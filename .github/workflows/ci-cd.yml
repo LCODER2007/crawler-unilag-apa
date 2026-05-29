@@ -89,7 +89,7 @@ jobs:
       - name: Initialize Database
         env:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-        run: python init_db.py
+        run: python scripts/init_db.py
       
       - name: Run Tests
         env:
@@ -150,7 +150,7 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: [test, security]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && secrets.DOCKER_USERNAME != ''
     steps:
       - uses: actions/checkout@v4
       
@@ -179,7 +179,7 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.KUBE_CONFIG != ''
     environment:
       name: production
       url: https://uraas.example.com
