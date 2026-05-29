@@ -14,20 +14,22 @@ import urllib.request, urllib.parse, urllib.error
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from uraas.config.institutions import get_registry, reset_registry
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 OPENALEX_BASE = "https://api.openalex.org"
 MAILTO = "uraas-bot@research.edu.ng"
-MAX_AUTHORS = 500   # cap per institution to avoid very long runs
-DELAY = 0.5         # seconds between requests (polite)
+MAX_AUTHORS = 500  # cap per institution to avoid very long runs
+DELAY = 0.5  # seconds between requests (polite)
 
 
 def _get(url: str, retries: int = 3) -> dict:
     """Simple urllib GET with retries."""
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": f"URAAS/1.0 (mailto:{MAILTO})"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": f"URAAS/1.0 (mailto:{MAILTO})"}
+            )
             with urllib.request.urlopen(req, timeout=20) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
@@ -57,7 +59,7 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
     unique_staff = {}
     cursor = "*"
     page = 0
-    max_pages = 50 # Limit to 50 pages (10k works max) to avoid running forever
+    max_pages = 50  # Limit to 50 pages (10k works max) to avoid running forever
 
     while len(unique_staff) < MAX_AUTHORS and page < max_pages:
         # We query the works endpoint using the exact ROR url
@@ -73,60 +75,64 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
         if not data:
             break
 
-        results = data.get('results', [])
+        results = data.get("results", [])
         if not results:
             break
 
         for work in results:
-            for authorship in work.get('authorships', []):
+            for authorship in work.get("authorships", []):
                 # Ensure the author is affiliated with our target institution for this work
                 is_affiliated = False
-                for inst in authorship.get('institutions', []):
-                    if inst.get('ror') == ror_url:
+                for inst in authorship.get("institutions", []):
+                    if inst.get("ror") == ror_url:
                         is_affiliated = True
                         break
-                
+
                 if not is_affiliated:
                     continue
-                    
-                author = authorship.get('author', {})
-                aid = author.get('id')
+
+                author = authorship.get("author", {})
+                aid = author.get("id")
                 if not aid or aid in unique_staff:
                     if aid in unique_staff:
-                        unique_staff[aid]['paper_count'] += 1
+                        unique_staff[aid]["paper_count"] += 1
                     continue
 
-                name = author.get('display_name', '').strip()
+                name = author.get("display_name", "").strip()
                 if not name:
                     continue
 
-                orcid_url = author.get('orcid', '')
-                orcid = orcid_url.replace('https://orcid.org/', '') if orcid_url else None
-                
+                orcid_url = author.get("orcid", "")
+                orcid = (
+                    orcid_url.replace("https://orcid.org/", "") if orcid_url else None
+                )
+
                 # We can't get concepts easily from works authorships without extra queries,
                 # so we will leave faculty and department empty for now.
-                
+
                 unique_staff[aid] = {
-                    'name': name,
-                    'orcid': orcid,
-                    'department': None,
-                    'faculty': None,
-                    'openalex_id': aid.replace('https://openalex.org/', ''),
-                    'paper_count': 1,
+                    "name": name,
+                    "orcid": orcid,
+                    "department": None,
+                    "faculty": None,
+                    "openalex_id": aid.replace("https://openalex.org/", ""),
+                    "paper_count": 1,
                 }
-                
+
                 if len(unique_staff) >= MAX_AUTHORS:
                     break
-            
+
             if len(unique_staff) >= MAX_AUTHORS:
                 break
 
-        log.info(f"  Page {page+1}: Processed {len(results)} works | Unique staff so far: {len(unique_staff)}")
+        log.info(
+            f"  Page {page+1}: Processed {len(results)} works | Unique staff so far: {len(unique_staff)}"
+        )
         page += 1
         time.sleep(DELAY)
 
-        meta = data.get('meta', {})
-        cursor = meta.get('next_cursor')
+        meta = data.get("meta", {})
+        cursor = meta.get("next_cursor")
         if not cursor:
             break
 
@@ -139,16 +145,50 @@ def _map_concept_to_faculty(concept: str, faculties: list) -> str:
     """Rough concept→faculty mapping via keyword overlap."""
     concept_lower = concept.lower()
     faculty_map = {
-        'medicine': ['health', 'medicine', 'clinical', 'nursing', 'pharmacy', 'dental'],
-        'engineering': ['engineering', 'technology', 'mechanical', 'electrical', 'civil', 'chemical'],
-        'science': ['biology', 'chemistry', 'physics', 'mathematics', 'statistics', 'computer'],
-        'arts': ['literature', 'linguistics', 'language', 'history', 'philosophy', 'arts'],
-        'social': ['sociology', 'economics', 'political', 'psychology', 'anthropology', 'social'],
-        'law': ['law', 'legal', 'jurisprudence', 'criminology'],
-        'education': ['education', 'pedagogy', 'teaching', 'curriculum'],
-        'agriculture': ['agriculture', 'botany', 'zoology', 'ecology', 'forestry'],
-        'management': ['business', 'management', 'accounting', 'finance', 'marketing'],
-        'environmental': ['environment', 'urban', 'planning', 'geography', 'architecture'],
+        "medicine": ["health", "medicine", "clinical", "nursing", "pharmacy", "dental"],
+        "engineering": [
+            "engineering",
+            "technology",
+            "mechanical",
+            "electrical",
+            "civil",
+            "chemical",
+        ],
+        "science": [
+            "biology",
+            "chemistry",
+            "physics",
+            "mathematics",
+            "statistics",
+            "computer",
+        ],
+        "arts": [
+            "literature",
+            "linguistics",
+            "language",
+            "history",
+            "philosophy",
+            "arts",
+        ],
+        "social": [
+            "sociology",
+            "economics",
+            "political",
+            "psychology",
+            "anthropology",
+            "social",
+        ],
+        "law": ["law", "legal", "jurisprudence", "criminology"],
+        "education": ["education", "pedagogy", "teaching", "curriculum"],
+        "agriculture": ["agriculture", "botany", "zoology", "ecology", "forestry"],
+        "management": ["business", "management", "accounting", "finance", "marketing"],
+        "environmental": [
+            "environment",
+            "urban",
+            "planning",
+            "geography",
+            "architecture",
+        ],
     }
     for fac_key, keywords in faculty_map.items():
         if any(kw in concept_lower for kw in keywords):
@@ -163,14 +203,17 @@ def get_orcid_details(orcid: str) -> dict:
     """Fetch name and affiliation details from ORCID public API."""
     url = f"https://pub.orcid.org/v3.0/{orcid}/person"
     try:
-        req = urllib.request.Request(url, headers={
-            "Accept": "application/json",
-            "User-Agent": f"URAAS/1.0 (mailto:{MAILTO})"
-        })
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": f"URAAS/1.0 (mailto:{MAILTO})",
+            },
+        )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
-        affiliations = data.get('activities-summary', {})
-        return {'orcid': orcid}
+        affiliations = data.get("activities-summary", {})
+        return {"orcid": orcid}
     except Exception:
         return {}
 
@@ -180,23 +223,31 @@ def save_staff(inst_config, staff: list, dry_run: bool = False):
     short = inst_config.short_name.lower()
     # Resolve base directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out_path = os.path.join(base_dir, 'data', f'{short}_staff.json')
+    out_path = os.path.join(base_dir, "data", f"{short}_staff.json")
 
     if dry_run:
         log.info(f"[DRY-RUN] Would save {len(staff)} staff records to {out_path}")
         return
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(staff, f, indent=2, ensure_ascii=False)
     log.info(f"Saved {len(staff)} staff records → {out_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Harvest staff from OpenAlex for URAAS institutions')
-    parser.add_argument('--institution', type=str, default=None,
-                        help='Single institution short name (default: all)')
-    parser.add_argument('--dry-run', action='store_true', help='Print counts without saving')
+    parser = argparse.ArgumentParser(
+        description="Harvest staff from OpenAlex for URAAS institutions"
+    )
+    parser.add_argument(
+        "--institution",
+        type=str,
+        default=None,
+        help="Single institution short name (default: all)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print counts without saving"
+    )
     args = parser.parse_args()
 
     reset_registry()
@@ -221,16 +272,20 @@ def main():
     for inst in target_insts:
         try:
             staff = harvest_institution(inst, dry_run=args.dry_run)
-            orcid_count = sum(1 for s in staff if s.get('orcid'))
+            orcid_count = sum(1 for s in staff if s.get("orcid"))
             save_staff(inst, staff, dry_run=args.dry_run)
-            summary.append({
-                'institution': inst.name,
-                'staff_total': len(staff),
-                'with_orcid': orcid_count,
-            })
+            summary.append(
+                {
+                    "institution": inst.name,
+                    "staff_total": len(staff),
+                    "with_orcid": orcid_count,
+                }
+            )
         except Exception as e:
             log.error(f"Failed harvesting {inst.name}: {e}")
-            summary.append({'institution': inst.name, 'staff_total': 0, 'with_orcid': 0})
+            summary.append(
+                {"institution": inst.name, "staff_total": 0, "with_orcid": 0}
+            )
         time.sleep(1)
 
     print(f"\n{'='*60}")
@@ -239,13 +294,15 @@ def main():
     total_staff = 0
     total_orcid = 0
     for s in summary:
-        print(f"  {s['institution']:<45} {s['staff_total']:>5} staff  {s['with_orcid']:>4} ORCID")
-        total_staff += s['staff_total']
-        total_orcid += s['with_orcid']
+        print(
+            f"  {s['institution']:<45} {s['staff_total']:>5} staff  {s['with_orcid']:>4} ORCID"
+        )
+        total_staff += s["staff_total"]
+        total_orcid += s["with_orcid"]
     print(f"{'-'*60}")
     print(f"  {'TOTAL':<45} {total_staff:>5} staff  {total_orcid:>4} ORCID")
     print(f"{'='*60}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

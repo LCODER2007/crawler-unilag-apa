@@ -1,11 +1,11 @@
 import re
 
-with open('uraas/dashboard/templates/index.html', 'r', encoding='utf-8') as f:
+with open("uraas/dashboard/templates/index.html", "r", encoding="utf-8") as f:
     content = f.read()
 
 # Find the special collections section and replace it
-pattern = r'(    \s*<!--\s+SPECIAL COLLECTIONS.*?</div>\n\n  </div><!-- end analytics tab -->)'
-replacement = '''    
+pattern = r"(    \s*<!--\s+SPECIAL COLLECTIONS.*?</div>\n\n  </div><!-- end analytics tab -->)"
+replacement = """    
     <!--  SPECIAL COLLECTIONS  -->
     <div id="atab-special" class="atab-content hidden">
       <div class="mb-5 flex items-start justify-between gap-4">
@@ -53,22 +53,22 @@ replacement = '''
       </div>
     </div>
 
-  </div><!-- end analytics tab -->'''
+  </div><!-- end analytics tab -->"""
 
 new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 if new_content == content:
     print("ERROR: Pattern not matched. Trying direct string replace...")
     # Try to find where special collections starts
-    idx = content.find('<!--  SPECIAL COLLECTIONS  -->')
+    idx = content.find("<!--  SPECIAL COLLECTIONS  -->")
     print(f"Found at index: {idx}")
     if idx >= 0:
-        end_marker = '  </div><!-- end analytics tab -->'
+        end_marker = "  </div><!-- end analytics tab -->"
         end_idx = content.find(end_marker, idx)
         print(f"End marker at: {end_idx}")
-        segment = content[idx:end_idx+len(end_marker)]
+        segment = content[idx : end_idx + len(end_marker)]
         print(f"Segment length: {len(segment)}")
         print("First 200 chars:", repr(segment[:200]))
 else:
-    with open('uraas/dashboard/templates/index.html', 'w', encoding='utf-8') as f:
+    with open("uraas/dashboard/templates/index.html", "w", encoding="utf-8") as f:
         f.write(new_content)
-    print('SUCCESS')
+    print("SUCCESS")

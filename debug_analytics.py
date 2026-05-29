@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from uraas.analytics.engine import URAASAnalyticsEngine
@@ -16,6 +17,7 @@ try:
 except Exception as e:
     print("Error in get_publications_by_year:", e)
     import traceback
+
     traceback.print_exc()
 
 print("\nTesting get_institutional_growth...")
@@ -25,4 +27,5 @@ try:
 except Exception as e:
     print("Error in get_institutional_growth:", e)
     import traceback
+
     traceback.print_exc()

@@ -1,7 +1,8 @@
 ﻿import os, sys
-sys.path.insert(0, '.')
 
-APP = '''import os,csv,io,subprocess,threading,re,logging
+sys.path.insert(0, ".")
+
+APP = """import os,csv,io,subprocess,threading,re,logging
 from flask import Flask,render_template,jsonify,send_file,request,Response
 from flask_socketio import SocketIO
 from uraas.config import config
@@ -18,7 +19,7 @@ crawler_process = None
 crawler_lock = threading.Lock()
 docid_crawler_process = None
 docid_crawler_lock = threading.Lock()
-'''
+"""
 
-open('uraas/dashboard/app.py','w',encoding='utf-8').write(APP)
-print('wrote', len(APP), 'chars')
+open("uraas/dashboard/app.py", "w", encoding="utf-8").write(APP)
+print("wrote", len(APP), "chars")

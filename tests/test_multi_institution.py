@@ -25,9 +25,9 @@ def test_institution_registry():
     print("=" * 60)
     print("TEST 1: Institution Registry")
     print("=" * 60)
-    
+
     registry = get_registry()
-    
+
     print(f"\nLoaded {len(registry.institutions)} institutions:")
     for config in registry.list_all():
         print(f"  - {config.name} ({config.short_name})")
@@ -36,23 +36,23 @@ def test_institution_registry():
         print(f"    Staff count: {len(config.staff_names)}")
         print(f"    Affiliation patterns: {len(config.affiliation_patterns)}")
         print()
-    
+
     # Test retrieval by short name
     print("\nTest retrieval by short name:")
-    unilag = registry.get('unilag')
+    unilag = registry.get("unilag")
     if unilag:
         print(f"  ✓ Found UNILAG: {unilag.name}")
     else:
         print(f"  ✗ UNILAG not found")
-    
+
     # Test retrieval by ROR
     print("\nTest retrieval by ROR:")
-    ui = registry.get_by_ror('https://ror.org/01js2sh04')
+    ui = registry.get_by_ror("https://ror.org/01js2sh04")
     if ui:
         print(f"  ✓ Found UI: {ui.name}")
     else:
         print(f"  ✗ UI not found")
-    
+
     # Test affiliation matching
     print("\nTest affiliation matching:")
     test_affiliations = [
@@ -61,7 +61,7 @@ def test_institution_registry():
         ("OAU Ile-Ife, Nigeria", "oau"),
         ("Ahmadu Bello University, Zaria", "abu"),
     ]
-    
+
     for affiliation, expected_short_name in test_affiliations:
         matched = False
         for config in registry.list_all():
@@ -72,7 +72,7 @@ def test_institution_registry():
                 break
         if not matched:
             print(f"  ✗ '{affiliation}' not matched correctly")
-    
+
     return registry
 
 
@@ -81,31 +81,33 @@ def test_staff_validator(registry):
     print("\n" + "=" * 60)
     print("TEST 2: Staff Validator")
     print("=" * 60)
-    
+
     # Test UNILAG validator
     print("\nTesting UNILAG validator:")
-    unilag_config = registry.get('unilag')
+    unilag_config = registry.get("unilag")
     if unilag_config:
         validator = StaffValidator(institution_config=unilag_config)
         print(f"  Institution: {validator.institution_name}")
         print(f"  ROR: {validator.ror}")
         print(f"  Staff count: {len(validator.staff_names)}")
-        
+
         # Test some known UNILAG staff (if any)
         test_authors = [
             "Prof. A. O. Adeyemi",
             "Dr. John Smith",  # Should not match
             "O. A. Ogunlana",
         ]
-        
+
         print("\n  Testing author validation:")
         for author in test_authors:
             is_staff = validator.is_staff_member(author)
-            print(f"    {'✓' if is_staff else '✗'} {author}: {'Staff' if is_staff else 'Not staff'}")
-    
+            print(
+                f"    {'✓' if is_staff else '✗'} {author}: {'Staff' if is_staff else 'Not staff'}"
+            )
+
     # Test UI validator (will have empty staff list for now)
     print("\nTesting UI validator:")
-    ui_config = registry.get('ui')
+    ui_config = registry.get("ui")
     if ui_config:
         validator = StaffValidator(institution_config=ui_config)
         print(f"  Institution: {validator.institution_name}")
@@ -119,10 +121,10 @@ def test_backward_compatibility():
     print("\n" + "=" * 60)
     print("TEST 3: Backward Compatibility")
     print("=" * 60)
-    
+
     # Test default validator (should still work for UNILAG)
     from uraas.utils.staff_validator import staff_validator
-    
+
     print(f"\nDefault validator:")
     print(f"  Institution: {staff_validator.institution_name}")
     print(f"  Staff count: {len(staff_validator.staff_names)}")
@@ -134,17 +136,17 @@ def main():
     print("\n" + "=" * 60)
     print("MULTI-INSTITUTION SUPPORT TEST SUITE")
     print("=" * 60)
-    
+
     try:
         # Test 1: Institution Registry
         registry = test_institution_registry()
-        
+
         # Test 2: Staff Validator
         test_staff_validator(registry)
-        
+
         # Test 3: Backward Compatibility
         test_backward_compatibility()
-        
+
         print("\n" + "=" * 60)
         print("ALL TESTS COMPLETED")
         print("=" * 60)
@@ -157,15 +159,16 @@ def main():
         print("  1. Populate staff files for UI, OAU, UNN, ABU")
         print("  2. Update spiders to accept institution parameter")
         print("  3. Test multi-institution crawling")
-        
+
     except Exception as e:
         print(f"\n✗ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
-    
+
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

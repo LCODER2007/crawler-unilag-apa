@@ -10,11 +10,13 @@ Cleanup rules:
 5. Flag (do not delete) items with institution mismatch in affiliation
 6. Report before/after counts
 """
+
 import os, sys, logging
 from datetime import datetime
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 
@@ -35,13 +37,18 @@ def run_cleanup(dry_run: bool = False):
 
         # ── Rule 1: Remove items from removed institutions ────────────────────
         all_institutions_in_db = session.query(Item.institution).distinct().all()
-        stale_insts = [r[0] for r in all_institutions_in_db
-                       if r[0] and r[0] not in valid_inst_names]
+        stale_insts = [
+            r[0]
+            for r in all_institutions_in_db
+            if r[0] and r[0] not in valid_inst_names
+        ]
 
         if stale_insts:
             log.info(f"Found stale institutions: {stale_insts}")
             for stale in stale_insts:
-                stale_items = session.query(Item).filter(Item.institution == stale).all()
+                stale_items = (
+                    session.query(Item).filter(Item.institution == stale).all()
+                )
                 log.info(f"  [{stale}] {len(stale_items)} items to remove")
                 if not dry_run:
                     for item in stale_items:
@@ -50,9 +57,13 @@ def run_cleanup(dry_run: bool = False):
                 removed += len(stale_items)
 
         # ── Rule 2: Remove items with no title ────────────────────────────────
-        no_title = session.query(Item).filter(
-            (Item.title == None) | (Item.title == '') | (Item.title == 'Untitled')
-        ).all()
+        no_title = (
+            session.query(Item)
+            .filter(
+                (Item.title == None) | (Item.title == "") | (Item.title == "Untitled")
+            )
+            .all()
+        )
         log.info(f"Items with no/empty title: {len(no_title)}")
         if not dry_run:
             for item in no_title:
@@ -63,7 +74,9 @@ def run_cleanup(dry_run: bool = False):
         # ── Rule 3: Remove items with title < 10 chars and no DOI ────────────
         all_short = session.query(Item).filter(Item.doi == None).all()
         short_items = [i for i in all_short if i.title and len(i.title.strip()) < 10]
-        log.info(f"Items with very short title (<10 chars) and no DOI: {len(short_items)}")
+        log.info(
+            f"Items with very short title (<10 chars) and no DOI: {len(short_items)}"
+        )
         if not dry_run:
             for item in short_items:
                 session.delete(item)
@@ -71,16 +84,18 @@ def run_cleanup(dry_run: bool = False):
         removed += len(short_items)
 
         # ── Rule 4: Remove exact DOI duplicates (keep lowest id) ─────────────
-        doi_subq = session.query(
-            Item.doi, func.min(Item.id).label('min_id')
-        ).filter(Item.doi != None).group_by(Item.doi).subquery()
+        doi_subq = (
+            session.query(Item.doi, func.min(Item.id).label("min_id"))
+            .filter(Item.doi != None)
+            .group_by(Item.doi)
+            .subquery()
+        )
 
-        dup_dois = session.query(Item).filter(
-            Item.doi != None,
-            Item.id.notin_(
-                session.query(doi_subq.c.min_id)
-            )
-        ).all()
+        dup_dois = (
+            session.query(Item)
+            .filter(Item.doi != None, Item.id.notin_(session.query(doi_subq.c.min_id)))
+            .all()
+        )
         log.info(f"Duplicate DOI items to remove: {len(dup_dois)}")
         if not dry_run:
             for item in dup_dois:
@@ -89,9 +104,11 @@ def run_cleanup(dry_run: bool = False):
         removed += len(dup_dois)
 
         # ── Rule 5: Remove items with no institution tag ──────────────────────
-        no_inst = session.query(Item).filter(
-            (Item.institution == None) | (Item.institution == '')
-        ).all()
+        no_inst = (
+            session.query(Item)
+            .filter((Item.institution == None) | (Item.institution == ""))
+            .all()
+        )
         # Only remove those that have no authors either
         truly_orphan = [i for i in no_inst if not i.authors]
         log.info(f"Items with no institution AND no authors: {len(truly_orphan)}")
@@ -111,10 +128,10 @@ def run_cleanup(dry_run: bool = False):
         log.info(f"{'='*50}")
 
         return {
-            'total_before': total_before,
-            'removed': removed,
-            'total_after': total_after,
-            'dry_run': dry_run,
+            "total_before": total_before,
+            "removed": removed,
+            "total_after": total_after,
+            "dry_run": dry_run,
         }
 
     except Exception as e:
@@ -125,9 +142,12 @@ def run_cleanup(dry_run: bool = False):
         session.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='URAAS Database Cleanup')
-    parser.add_argument('--dry-run', action='store_true', help='Report without deleting')
+
+    parser = argparse.ArgumentParser(description="URAAS Database Cleanup")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Report without deleting"
+    )
     args = parser.parse_args()
     run_cleanup(dry_run=args.dry_run)

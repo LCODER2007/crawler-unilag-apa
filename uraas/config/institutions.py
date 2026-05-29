@@ -13,8 +13,18 @@ from pathlib import Path
 class InstitutionConfig:
     """Configuration for a single institution"""
 
-    def __init__(self, ror, name, short_name, country, staff_file,
-                 affiliation_patterns, faculties=None, crawler_settings=None, sub_region='Unknown'):
+    def __init__(
+        self,
+        ror,
+        name,
+        short_name,
+        country,
+        staff_file,
+        affiliation_patterns,
+        faculties=None,
+        crawler_settings=None,
+        sub_region="Unknown",
+    ):
         self.ror = ror
         self.name = name
         self.short_name = short_name
@@ -42,15 +52,15 @@ class InstitutionConfig:
         if not os.path.exists(path):
             return []
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):
-                if 'staff' in data:
-                    return data['staff']
-                if 'names' in data:
-                    return data['names']
+                if "staff" in data:
+                    return data["staff"]
+                if "names" in data:
+                    return data["names"]
                 names = []
                 for value in data.values():
                     if isinstance(value, list):
@@ -69,7 +79,7 @@ class InstitutionConfig:
             if isinstance(entry, str):
                 names.append(entry)
             elif isinstance(entry, dict):
-                n = entry.get('name') or entry.get('display_name', '')
+                n = entry.get("name") or entry.get("display_name", "")
                 if n:
                     names.append(n)
         return names
@@ -80,28 +90,32 @@ class InstitutionConfig:
         records = []
         for entry in self._raw_staff:
             if isinstance(entry, str):
-                records.append({'name': entry, 'orcid': None, 'department': None, 'faculty': None})
+                records.append(
+                    {"name": entry, "orcid": None, "department": None, "faculty": None}
+                )
             elif isinstance(entry, dict):
-                records.append({
-                    'name': entry.get('name') or entry.get('display_name', ''),
-                    'orcid': entry.get('orcid'),
-                    'department': entry.get('department'),
-                    'faculty': entry.get('faculty'),
-                    'openalex_id': entry.get('openalex_id'),
-                    'paper_count': entry.get('paper_count', 0),
-                })
-        return [r for r in records if r['name']]
+                records.append(
+                    {
+                        "name": entry.get("name") or entry.get("display_name", ""),
+                        "orcid": entry.get("orcid"),
+                        "department": entry.get("department"),
+                        "faculty": entry.get("faculty"),
+                        "openalex_id": entry.get("openalex_id"),
+                        "paper_count": entry.get("paper_count", 0),
+                    }
+                )
+        return [r for r in records if r["name"]]
 
     @property
     def staff_with_orcid(self) -> List[Dict]:
-        return [r for r in self.staff_records if r.get('orcid')]
+        return [r for r in self.staff_records if r.get("orcid")]
 
     @property
     def departments(self) -> List[str]:
         depts = set()
         for r in self.staff_records:
-            if r.get('department'):
-                depts.add(r['department'])
+            if r.get("department"):
+                depts.add(r["department"])
         return sorted(depts)
 
     def matches_affiliation(self, affiliation_text: str) -> bool:
@@ -117,54 +131,84 @@ class InstitutionConfig:
         """
         if not authorships:
             return False
-        target_short = self.ror.split('/')[-1]
+        target_short = self.ror.split("/")[-1]
         for authorship in authorships:
-            for inst in authorship.get('institutions', []):
-                inst_ror = inst.get('ror', '') or inst.get('id', '') or ''
+            for inst in authorship.get("institutions", []):
+                inst_ror = inst.get("ror", "") or inst.get("id", "") or ""
                 if target_short in inst_ror or self.ror == inst_ror:
                     return True
         return False
 
     def to_dict(self) -> Dict:
         return {
-            'ror': self.ror, 'name': self.name, 'short_name': self.short_name,
-            'country': self.country, 'staff_file': self.staff_file,
-            'affiliation_patterns': self.affiliation_patterns,
-            'faculties': self.faculties, 'crawler_settings': self.crawler_settings,
-            'sub_region': self.sub_region,
-            'staff_count': len(self.staff_names),
-            'staff_with_orcid_count': len(self.staff_with_orcid),
+            "ror": self.ror,
+            "name": self.name,
+            "short_name": self.short_name,
+            "country": self.country,
+            "staff_file": self.staff_file,
+            "affiliation_patterns": self.affiliation_patterns,
+            "faculties": self.faculties,
+            "crawler_settings": self.crawler_settings,
+            "sub_region": self.sub_region,
+            "staff_count": len(self.staff_names),
+            "staff_with_orcid_count": len(self.staff_with_orcid),
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'InstitutionConfig':
-        sub_region = data.get('sub_region')
+    def from_dict(cls, data: Dict) -> "InstitutionConfig":
+        sub_region = data.get("sub_region")
         if not sub_region:
-            country = data.get('country', '')
-            if country in ('Nigeria', 'Ghana'):
-                sub_region = 'West Africa'
-            elif country in ('South Africa', 'Zimbabwe', 'Zambia', 'Namibia', 'Botswana', 'Lesotho', 'Eswatini', 'Malawi', 'Mozambique'):
-                sub_region = 'Southern Africa'
-            elif country in ('Kenya', 'Uganda', 'Ethiopia', 'Rwanda', 'Tanzania'):
-                sub_region = 'East Africa'
-            elif country in ('Egypt', 'Morocco', 'Tunisia', 'Algeria', 'Libya', 'Sudan'):
-                sub_region = 'North Africa'
-            elif country in ('Cameroon', 'DR Congo', 'Angola', 'Gabon', 'Republic of the Congo'):
-                sub_region = 'Central Africa'
+            country = data.get("country", "")
+            if country in ("Nigeria", "Ghana"):
+                sub_region = "West Africa"
+            elif country in (
+                "South Africa",
+                "Zimbabwe",
+                "Zambia",
+                "Namibia",
+                "Botswana",
+                "Lesotho",
+                "Eswatini",
+                "Malawi",
+                "Mozambique",
+            ):
+                sub_region = "Southern Africa"
+            elif country in ("Kenya", "Uganda", "Ethiopia", "Rwanda", "Tanzania"):
+                sub_region = "East Africa"
+            elif country in (
+                "Egypt",
+                "Morocco",
+                "Tunisia",
+                "Algeria",
+                "Libya",
+                "Sudan",
+            ):
+                sub_region = "North Africa"
+            elif country in (
+                "Cameroon",
+                "DR Congo",
+                "Angola",
+                "Gabon",
+                "Republic of the Congo",
+            ):
+                sub_region = "Central Africa"
             else:
-                sub_region = 'Unknown'
+                sub_region = "Unknown"
         return cls(
-            ror=data['ror'], name=data['name'], short_name=data['short_name'],
-            country=data['country'], staff_file=data['staff_file'],
-            affiliation_patterns=data['affiliation_patterns'],
-            faculties=data.get('faculties', []),
-            crawler_settings=data.get('crawler_settings', {}),
-            sub_region=sub_region
+            ror=data["ror"],
+            name=data["name"],
+            short_name=data["short_name"],
+            country=data["country"],
+            staff_file=data["staff_file"],
+            affiliation_patterns=data["affiliation_patterns"],
+            faculties=data.get("faculties", []),
+            crawler_settings=data.get("crawler_settings", {}),
+            sub_region=sub_region,
         )
 
     @classmethod
-    def from_json_file(cls, file_path: str) -> 'InstitutionConfig':
-        with open(file_path, 'r', encoding='utf-8') as f:
+    def from_json_file(cls, file_path: str) -> "InstitutionConfig":
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
 
@@ -175,7 +219,7 @@ class InstitutionRegistry:
     def __init__(self, config_dir: str = None):
         if config_dir is None:
             base_dir = Path(__file__).parent.parent.parent
-            config_dir = base_dir / 'config' / 'institutions'
+            config_dir = base_dir / "config" / "institutions"
         self.config_dir = Path(config_dir)
         self.institutions: Dict[str, InstitutionConfig] = {}
         self._load_all_institutions()
@@ -184,7 +228,7 @@ class InstitutionRegistry:
         if not self.config_dir.exists():
             print(f"Warning: Institution config directory not found: {self.config_dir}")
             return
-        for json_file in sorted(self.config_dir.glob('*.json')):
+        for json_file in sorted(self.config_dir.glob("*.json")):
             try:
                 config = InstitutionConfig.from_json_file(str(json_file))
                 self.institutions[config.short_name.lower()] = config
@@ -196,7 +240,10 @@ class InstitutionRegistry:
         if identifier_lower in self.institutions:
             return self.institutions[identifier_lower]
         for config in self.institutions.values():
-            if config.ror == identifier or identifier_lower == config.ror.split('/')[-1]:
+            if (
+                config.ror == identifier
+                or identifier_lower == config.ror.split("/")[-1]
+            ):
                 return config
         return None
 
@@ -210,7 +257,11 @@ class InstitutionRegistry:
         return list(self.institutions.values())
 
     def list_by_country(self, country: str) -> List[InstitutionConfig]:
-        return [c for c in self.institutions.values() if c.country.lower() == country.lower()]
+        return [
+            c
+            for c in self.institutions.values()
+            if c.country.lower() == country.lower()
+        ]
 
     def add_institution(self, config: InstitutionConfig):
         self.institutions[config.short_name.lower()] = config
@@ -218,7 +269,7 @@ class InstitutionRegistry:
     def save_institution(self, config: InstitutionConfig):
         self.config_dir.mkdir(parents=True, exist_ok=True)
         file_path = self.config_dir / f"{config.short_name.lower()}.json"
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
         self.add_institution(config)
 

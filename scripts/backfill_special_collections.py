@@ -5,6 +5,7 @@ Runs classify_special_collections() over every Item (title + abstract + dc_subje
 and writes the score/categories. Idempotent — re-running on already-scored rows
 produces the same values.
 """
+
 import os
 import sys
 
@@ -12,7 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from uraas.database import SessionLocal, Item
 from uraas.utils.ai_classifier import classify_special_collections
-
 
 BATCH_SIZE = 500
 
@@ -27,23 +27,31 @@ def main() -> int:
         hits = 0
         offset = 0
         while offset < total:
-            batch = session.query(Item).order_by(Item.id).offset(offset).limit(BATCH_SIZE).all()
+            batch = (
+                session.query(Item)
+                .order_by(Item.id)
+                .offset(offset)
+                .limit(BATCH_SIZE)
+                .all()
+            )
             if not batch:
                 break
 
             for item in batch:
                 sc = classify_special_collections(
-                    item.title or '',
-                    item.abstract or '',
-                    item.dc_subject or '',
+                    item.title or "",
+                    item.abstract or "",
+                    item.dc_subject or "",
                 )
                 if sc:
-                    item.special_collection_score = float(sum(h['score'] for h in sc))
-                    item.special_collection_categories = ','.join(h['category'] for h in sc)
+                    item.special_collection_score = float(sum(h["score"] for h in sc))
+                    item.special_collection_categories = ",".join(
+                        h["category"] for h in sc
+                    )
                     hits += 1
                 else:
                     item.special_collection_score = 0.0
-                    item.special_collection_categories = ''
+                    item.special_collection_categories = ""
                 scored += 1
 
             session.commit()
@@ -57,5 +65,5 @@ def main() -> int:
         session.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

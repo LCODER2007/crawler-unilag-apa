@@ -15,7 +15,7 @@ _DEFAULT_TTL = 1800  # 30 minutes
 
 
 class _CacheEntry:
-    __slots__ = ('value', 'expires_at')
+    __slots__ = ("value", "expires_at")
 
     def __init__(self, value: Any, ttl: int):
         self.value = value
@@ -64,7 +64,9 @@ class AnalyticsCache:
             keys = [k for k in self._store if k.startswith(prefix)]
             for k in keys:
                 del self._store[k]
-            log.debug("Invalidated %d cache entries with prefix '%s'", len(keys), prefix)
+            log.debug(
+                "Invalidated %d cache entries with prefix '%s'", len(keys), prefix
+            )
 
     @property
     def size(self) -> int:

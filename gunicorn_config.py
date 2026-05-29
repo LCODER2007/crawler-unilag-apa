@@ -2,6 +2,7 @@
 Gunicorn configuration for production deployment on Render.
 Optimized for Flask-SocketIO with WebSocket support.
 """
+
 import os
 import multiprocessing
 
@@ -31,7 +32,7 @@ keepalive = 5
 
 # Logging
 accesslog = "-"  # Log to stdout (Render captures this)
-errorlog = "-"   # Log to stderr (Render captures this)
+errorlog = "-"  # Log to stderr (Render captures this)
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
 

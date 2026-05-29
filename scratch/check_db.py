@@ -1,9 +1,11 @@
 import sqlite3
 
-conn = sqlite3.connect('uraas.db')
+conn = sqlite3.connect("uraas.db")
 cursor = conn.cursor()
 
-cursor.execute("SELECT title, institution, created_at FROM items WHERE institution = 'Addis Ababa University' ORDER BY created_at DESC;")
+cursor.execute(
+    "SELECT title, institution, created_at FROM items WHERE institution = 'Addis Ababa University' ORDER BY created_at DESC;"
+)
 rows = cursor.fetchall()
 
 if not rows:

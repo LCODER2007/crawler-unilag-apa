@@ -1,5 +1,7 @@
 """Title normalization utilities for gap analysis deduplication."""
+
 import re
+
 
 def normalize_title(title: str) -> str:
     """
@@ -8,8 +10,8 @@ def normalize_title(title: str) -> str:
     score ≥95% similarity under Levenshtein distance.
     """
     if not title:
-        return ''
+        return ""
     t = title.lower()
-    t = re.sub(r'[^\w\s]', ' ', t)   # strip punctuation
-    t = re.sub(r'\s+', ' ', t).strip()
+    t = re.sub(r"[^\w\s]", " ", t)  # strip punctuation
+    t = re.sub(r"\s+", " ", t).strip()
     return t
