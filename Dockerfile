@@ -58,14 +58,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8080/api/analytics/overview', timeout=5)"
 
-# Run gunicorn
-CMD ["gunicorn", \
-     "--bind", "0.0.0.0:8080", \
-     "--workers", "4", \
-     "--worker-class", "gevent", \
-     "--worker-connections", "1000", \
-     "--timeout", "120", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info", \
-     "uraas.dashboard.app:app"]
+# Run database initialization and then start gunicorn
+CMD python scripts/init_db.py && gunicorn --bind 0.0.0.0:8080 --workers 4 --worker-class gevent --worker-connections 1000 --timeout 120 --access-logfile - --error-logfile - --log-level info uraas.dashboard.app:app
