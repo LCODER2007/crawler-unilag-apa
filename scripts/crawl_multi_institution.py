@@ -136,6 +136,7 @@ def main():
     )
     settings.set("LOG_LEVEL", "INFO")
     settings.set("LOG_SCRAPED_ITEMS", False)
+    settings.set("TELNETCONSOLE_ENABLED", False)
 
     process = CrawlerProcess(settings)
 
