@@ -4,8 +4,9 @@ name + faculty + department for each staff member.
 Saves to data/unilag_staff_detailed.json for accurate classification.
 """
 
-import os
 import json
+import os
+
 import scrapy
 from scrapy.http import Request
 

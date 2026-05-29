@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -9,8 +9,9 @@ from uraas.dashboard.app import app
 
 def handler(event, context):
     """Netlify serverless function handler"""
-    from werkzeug.wrappers import Request, Response
     from io import BytesIO
+
+    from werkzeug.wrappers import Request, Response
 
     # Convert Netlify event to WSGI environ
     environ = {

@@ -4,10 +4,10 @@ Thread-safe in-memory cache with TTL for expensive analytics computations.
 Invalidated on crawl completion.
 """
 
+import logging
 import threading
 import time
-import logging
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 log = logging.getLogger(__name__)
 

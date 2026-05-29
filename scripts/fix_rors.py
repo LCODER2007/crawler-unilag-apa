@@ -1,4 +1,8 @@
-import urllib.request, urllib.parse, json, glob, os
+import glob
+import json
+import os
+import urllib.parse
+import urllib.request
 
 files = glob.glob("config/institutions/*.json")
 

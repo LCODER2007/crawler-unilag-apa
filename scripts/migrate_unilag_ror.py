@@ -1,9 +1,9 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import SessionLocal, Item, Community, Author
+from uraas.database import Author, Community, Item, SessionLocal
 
 
 def migrate():

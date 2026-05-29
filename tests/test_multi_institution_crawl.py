@@ -3,8 +3,8 @@ Test multi-institution crawling functionality
 Tests spider initialization and basic crawling for multiple institutions
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -68,8 +68,8 @@ def test_affiliation_filter():
     print("TEST: Affiliation Filter")
     print("=" * 60)
 
-    from uraas.pipelines.affiliation_filter import AffiliationFilterPipeline
     from uraas.config.institutions import get_registry
+    from uraas.pipelines.affiliation_filter import AffiliationFilterPipeline
 
     # Create mock spider for each institution
     class MockSpider:

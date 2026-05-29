@@ -1,10 +1,11 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import SessionLocal, Base, engine
 from sqlalchemy import text
+
+from uraas.database import Base, SessionLocal, engine
 
 
 def inspect():

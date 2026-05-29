@@ -3,11 +3,12 @@ Staff Validator - Validates authors against institution staff lists.
 Supports multi-institution with ROR-based configuration.
 """
 
-import os
 import json
-import re
 import logging
-from typing import List, Set, Optional, Dict, Tuple
+import os
+import re
+from typing import Dict, List, Optional, Set, Tuple
+
 from thefuzz import fuzz
 
 logger = logging.getLogger(__name__)

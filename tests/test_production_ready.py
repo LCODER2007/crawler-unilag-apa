@@ -3,14 +3,15 @@ URAAS Production Readiness Test Suite
 Comprehensive tests ensuring zero defects before deployment
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from uraas.database import Author, Item, SessionLocal
 from uraas.utils.ai_keyword_extractor import ai_extractor
-from uraas.database import SessionLocal, Item, Author
 from uraas.utils.staff_validator import staff_validator
 
 

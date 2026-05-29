@@ -11,7 +11,9 @@ Cleanup rules:
 6. Report before/after counts
 """
 
-import os, sys, logging
+import logging
+import os
+import sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,9 +23,10 @@ log = logging.getLogger(__name__)
 
 
 def run_cleanup(dry_run: bool = False):
-    from uraas.database import SessionLocal, Item, Author, Community, Collection
-    from uraas.config.institutions import get_registry
     from sqlalchemy import func
+
+    from uraas.config.institutions import get_registry
+    from uraas.database import Author, Collection, Community, Item, SessionLocal
 
     registry = get_registry()
     valid_inst_names = {c.name for c in registry.list_all()}

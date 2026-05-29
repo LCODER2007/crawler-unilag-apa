@@ -1,15 +1,16 @@
 # Define your item pipelines here
-from uraas.database import SessionLocal, Item, Author, Collection, Community, File
-from uraas.utils.unilag_classifier import classifier
-from uraas.utils.pdf_downloader import pdf_downloader
+import re
+from datetime import date
+
+from uraas.database import Author, Collection, Community, File, Item, SessionLocal
 from uraas.utils.ai_classifier import (
-    extract_keywords,
     _clean_text,
     classify_special_collections,
+    extract_keywords,
 )
 from uraas.utils.analytics_cache import analytics_cache
-from datetime import date
-import re
+from uraas.utils.pdf_downloader import pdf_downloader
+from uraas.utils.unilag_classifier import classifier
 
 _DOI_RE = re.compile(r"^10\.\d{4,}/")
 

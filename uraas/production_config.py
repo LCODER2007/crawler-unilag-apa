@@ -3,9 +3,9 @@ Production configuration module for Render deployment.
 Detects production environment and applies security-hardened settings.
 """
 
-import os
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
 
 
 class ProductionConfig:

@@ -3,8 +3,8 @@ Simple script to start the URAAS dashboard.
 Handles Python path setup automatically.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import uraas
 
 print(f"DEBUG: uraas path: {uraas.__path__}", flush=True)
-from uraas.dashboard.app import app, socketio
 from uraas.config import config
+from uraas.dashboard.app import app, socketio
 
 if __name__ == "__main__":
     print("=" * 70, flush=True)

@@ -1,7 +1,8 @@
-import scrapy
 import os
 import sys
 from datetime import datetime
+
+import scrapy
 from scrapy.http import Request
 
 # Add project root to path for imports

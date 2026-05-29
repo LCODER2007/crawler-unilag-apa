@@ -6,8 +6,8 @@ Supports rich staff format: [{name, orcid, department, faculty}]
 
 import json
 import os
-from typing import List, Dict, Optional, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 class InstitutionConfig:

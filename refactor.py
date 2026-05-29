@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 path = "uraas/analytics/engine.py"
 with open(path, "r", encoding="utf-8") as f:

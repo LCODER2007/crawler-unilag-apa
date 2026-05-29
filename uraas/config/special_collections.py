@@ -9,6 +9,7 @@ URLs short and avoids hammering the APIs with 100+ OR clauses.
 """
 
 from typing import List
+
 from uraas.utils.ai_classifier import SPECIAL_COLLECTIONS
 
 # Hand-picked seeds per category: the 2-3 most distinctive, low-ambiguity phrases.

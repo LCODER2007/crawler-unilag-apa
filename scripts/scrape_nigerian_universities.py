@@ -3,13 +3,14 @@ Comprehensive scraper for Nigerian university faculty directories
 Collects full staff names with high accuracy
 """
 
+import json
+import re
+import time
+from typing import Dict, List, Set
+from urllib.parse import urljoin, urlparse
+
 import requests
 from bs4 import BeautifulSoup
-import json
-import time
-import re
-from typing import List, Dict, Set
-from urllib.parse import urljoin, urlparse
 
 
 class UniversityStaffScraper:

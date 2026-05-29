@@ -3,8 +3,9 @@
 import sys
 
 sys.path.insert(0, ".")
+from sqlalchemy import inspect, text
+
 from uraas.database import engine
-from sqlalchemy import text, inspect
 
 NEW_COLS = [
     ("items", "dc_type", "TEXT"),

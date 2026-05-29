@@ -4,10 +4,11 @@ Loads staff records with ORCID from {inst}_staff.json.
 No arbitrary limits — crawls all staff with ORCIDs.
 """
 
-import scrapy
 import json
 import os
 import sys
+
+import scrapy
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config.institutions import get_registry

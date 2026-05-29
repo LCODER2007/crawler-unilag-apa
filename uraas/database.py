@@ -9,21 +9,13 @@ Supports the APA Intelligence & Analytics Platform:
 """
 
 from datetime import datetime
-from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-    Text,
-    DateTime,
-    Float,
-    ForeignKey,
-    Table,
-    Boolean,
-    Index,
-)
-from sqlalchemy import cast, extract, func, String as SAString
+
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer
+from sqlalchemy import String
+from sqlalchemy import String as SAString
+from sqlalchemy import Table, Text, cast, create_engine, extract, func
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
 from uraas.config import config
 
 

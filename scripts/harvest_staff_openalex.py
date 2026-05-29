@@ -8,8 +8,15 @@ Usage:
     python scripts/harvest_staff_openalex.py --dry-run        # just print counts
 """
 
-import os, sys, json, time, argparse, logging
-import urllib.request, urllib.parse, urllib.error
+import argparse
+import json
+import logging
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from uraas.config.institutions import get_registry, reset_registry

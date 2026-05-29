@@ -4,13 +4,15 @@ Fetches citation counts and citation graphs from OpenAlex and Crossref.
 Calculates h-index and other bibliometric indicators.
 """
 
-import requests
 import logging
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Text
+from typing import Dict, List, Optional, Tuple
+
+import requests
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
-from uraas.database import Base, SessionLocal, Item, Author
+
+from uraas.database import Author, Base, Item, SessionLocal
 
 logger = logging.getLogger(__name__)
 

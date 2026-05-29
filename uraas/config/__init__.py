@@ -2,11 +2,12 @@
 Configuration package for URAAS
 """
 
-from .institutions import InstitutionConfig, InstitutionRegistry, get_registry
-
 # Import config from the root config module
 import os
+
 from dotenv import load_dotenv
+
+from .institutions import InstitutionConfig, InstitutionRegistry, get_registry
 
 load_dotenv()
 

@@ -3,15 +3,18 @@ URAAS Test Suite  covers every API endpoint and APA analytics metrics.
 Run: pytest tests/test_api.py -v
 """
 
-import sys, os, pytest
+import os
+import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from uraas.analytics.engine import URAASAnalyticsEngine, analytics
 from uraas.dashboard.app import app as flask_app
-from uraas.analytics.engine import analytics, URAASAnalyticsEngine
+from uraas.database import Author, Collection, Community, Item, SessionLocal
 from uraas.utils.ai_keyword_extractor import ai_extractor
 from uraas.utils.docid_generator import docid_generator
-from uraas.database import SessionLocal, Item, Author, Community, Collection
 
 
 @pytest.fixture(scope="module")

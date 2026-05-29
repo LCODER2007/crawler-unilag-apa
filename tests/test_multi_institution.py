@@ -3,8 +3,9 @@ Test script for multi-institution support
 Tests institution configuration and staff validation
 """
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Add project root to path

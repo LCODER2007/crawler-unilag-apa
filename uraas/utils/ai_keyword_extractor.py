@@ -3,11 +3,11 @@ AI-Powered Keyword Extraction System
 Uses local LLM (Ollama) for robust keyword extraction and classification
 """
 
-import re
 import json
-from typing import List, Dict, Tuple
-from collections import Counter
 import logging
+import re
+from collections import Counter
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 

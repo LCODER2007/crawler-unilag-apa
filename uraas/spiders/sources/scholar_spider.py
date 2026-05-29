@@ -1,11 +1,12 @@
-import scrapy
-from scholarly import scholarly, ProxyGenerator
-import uuid
-import time
-import random
-import os
-import sys
 import json
+import os
+import random
+import sys
+import time
+import uuid
+
+import scrapy
+from scholarly import ProxyGenerator, scholarly
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))

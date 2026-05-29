@@ -4,11 +4,13 @@ Implements Boolean operators, field-specific queries, and full-text search.
 Comparable to Scopus/Web of Science search capabilities.
 """
 
-import re
 import logging
-from typing import List, Dict, Optional, Tuple
-from sqlalchemy import or_, and_, not_, func, text
-from uraas.database import SessionLocal, Item, Author, Collection, Community, db_year
+import re
+from typing import Dict, List, Optional, Tuple
+
+from sqlalchemy import and_, func, not_, or_, text
+
+from uraas.database import Author, Collection, Community, Item, SessionLocal, db_year
 
 logger = logging.getLogger(__name__)
 

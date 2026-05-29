@@ -1,6 +1,7 @@
-import re
 import os
+import re
 import sys
+
 from scrapy.exceptions import DropItem
 
 # Add project root to path

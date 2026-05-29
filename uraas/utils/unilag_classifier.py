@@ -10,9 +10,9 @@ Features:
   - Full 2024 UNILAG Faculty & Department structure
 """
 
-import re
 import math
-from typing import List, Tuple, Optional, Dict, Any
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 # ─── Complete UNILAG Faculty and Department Structure (2024) ───────────────────
 UNILAG_STRUCTURE = {

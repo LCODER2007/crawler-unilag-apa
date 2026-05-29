@@ -12,35 +12,35 @@ Implements all APA Intelligence & Analytics Platform metrics:
   - Special Collections (African Literature, Indigenous Knowledge, etc.)
 """
 
-import re
 import itertools
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import func, desc, extract, or_
+from sqlalchemy import desc, extract, func, or_
 from sqlalchemy.orm import joinedload
 
+from uraas.config.institutions import get_registry
 from uraas.database import (
-    SessionLocal,
-    Item,
     Author,
     Collection,
     Community,
     File,
+    Item,
+    SessionLocal,
     db_year,
     db_year_month,
 )
-from uraas.config.institutions import get_registry
 from uraas.utils.ai_classifier import (
+    SPECIAL_COLLECTIONS,
     classify_special_collections,
     extract_keywords,
     extract_trends_from_corpus,
-    SPECIAL_COLLECTIONS,
 )
-from uraas.utils.unilag_classifier import classifier
 from uraas.utils.analytics_cache import analytics_cache
+from uraas.utils.unilag_classifier import classifier
 
 logger = logging.getLogger(__name__)
 

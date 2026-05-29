@@ -3,17 +3,17 @@ Comprehensive test for all multi-institution spiders
 Tests initialization and configuration for all spider types
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from uraas.config.institutions import get_registry
-from uraas.spiders.sources.openalex_spider import OpenAlexSpider
-from uraas.spiders.sources.crossref_spider import CrossrefSpider
 from uraas.spiders.sources.arxiv_spider import ArxivSpider
-from uraas.spiders.sources.scholar_spider import ScholarSpider
+from uraas.spiders.sources.crossref_spider import CrossrefSpider
+from uraas.spiders.sources.openalex_spider import OpenAlexSpider
 from uraas.spiders.sources.orcid_spider import ORCIDSpider
+from uraas.spiders.sources.scholar_spider import ScholarSpider
 
 
 def test_all_spiders():

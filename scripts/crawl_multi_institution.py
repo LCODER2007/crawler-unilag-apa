@@ -3,10 +3,11 @@ Multi-Institution Crawler
 Crawls papers for multiple Nigerian universities simultaneously
 """
 
-import sys
-import os
 import argparse
+import os
 import subprocess
+import sys
+
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 

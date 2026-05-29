@@ -7,16 +7,17 @@ Test script for new Scopus-competitive features:
 
 import sys
 import time
-from uraas.database import SessionLocal, Item, Author, Base, engine
+
+from uraas.database import Author, Base, Item, SessionLocal, engine
+from uraas.services.advanced_search import SearchQuery
 from uraas.services.citation_tracker import (
-    CitationTracker,
+    AuthorMetrics,
     Citation,
     CitationMetrics,
-    AuthorMetrics,
-    get_paper_citations,
+    CitationTracker,
     get_author_bibliometrics,
+    get_paper_citations,
 )
-from uraas.services.advanced_search import SearchQuery
 
 if __name__ == "__main__":
     # Create new tables

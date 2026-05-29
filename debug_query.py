@@ -1,10 +1,11 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from uraas.database import SessionLocal, Item
 from sqlalchemy import func
+
+from uraas.database import Item, SessionLocal
 
 print("DB connection ok", flush=True)
 

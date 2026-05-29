@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import SessionLocal, Item
+from uraas.database import Item, SessionLocal
 from uraas.utils.ai_classifier import classify_special_collections
 
 BATCH_SIZE = 500

@@ -1,5 +1,6 @@
-from uraas.config.institutions import get_registry
 import os
+
+from uraas.config.institutions import get_registry
 
 if __name__ == "__main__":
     registry = get_registry()

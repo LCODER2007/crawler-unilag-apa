@@ -3,19 +3,21 @@ Multi-Institution Comparator Engine
 Core feature of APA Intelligence Platform - allows comparing multiple African universities
 """
 
-from typing import List, Dict, Optional
-from sqlalchemy import func, distinct
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+from sqlalchemy import distinct, func
 from sqlalchemy.orm import aliased
+
 from uraas.database import (
-    SessionLocal,
-    Item,
     Author,
-    Community,
     Collection,
+    Community,
     File,
+    Item,
+    SessionLocal,
     item_authors,
 )
-from datetime import datetime, timedelta
 
 
 class InstitutionProfile:

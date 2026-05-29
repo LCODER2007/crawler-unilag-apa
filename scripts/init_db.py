@@ -3,13 +3,13 @@ Database Initialization Script
 Creates all tables and seeds Communities and Collections based on UNILAG structure.
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path (parent of scripts/)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import init_db, SessionLocal, Community, Collection
+from uraas.database import Collection, Community, SessionLocal, init_db
 from uraas.utils.unilag_classifier import UNILAG_STRUCTURE
 
 

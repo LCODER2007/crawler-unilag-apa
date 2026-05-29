@@ -11,11 +11,11 @@ Key improvements over v1:
 - Named entity filtering (no city/country names as keywords)
 """
 
-import re
-import math
 import html
 import logging
-from typing import Dict, List, Tuple, Optional
+import math
+import re
+from typing import Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -1105,7 +1105,8 @@ def _load_nlp():
         try:
             _nlp = spacy.load("en_core_web_sm")
         except OSError:
-            import subprocess, sys
+            import subprocess
+            import sys
 
             subprocess.run(
                 [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],

@@ -1,21 +1,29 @@
-import os, csv, io, subprocess, threading, re, logging
-from flask import Flask, render_template, jsonify, send_file, request, Response
+import csv
+import io
+import logging
+import os
+import re
+import subprocess
+import threading
+
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from flask_socketio import SocketIO
-from uraas.config import config
+from sqlalchemy import desc, extract, func, or_
+
 from uraas.analytics.engine import analytics
+from uraas.config import config
 from uraas.database import (
-    SessionLocal,
-    Item,
-    File,
     Author,
-    Community,
     Collection,
+    Community,
+    File,
+    Item,
+    SessionLocal,
     db_year,
     db_year_month,
 )
-from uraas.utils.docid_generator import docid_generator
 from uraas.utils.analytics_cache import analytics_cache
-from sqlalchemy import func, extract, desc, or_
+from uraas.utils.docid_generator import docid_generator
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.DASHBOARD_SECRET_KEY
@@ -1272,7 +1280,7 @@ def au_charter_alignment():
     """
     session = SessionLocal()
     try:
-        from uraas.utils.ai_classifier import classify_au_targets, AU_CHARTER_TARGETS
+        from uraas.utils.ai_classifier import AU_CHARTER_TARGETS, classify_au_targets
 
         institution = request.args.get("institution", "").strip().lower()
         from uraas.analytics.engine import analytics as _analytics
@@ -1674,6 +1682,7 @@ def health_check():
     Returns 200 if operational, 503 if critical services are down.
     """
     from datetime import datetime
+
     from sqlalchemy import text
 
     health_status = {
@@ -1748,7 +1757,8 @@ def get_unilag_report():
     try:
         import json
         from datetime import datetime
-        from uraas.utils.ai_classifier import classify_au_targets, AU_CHARTER_TARGETS
+
+        from uraas.utils.ai_classifier import AU_CHARTER_TARGETS, classify_au_targets
 
         # UNILAG ROR
         unilag_ror = "https://ror.org/05rk03822"

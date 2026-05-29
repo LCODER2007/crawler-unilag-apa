@@ -2,9 +2,10 @@
 Enhanced retry middleware with exponential backoff.
 """
 
+import time
+
 from scrapy.downloadermiddlewares.retry import RetryMiddleware
 from scrapy.utils.response import response_status_message
-import time
 
 
 class EnhancedRetryMiddleware(RetryMiddleware):

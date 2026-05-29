@@ -3,13 +3,14 @@ PDF Downloader - Downloads and stores PDFs locally with metadata extraction.
 Tries direct URL first, then falls back to Unpaywall open-access copy.
 """
 
-import os
 import hashlib
-import requests
-from typing import Optional, Dict
+import os
 from datetime import datetime
-import PyPDF2
 from io import BytesIO
+from typing import Dict, Optional
+
+import PyPDF2
+import requests
 
 UNPAYWALL_EMAIL = "library@unilag.edu.ng"
 

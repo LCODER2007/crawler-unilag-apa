@@ -1,12 +1,13 @@
-import scrapy
+import logging
 import os
 import sys
-import logging
+
+import scrapy
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config.institutions import get_registry
-from uraas.config.special_collections import SC_SEED_KEYWORDS, SC_OPENALEX_CONCEPTS
+from uraas.config.special_collections import SC_OPENALEX_CONCEPTS, SC_SEED_KEYWORDS
 
 OPENALEX_BASE = "https://api.openalex.org/works"
 MAILTO = "cokiki@unilag.edu.ng"
@@ -254,7 +255,7 @@ class OpenAlexSpider(scrapy.Spider):
             and wave_accepted < wave_cap
             and self._accepted < self.target_limit
         ):
-            from urllib.parse import urlparse, parse_qs
+            from urllib.parse import parse_qs, urlparse
 
             qs = parse_qs(urlparse(response.url).query)
             current_filters = (

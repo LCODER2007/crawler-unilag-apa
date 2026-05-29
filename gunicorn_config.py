@@ -3,8 +3,8 @@ Gunicorn configuration for production deployment on Render.
 Optimized for Flask-SocketIO with WebSocket support.
 """
 
-import os
 import multiprocessing
+import os
 
 # Server socket
 port = os.getenv("PORT", "10000")

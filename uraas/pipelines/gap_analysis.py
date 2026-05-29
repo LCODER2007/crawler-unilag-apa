@@ -1,7 +1,8 @@
 from scrapy.exceptions import DropItem
-from uraas.database import SessionLocal, Item
-from uraas.utils.normalizer import normalize_title
 from thefuzz import fuzz
+
+from uraas.database import Item, SessionLocal
+from uraas.utils.normalizer import normalize_title
 
 FUZZY_THRESHOLD = 95  # % similarity required to classify as duplicate
 

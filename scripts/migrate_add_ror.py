@@ -2,8 +2,9 @@
 Database migration: Add ROR support for multi-institution comparison
 """
 
-from uraas.database import engine, SessionLocal, Item
 from sqlalchemy import text
+
+from uraas.database import Item, SessionLocal, engine
 
 
 def migrate():
