@@ -27,7 +27,7 @@ from uraas.utils.docid_generator import docid_generator
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.DASHBOARD_SECRET_KEY
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 logger = logging.getLogger(__name__)
 crawler_process = None
 crawler_lock = threading.Lock()

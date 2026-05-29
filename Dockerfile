@@ -59,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8080/api/analytics/overview', timeout=5)"
 
 # Run database initialization and then start gunicorn
-CMD python scripts/init_db.py && gunicorn --bind 0.0.0.0:8080 --workers 1 --worker-class eventlet --timeout 120 --access-logfile - --error-logfile - --log-level info uraas.dashboard.app:app
+CMD python scripts/init_db.py && gunicorn --bind 0.0.0.0:8080 --workers 1 --worker-class gevent --timeout 120 --access-logfile - --error-logfile - --log-level info uraas.dashboard.app:app
