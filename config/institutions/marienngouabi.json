@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/02y1sra05",
+  "name": "Université Marien Ngouabi",
+  "short_name": "Marien Ngouabi",
+  "country": "Republic of the Congo",
+  "sub_region": "Central Africa",
+  "staff_file": "data/marien_ngouabi_staff.json",
+  "affiliation_patterns": [
+    "Université Marien Ngouabi",
+    "Marien Ngouabi",
+    "Université Marien Ngouabi Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/04h7g6177",
+  "name": "Université de Yaoundé I",
+  "short_name": "Yaoundé I",
+  "country": "Cameroon",
+  "sub_region": "Central Africa",
+  "staff_file": "data/yaoundé_i_staff.json",
+  "affiliation_patterns": [
+    "Université de Yaoundé I",
+    "Yaoundé I",
+    "Université de Yaoundé I Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

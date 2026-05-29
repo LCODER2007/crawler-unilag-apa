@@ -15,7 +15,7 @@ class ArxivSpider(scrapy.Spider):
     allowed_domains = ["arxiv.org"]
 
     def __init__(self, institution='unilag', target=20, boost_special=True,
-                 sc_only=False, *args, **kwargs):
+                 sc_only=True, *args, **kwargs):
         """
         boost_special: fire extra arXiv searches AND-ed with SC seed phrases
                        (default True — heavy SC weight).
@@ -24,7 +24,7 @@ class ArxivSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
         self.boost_special = str(boost_special).lower() not in ('false', '0', 'no', 'off')
-        self.sc_only = str(sc_only).lower() in ('true', '1', 'yes', 'on')
+        self.sc_only = str(sc_only).lower() not in ('false', '0', 'no', 'off')
 
         # Get institution configuration
         registry = get_registry()

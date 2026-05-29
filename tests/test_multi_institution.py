@@ -5,12 +5,19 @@ Tests institution configuration and staff validation
 
 import sys
 import os
+import pytest
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from uraas.config.institutions import InstitutionRegistry, get_registry
 from uraas.utils.staff_validator import StaffValidator
+
+
+@pytest.fixture
+def registry():
+    """Provide the institution registry as a pytest fixture."""
+    return get_registry()
 
 
 def test_institution_registry():

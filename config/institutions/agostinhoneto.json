@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/00z2bpt98",
+  "name": "Université Agostinho Neto",
+  "short_name": "Agostinho Neto",
+  "country": "Angola",
+  "sub_region": "Central Africa",
+  "staff_file": "data/agostinho_neto_staff.json",
+  "affiliation_patterns": [
+    "Université Agostinho Neto",
+    "Agostinho Neto",
+    "Université Agostinho Neto Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

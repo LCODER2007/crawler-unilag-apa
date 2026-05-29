@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/0199e1957",
+  "name": "University of Dar es Salaam",
+  "short_name": "UDSM",
+  "country": "Tanzania",
+  "sub_region": "East Africa",
+  "staff_file": "data/udsm_staff.json",
+  "affiliation_patterns": [
+    "University of Dar es Salaam",
+    "UDSM",
+    "University of Dar es Salaam Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

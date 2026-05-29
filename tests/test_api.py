@@ -1,4 +1,4 @@
-﻿"""
+"""
 URAAS Test Suite  covers every API endpoint and APA analytics metrics.
 Run: pytest tests/test_api.py -v
 """
@@ -141,17 +141,7 @@ def test_paper_detail_if_exists(client):
     finally:
         session.close()
 
-#  SDG alignment 
 
-def test_sdg_alignment(client):
-    r = client.get('/api/analytics/sdg-alignment')
-    assert r.status_code == 200
-    d = r.get_json()
-    assert isinstance(d, list)
-    for item in d:
-        assert 'sdg' in item
-        assert 'count' in item
-        assert item['count'] >= 0
 
 #  Keyword cloud 
 

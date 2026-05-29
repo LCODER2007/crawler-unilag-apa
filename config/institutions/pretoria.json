@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/047fpp722",
+  "name": "University of Pretoria",
+  "short_name": "UP",
+  "country": "South Africa",
+  "sub_region": "Southern Africa",
+  "staff_file": "data/up_staff.json",
+  "affiliation_patterns": [
+    "University of Pretoria",
+    "UP",
+    "University of Pretoria Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

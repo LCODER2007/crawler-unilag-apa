@@ -76,13 +76,19 @@ class InstitutionProfile:
         docid_count = sum(1 for i in items if i.docid)
         self.metrics['docid_coverage'] = round(docid_count / len(items) * 100, 1) if items else 0
         
+        # Sub-region lookup from registry
+        from uraas.config.institutions import get_registry
+        reg = get_registry()
+        inst_cfg = reg.get(self.ror_id)
+        self.metrics['sub_region'] = inst_cfg.sub_region if inst_cfg else 'Unknown'
+        
         return self.metrics
 
 
 class ComparatorEngine:
     """
     Multi-Institution Comparison Engine
-    Allows comparing 2-10 institutions simultaneously
+    Allows comparing 2-15 institutions simultaneously across all African universities
     """
     
     @staticmethod

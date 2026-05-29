@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/039482g93",
+  "name": "University of the Witwatersrand",
+  "short_name": "Wits",
+  "country": "South Africa",
+  "sub_region": "Southern Africa",
+  "staff_file": "data/wits_staff.json",
+  "affiliation_patterns": [
+    "University of the Witwatersrand",
+    "Wits",
+    "University of the Witwatersrand Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

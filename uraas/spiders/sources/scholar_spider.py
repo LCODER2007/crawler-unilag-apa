@@ -11,6 +11,7 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from uraas.config.institutions import get_registry
+from uraas.config.special_collections import all_classifier_keywords
 
 class ScholarSpider(scrapy.Spider):
     name = "scholar_multi"
@@ -84,8 +85,15 @@ class ScholarSpider(scrapy.Spider):
                 for pub in publications[:10]: # Up to 10 papers per author
                     pub_filled = scholarly.fill(pub)
                     bib = pub_filled.get('bib', {})
+                    abstract = bib.get('abstract', '')
                     title = bib.get('title', '')
                     if not title: continue
+                    
+                    combined = f"{title} {abstract}".lower()
+                    kws = all_classifier_keywords()
+                    if not any(kw.lower() in combined for kw in kws):
+                        self.logger.debug(f"ScholarSpider: Skipping non-SC paper: {title[:50]}")
+                        continue
                     
                     authors_str = bib.get('author', '')
                     authors_list = [a.strip() for a in authors_str.split(' and ')] if authors_str else [profile_name]

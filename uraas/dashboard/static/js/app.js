@@ -6,8 +6,8 @@
 const socket = io();
 let archiveData = {}, charts = {}, networkEdgeData = null;
 let yearDataCache = null, yearStackedCache = null, facultyDataCache = null;
-let sdgData = null, trendsData = null, keywordData = null;
-let analyticsLoaded = false, sdgLoaded = false, kwLoaded = false, trendsLoaded = false;
+let trendsData = null, keywordData = null;
+let analyticsLoaded = false, kwLoaded = false, trendsLoaded = false;
 let currentAtab = 'overview';
 
 // Global Color Palette
@@ -29,7 +29,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function safeFetch(url, ok, err) {
-  return fetch(url)
+  return fetch(url, { cache: 'no-store' })
     .then(r => {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -105,6 +105,7 @@ function switchTab(name, btn) {
   }
   if (name === 'archive') renderTree(archiveData);
   if (name === 'search') loadSearchFaculties();
+  if (name === 'comparator') loadCompareDDs();
 }
 
 function switchAtab(name, btn) {
@@ -115,8 +116,7 @@ function switchAtab(name, btn) {
   if (t) t.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   
-  if (name === 'sdg') loadSDGTab();
-  if (name === 'trends') loadTrendsTab();
+  if (name === 'au') loadAUCharterTab();
   if (name === 'compare') loadCompareDDs();
   if (name === 'language') loadLanguageTab();
   if (name === 'special') loadSpecialTab();
@@ -145,8 +145,7 @@ function applyGlobalInstitutionFilter() {
   const specCsv = $('special-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
   
   if (currentAtab === 'overview') loadAnalyticsOverview();
-  else if (currentAtab === 'sdg') { sdgLoaded = false; loadSDGTab(); }
-  else if (currentAtab === 'trends') { trendsLoaded = false; loadTrendsTab(); }
+  
   else if (currentAtab === 'language') { loadLanguageTab(); }
   else if (currentAtab === 'special') { loadSpecialTab(); }
   else if (currentAtab === 'staff') { loadStaffDirectory(); }
@@ -472,53 +471,6 @@ function openSDGPanel(idx) {
 function closeSdgPanel() { $('sdg-papers-panel')?.classList.add('hidden'); }
 
 /**
- * Research Trends
- */
-function loadTrendsTab() {
-  if (trendsLoaded) return;
-  safeFetch(withInst('/api/analytics/research-trends'), data => {
-    trendsLoaded = true; trendsData = data;
-    renderTrendsChips();
-    renderTrendsLeaderboard();
-  });
-}
-
-function renderTrendsChips() {
-  const el = $('trends-chips'); if (!el || !trendsData) return;
-  el.innerHTML = trendsData.map((t, i) => `<button class="chip ${i === 0 ? 'active' : ''}" onclick="selectTrend(${i}, this)">${esc(t.topic)} <span style="opacity:0.6">(${t.total})</span></button>`).join('');
-  selectTrend(0, el.querySelector('.chip'));
-}
-
-function renderTrendsLeaderboard() {
-  const el = $('trends-leaderboard'); if (!el || !trendsData) return;
-  const maxTotal = Math.max(...trendsData.map(t => t.total));
-  el.innerHTML = trendsData.map((t, i) => `
-    <div class="flex items-center gap-3 py-2">
-      <span class="text-xs mono w-6 text-right text-muted">${i + 1}</span>
-      <span class="text-sm font-medium flex-1">${esc(t.topic)}</span>
-      <div class="flex-1 max-w-[120px] h-2 rounded bg-slate-800">
-        <div style="width:${t.total / maxTotal * 100}%; height:100%; background:${COLORS[i % COLORS.length]}; border-radius:4px"></div>
-      </div>
-      <span class="text-xs font-bold mono" style="color:${COLORS[i % COLORS.length]}; min-width:30px; text-align:right">${t.total}</span>
-    </div>`).join('');
-}
-
-function selectTrend(idx, btn) {
-  document.querySelectorAll('#trends-chips .chip').forEach(c => c.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  const t = trendsData[idx];
-  destroyChart('trends');
-  charts['trends'] = new Chart($('chart-trends'), {
-    type: 'line',
-    data: {
-      labels: t.by_year.map(d => d.year),
-      datasets: [{ label: t.topic, data: t.by_year.map(d => d.count), borderColor: COLORS[idx % COLORS.length], backgroundColor: COLORS[idx % COLORS.length] + '10', fill: true, tension: 0.4 }]
-    },
-    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
-  });
-}
-
-/**
  * Collaboration Network (D3.js)
  */
 let netTimer = null, curNetAuthor = null, d3Sim = null;
@@ -589,40 +541,225 @@ function renderNetTable(data, center) {
  * Comparator Engine
  */
 let selectedInstitutions = [];
+
+// Coordinates for the 25 demo universities
+const UNIVERSITY_COORDS = {
+  "https://ror.org/03c4mpy73": { lat: 30.0276, lon: 31.2089, name: "Cairo University", sub_region: "North Africa" },
+  "https://ror.org/034x7p097": { lat: 30.0772, lon: 31.2850, name: "Ain Shams University", sub_region: "North Africa" },
+  "https://ror.org/02078r490": { lat: 31.2001, lon: 29.9187, name: "Alexandria University", sub_region: "North Africa" },
+  "https://ror.org/050j3a172": { lat: 36.8315, lon: 10.1887, name: "Université de Tunis El Manar", sub_region: "North Africa" },
+  "https://ror.org/03vpy3v17": { lat: 33.9842, lon: -6.8689, name: "Université Mohammed V de Rabat", sub_region: "North Africa" },
+
+  "https://ror.org/04h7g6177": { lat: 3.8619, lon: 11.5222, name: "Université de Yaoundé I", sub_region: "Central Africa" },
+  "https://ror.org/05vzwad88": { lat: -4.4173, lon: 15.3086, name: "Université de Kinshasa", sub_region: "Central Africa" },
+  "https://ror.org/00z2bpt98": { lat: -8.8383, lon: 13.2842, name: "Université Agostinho Neto", sub_region: "Central Africa" },
+  "https://ror.org/02y1sra05": { lat: -4.2638, lon: 15.2471, name: "Université Marien Ngouabi", sub_region: "Central Africa" },
+  "https://ror.org/059gqse72": { lat: -1.6247, lon: 13.5786, name: "Université des Sciences et Techniques de Masuku", sub_region: "Central Africa" },
+
+  "https://ror.org/05rk03822": { lat: 6.5182, lon: 3.3987, name: "University of Lagos", sub_region: "West Africa" },
+  "https://ror.org/01es5me90": { lat: 7.4443, lon: 3.8994, name: "University of Ibadan", sub_region: "West Africa" },
+  "https://ror.org/02n05rk12": { lat: 6.6726, lon: 3.1612, name: "Covenant University", sub_region: "West Africa" },
+  "https://ror.org/00zpy3v12": { lat: 5.6508, lon: -0.1870, name: "University of Ghana", sub_region: "West Africa" },
+  "https://ror.org/00x4mpy73": { lat: 6.6745, lon: -1.5716, name: "Kwame Nkrumah University of Science and Technology", sub_region: "West Africa" },
+
+  "https://ror.org/017620319": { lat: -33.9573, lon: 18.4612, name: "University of Cape Town", sub_region: "Southern Africa" },
+  "https://ror.org/05777p686": { lat: -33.9321, lon: 18.8644, name: "Stellenbosch University", sub_region: "Southern Africa" },
+  "https://ror.org/039482g93": { lat: -26.1929, lon: 28.0305, name: "University of the Witwatersrand", sub_region: "Southern Africa" },
+  "https://ror.org/047fpp722": { lat: -25.7545, lon: 28.2314, name: "University of Pretoria", sub_region: "Southern Africa" },
+  "https://ror.org/03w489125": { lat: -17.7840, lon: 31.0530, name: "University of Zimbabwe", sub_region: "Southern Africa" },
+
+  "https://ror.org/05vzwad88_makerere": { lat: 0.3349, lon: 32.5677, name: "Makerere University", sub_region: "East Africa" },
+  "https://ror.org/01078r490": { lat: -1.2801, lon: 36.8166, name: "University of Nairobi", sub_region: "East Africa" },
+  "https://ror.org/01py3v171": { lat: 9.0350, lon: 38.7523, name: "Addis Ababa University", sub_region: "East Africa" },
+  "https://ror.org/0199e1957": { lat: -6.7725, lon: 39.2064, name: "University of Dar es Salaam", sub_region: "East Africa" },
+  "https://ror.org/02yr01r27": { lat: -1.9441, lon: 30.0619, name: "University of Rwanda", sub_region: "East Africa" }
+};
+
+// Capital city coordinates for all 52 African countries
+const COUNTRY_CAPITAL_COORDS = {
+  "Egypt": { lat: 30.0444, lon: 31.2357 },
+  "Morocco": { lat: 34.0209, lon: -6.8416 },
+  "Algeria": { lat: 36.7538, lon: 3.0588 },
+  "Tunisia": { lat: 36.8065, lon: 10.1815 },
+  "Libya": { lat: 32.8872, lon: 13.1913 },
+  "Sudan": { lat: 15.5007, lon: 32.5599 },
+  "Nigeria": { lat: 9.0765, lon: 7.3986 },
+  "Ghana": { lat: 5.6037, lon: -0.1870 },
+  "Senegal": { lat: 14.7167, lon: -17.4677 },
+  "Cote d'Ivoire": { lat: 6.8276, lon: -5.2793 },
+  "Benin": { lat: 6.3654, lon: 2.4183 },
+  "Burkina Faso": { lat: 12.3714, lon: -1.5197 },
+  "Cape Verde": { lat: 14.9330, lon: -23.5133 },
+  "Gambia": { lat: 13.4549, lon: -16.5790 },
+  "Guinea": { lat: 9.5370, lon: -13.6773 },
+  "Guinea-Bissau": { lat: 11.8817, lon: -15.6178 },
+  "Liberia": { lat: 6.3156, lon: -10.8074 },
+  "Mali": { lat: 12.6392, lon: -8.0029 },
+  "Mauritania": { lat: 18.0735, lon: -15.9582 },
+  "Niger": { lat: 13.5116, lon: 2.1085 },
+  "Sierra Leone": { lat: 8.4840, lon: -13.2299 },
+  "Togo": { lat: 6.1375, lon: 1.2123 },
+  "Kenya": { lat: -1.2921, lon: 36.8219 },
+  "Uganda": { lat: 0.3152, lon: 32.5825 },
+  "Tanzania": { lat: -6.1630, lon: 35.7516 },
+  "Ethiopia": { lat: 9.0300, lon: 38.7400 },
+  "Rwanda": { lat: -1.9441, lon: 30.0619 },
+  "Burundi": { lat: -3.3731, lon: 29.9189 },
+  "Djibouti": { lat: 11.5721, lon: 43.1456 },
+  "Eritrea": { lat: 15.3390, lon: 38.9371 },
+  "Somalia": { lat: 2.0439, lon: 45.3426 },
+  "South Sudan": { lat: 4.8517, lon: 31.5713 },
+  "Madagascar": { lat: -18.8792, lon: 47.5079 },
+  "Mauritius": { lat: -20.1609, lon: 57.5012 },
+  "Seychelles": { lat: -4.6191, lon: 55.4513 },
+  "Comoros": { lat: -11.7006, lon: 43.2505 },
+  "South Africa": { lat: -25.7479, lon: 28.2293 },
+  "Zimbabwe": { lat: -17.8252, lon: 31.0335 },
+  "Zambia": { lat: -15.3875, lon: 28.3228 },
+  "Namibia": { lat: -22.5609, lon: 17.0658 },
+  "Botswana": { lat: -24.6282, lon: 25.9231 },
+  "Lesotho": { lat: -29.3134, lon: 27.4844 },
+  "Eswatini": { lat: -26.3055, lon: 31.1367 },
+  "Malawi": { lat: -13.9626, lon: 33.7741 },
+  "Mozambique": { lat: -25.9692, lon: 32.5732 },
+  "Cameroon": { lat: 3.8480, lon: 11.5021 },
+  "DR Congo": { lat: -4.4419, lon: 15.2663 },
+  "Angola": { lat: -8.8390, lon: 13.2894 },
+  "Gabon": { lat: 0.4162, lon: 9.4673 },
+  "Republic of the Congo": { lat: -4.2634, lon: 15.2429 },
+  "Central African Republic": { lat: 4.3947, lon: 18.5582 },
+  "Chad": { lat: 12.1348, lon: 15.0557 },
+  "Equatorial Guinea": { lat: 3.7504, lon: 8.7817 },
+  "Sao Tome and Principe": { lat: 0.3302, lon: 6.7273 }
+};
+
+function loadCompareDDs() {
+  if (window.universityRegistry) return;
+  safeFetch('/api/university-registry', data => {
+    window.universityRegistry = data;
+  });
+}
+
+function onSubregionChange() {
+  const subregion = $('comp-subregion-select').value;
+  const countrySel = $('comp-country-select');
+  const uniSel = $('comp-university-select');
+  
+  countrySel.innerHTML = '<option value="">Country...</option>';
+  uniSel.innerHTML = '<option value="">University...</option>';
+  uniSel.disabled = true;
+  
+  if (!subregion || !window.universityRegistry || !window.universityRegistry[subregion]) {
+    countrySel.disabled = true;
+    return;
+  }
+  
+  const countries = Object.keys(window.universityRegistry[subregion]).sort();
+  countries.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    countrySel.appendChild(opt);
+  });
+  countrySel.disabled = false;
+}
+
+function onCountryChange() {
+  const subregion = $('comp-subregion-select').value;
+  const country = $('comp-country-select').value;
+  const uniSel = $('comp-university-select');
+  
+  uniSel.innerHTML = '<option value="">University...</option>';
+  
+  if (!subregion || !country || !window.universityRegistry || !window.universityRegistry[subregion] || !window.universityRegistry[subregion][country]) {
+    uniSel.disabled = true;
+    return;
+  }
+  
+  const unis = window.universityRegistry[subregion][country];
+  unis.forEach(u => {
+    const opt = document.createElement('option');
+    const rorValue = u.ror || `https://ror.org/local/${encodeURIComponent(u.name)}`;
+    opt.value = rorValue;
+    opt.textContent = u.name;
+    uniSel.appendChild(opt);
+  });
+  uniSel.disabled = false;
+}
+
+function onUniversityChange(value) {
+  if (!value) return;
+  quickAddInstitution(value);
+  $('comp-university-select').value = '';
+}
+
 function addInstitutionToComparison() {
   const input = $('comp-institution-input');
   const value = input.value.trim();
-  if (!value || selectedInstitutions.includes(value) || selectedInstitutions.length >= 10) return;
+  if (!value || selectedInstitutions.includes(value) || selectedInstitutions.length >= 15) return;
   selectedInstitutions.push(value);
   input.value = '';
   renderSelectedInstitutions();
 }
+
 function quickAddInstitution(ror) {
-  if (!ror || selectedInstitutions.includes(ror) || selectedInstitutions.length >= 10) return;
+  if (!ror || selectedInstitutions.includes(ror) || selectedInstitutions.length >= 15) return;
   selectedInstitutions.push(ror);
   renderSelectedInstitutions();
 }
+
 function removeInstitution(ror) {
   selectedInstitutions = selectedInstitutions.filter(r => r !== ror);
   renderSelectedInstitutions();
 }
+
 function renderSelectedInstitutions() {
   const container = $('comp-selected-institutions'); if (!container) return;
   if (selectedInstitutions.length === 0) { container.innerHTML = '<p class="text-xs text-muted">No institutions selected.</p>'; return; }
-  container.innerHTML = selectedInstitutions.map(ror => `<div class="chip active">${ror.split('/').pop()} <button onclick="removeInstitution('${ror}')" class="ml-1">×</button></div>`).join('');
+  container.innerHTML = selectedInstitutions.map(ror => {
+    let name = ror.split('/').pop();
+    if (name.startsWith('local/')) {
+      name = decodeURIComponent(name.replace('local/', ''));
+    }
+    if (name.length > 25) name = name.substring(0, 22) + '...';
+    return `<div class="chip active">${esc(name)} <button onclick="removeInstitution('${ror}')" class="ml-1">×</button></div>`;
+  }).join('');
 }
+
+function clearComparison() {
+  selectedInstitutions = [];
+  renderSelectedInstitutions();
+  $('comp-results').classList.add('hidden');
+  $('comp-institution-input').value = '';
+  $('comp-subregion-select').value = '';
+  $('comp-country-select').innerHTML = '<option value="">Country...</option>';
+  $('comp-country-select').disabled = true;
+  $('comp-university-select').innerHTML = '<option value="">University...</option>';
+  $('comp-university-select').disabled = true;
+}
+
 function runComparison() {
   if (selectedInstitutions.length < 2) { toast('Add at least 2 institutions', 'warning'); return; }
   const btn = $('comp-run-btn'); btn.disabled = true;
-  fetch('/api/comparator/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ror_ids: selectedInstitutions }) })
-    .then(r => r.json()).then(data => { renderComparisonResults(data); $('comp-results').classList.remove('hidden'); })
+  fetch('/api/comparator/senate-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ror_ids: selectedInstitutions, format: 'json' }) })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => { window.lastCompareData = data; renderComparisonResults(data); $('comp-results').classList.remove('hidden'); })
+    .catch(e => { console.error(e); toast('Comparison failed: ' + e.message, 'error'); })
     .finally(() => btn.disabled = false);
 }
+
 function renderComparisonResults(data) {
+  // Summary cards
+  $('comp-total-papers').textContent = data.executive_summary.total_papers.toLocaleString();
+  $('comp-total-authors').textContent = data.executive_summary.total_authors.toLocaleString();
+  $('comp-avg-oa').textContent = data.executive_summary.average_oa_rate + '%';
+  $('comp-collaborations').textContent = data.executive_summary.total_collaborations;
+
+  // Table Matrix
   const tbody = $('comp-table-body');
-  tbody.innerHTML = data.institutions.map(inst => `
+  tbody.innerHTML = data.detailed_comparison.institutions.map(inst => `
     <tr class="row-hover border-b border-white/5">
-      <td class="py-3 px-2 font-medium">${inst.name}</td>
+      <td class="py-3 px-2 font-medium">${esc(inst.name)}</td>
       <td class="py-3 px-2 text-right">${inst.metrics.total_papers.toLocaleString()}</td>
       <td class="py-3 px-2 text-right">${inst.metrics.total_authors.toLocaleString()}</td>
       <td class="py-3 px-2 text-right">${inst.metrics.oa_rate}%</td>
@@ -630,6 +767,355 @@ function renderComparisonResults(data) {
       <td class="py-3 px-2 text-right">${inst.metrics.patents}</td>
       <td class="py-3 px-2 text-right">${inst.metrics.growth_rate}%</td>
     </tr>`).join('');
+
+  // Rankings
+  const renderRanks = (list, unit) => {
+    if (!list || !list.length) return '<p class="text-xs text-muted">No data</p>';
+    return list.map(r => `
+      <div class="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
+        <span class="text-sm"><span class="font-bold text-accent mr-2">#${r.rank}</span>${esc(r.institution)}</span>
+        <span class="font-mono text-xs font-bold">${r.value.toLocaleString()}${unit}</span>
+      </div>`).join('');
+  };
+  
+  const rankings = data.detailed_comparison.rankings;
+  $('comp-rank-volume').innerHTML = renderRanks(rankings.total_papers, ' papers');
+  $('comp-rank-oa').innerHTML = renderRanks(rankings.oa_rate, '%');
+  $('comp-rank-tk').innerHTML = renderRanks(rankings.tk_rate, '%');
+  $('comp-rank-patent').innerHTML = renderRanks(rankings.patent_rate || rankings.patents_per_100_papers, '%');
+
+  // Insights
+  const insightsEl = $('comp-insights');
+  let html = '';
+  if (data.detailed_comparison.insights && data.detailed_comparison.insights.length) {
+    html += '<div class="space-y-2 mb-4">';
+    data.detailed_comparison.insights.forEach(ins => {
+      if (ins.category.includes('Leader') || ins.category.includes('Champion')) {
+        html += `
+          <div class="p-3 rounded-lg border border-success/20 bg-success/5 flex items-start gap-2">
+            <span class="text-success text-base">★</span>
+            <div>
+              <p class="font-bold text-xs text-success uppercase tracking-wider">${esc(ins.category)}</p>
+              <p class="text-sm font-semibold text-slate-100">${esc(ins.institution)} leads with ${ins.value.toLocaleString()}${ins.metric.includes('rate') ? '%' : ''}</p>
+            </div>
+          </div>`;
+      } else {
+        html += `
+          <div class="p-3 rounded-lg border border-warning/20 bg-warning/5 flex items-start gap-2">
+            <span class="text-warning text-base">⚠</span>
+            <div>
+              <p class="font-bold text-xs text-warning uppercase tracking-wider">${esc(ins.category)} (${esc(ins.institution)})</p>
+              <p class="text-sm text-slate-200">${esc(ins.message)}</p>
+            </div>
+          </div>`;
+      }
+    });
+    html += '</div>';
+  }
+  
+  if (data.recommendations && data.recommendations.length) {
+    html += '<p class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Actionable Policy Recommendations</p>';
+    html += '<ul class="list-disc pl-5 text-sm space-y-1 text-slate-300">';
+    data.recommendations.forEach(rec => { html += `<li>${esc(rec)}</li>`; });
+    html += '</ul>';
+  }
+  
+  insightsEl.innerHTML = html || '<p class="text-sm py-4 text-muted">No insights available.</p>';
+
+  // Network map
+  renderAfricanCollaborationMap(data.collaboration_network);
+}
+
+function generateSenateReport() {
+  if (selectedInstitutions.length < 2) { toast('Add at least 2 institutions', 'warning'); return; }
+  toast('Downloading Senate Report (CSV)...', 'info');
+  fetch('/api/comparator/senate-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ror_ids: selectedInstitutions, format: 'csv' }) })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none'; a.href = url;
+      a.download = `senate_report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a); a.click();
+      window.URL.revokeObjectURL(url);
+      toast('Senate Report downloaded successfully', 'success');
+    })
+    .catch(e => { console.error(e); toast('Report download failed: ' + e.message, 'error'); });
+}
+
+function renderAfricanCollaborationMap(networkData) {
+  const svg = d3.select('#comp-map-svg');
+  svg.selectAll('*').remove();
+  const container = document.getElementById('comp-collaboration-viz');
+  const width = container.clientWidth || 800, height = 520;
+  svg.attr('viewBox', `0 0 ${width} ${height}`);
+
+  const africaOutline = [
+    {lat: 37.0, lon: 10.0}, {lat: 31.0, lon: 32.0}, {lat: 12.0, lon: 51.0},
+    {lat: -4.0, lon: 40.0}, {lat: -26.0, lon: 33.0}, {lat: -34.0, lon: 18.4},
+    {lat: -15.0, lon: 12.0}, {lat: -5.0, lon: 12.0}, {lat: 4.0, lon: 9.0},
+    {lat: 6.0, lon: 3.0}, {lat: 5.0, lon: -8.0}, {lat: 14.7, lon: -17.4},
+    {lat: 21.0, lon: -17.0}, {lat: 35.8, lon: -5.8}, {lat: 36.8, lon: 3.0}
+  ];
+
+  function projectCoords(lat, lon) {
+    const minLat = -36, maxLat = 39, minLon = -22, maxLon = 53;
+    const xPct = (lon - minLon) / (maxLon - minLon);
+    const yPct = 1 - (lat - minLat) / (maxLat - minLat);
+    const padding = 50;
+    return { x: padding + xPct * (width - 2 * padding), y: padding + yPct * (height - 2 * padding) };
+  }
+
+  const pointsString = africaOutline.map(p => {
+    const proj = projectCoords(p.lat, p.lon);
+    return `${proj.x},${proj.y}`;
+  }).join(' ');
+
+  const defs = svg.append('defs');
+  const glowFilter = defs.append('filter').attr('id', 'map-glow').attr('x', '-20%').attr('y', '-20%').attr('width', '140%').attr('height', '140%');
+  glowFilter.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'blur');
+  glowFilter.append('feMerge').selectAll('feMergeNode').data(['blur', 'SourceGraphic']).enter().append('feMergeNode').attr('in', d => d);
+
+  svg.append('polygon').attr('points', pointsString).attr('fill', 'rgba(255, 255, 255, 0.015)').attr('stroke', 'rgba(255, 255, 255, 0.05)').attr('stroke-width', 2.5).attr('stroke-dasharray', '5,5');
+
+  const nodes = [], nodesMap = {};
+  networkData.nodes.forEach(node => {
+    let lat = 0, lon = 20, name = node.label, region = 'Unknown';
+    const uRor = node.id;
+    if (UNIVERSITY_COORDS[uRor]) {
+      lat = UNIVERSITY_COORDS[uRor].lat; lon = UNIVERSITY_COORDS[uRor].lon;
+      name = UNIVERSITY_COORDS[uRor].name; region = UNIVERSITY_COORDS[uRor].sub_region;
+    } else {
+      let found = false;
+      if (window.universityRegistry) {
+        for (const [subReg, countries] of Object.entries(window.universityRegistry)) {
+          for (const [country, unis] of Object.entries(countries)) {
+            const uni = unis.find(u => u.ror === uRor || u.name === name);
+            if (uni) {
+              const countryCoords = COUNTRY_CAPITAL_COORDS[country];
+              if (countryCoords) { lat = countryCoords.lat; lon = countryCoords.lon; }
+              name = uni.name; region = subReg; found = true; break;
+            }
+          }
+          if (found) break;
+        }
+      }
+    }
+    const proj = projectCoords(lat, lon);
+    const n = { id: node.id, label: name, lat, lon, x: proj.x, y: proj.y, region };
+    nodes.push(n); nodesMap[node.id] = n;
+  });
+
+  const links = networkData.edges.map(e => ({ source: nodesMap[e.source], target: nodesMap[e.target], weight: e.weight })).filter(l => l.source && l.target);
+
+  const regionColors = { "North Africa": "#3b82f6", "West Africa": "#22c55e", "East Africa": "#f59e0b", "Southern Africa": "#8b5cf6", "Central Africa": "#ec4899", "Unknown": "#64748b" };
+
+  svg.append('g').selectAll('line').data(links).enter().append('line')
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+    .attr('stroke', 'rgba(251, 191, 36, 0.4)').attr('stroke-width', d => Math.max(1.5, Math.min(d.weight * 1.5, 8))).attr('filter', 'url(#map-glow)').style('stroke-linecap', 'round');
+
+  const nodeGroup = svg.append('g').selectAll('g').data(nodes).enter().append('g').attr('transform', d => `translate(${d.x},${d.y})`).style('cursor', 'pointer');
+  nodeGroup.append('circle').attr('r', 16).attr('fill', 'none').attr('stroke', d => regionColors[d.region] || '#64748b').attr('stroke-width', 1.5).attr('opacity', 0).attr('class', 'hover-ring');
+  nodeGroup.append('circle').attr('r', 9).attr('fill', d => regionColors[d.region] || '#64748b').attr('stroke', '#0f172a').attr('stroke-width', 1.5);
+  nodeGroup.append('text').attr('text-anchor', 'middle').attr('y', -14).attr('font-size', '10px').attr('font-weight', '600').attr('fill', '#e2e8f0').attr('paint-order', 'stroke').attr('stroke', '#0f172a').attr('stroke-width', '2.5px').text(d => d.label.length > 20 ? d.label.substring(0, 18) + '...' : d.label);
+
+  const tooltip = d3.select('#comp-map-tooltip');
+  nodeGroup.on('mouseover', function(event, d) {
+    d3.select(this).select('.hover-ring').transition().duration(200).style('opacity', 0.8).attr('r', 18);
+    tooltip.transition().duration(150).style('opacity', 1).style('display', 'block');
+    let metricsHtml = `<p class="font-bold text-slate-100">${esc(d.label)}</p><p class="text-[10px] text-muted mb-2">${esc(d.region)}</p>`;
+    if (window.lastCompareData) {
+      const inst = window.lastCompareData.detailed_comparison.institutions.find(i => i.ror_id === d.id);
+      if (inst) {
+        metricsHtml += `
+          <div class="space-y-1 mt-1 border-t border-white/10 pt-1">
+            <div class="flex justify-between gap-4"><span>Papers:</span><span class="font-mono text-accent">${inst.metrics.total_papers.toLocaleString()}</span></div>
+            <div class="flex justify-between gap-4"><span>OA Rate:</span><span class="font-mono text-success">${inst.metrics.oa_rate}%</span></div>
+            <div class="flex justify-between gap-4"><span>IK Rate:</span><span class="font-mono text-warning">${inst.metrics.tk_rate}%</span></div>
+            <div class="flex justify-between gap-4"><span>Patents:</span><span class="font-mono">${inst.metrics.patents}</span></div>
+          </div>`;
+      }
+    }
+    tooltip.html(metricsHtml);
+  })
+  .on('mousemove', function(event) {
+    const containerRect = container.getBoundingClientRect(), tooltipWidth = tooltip.node().offsetWidth, tooltipHeight = tooltip.node().offsetHeight;
+    let x = event.clientX - containerRect.left + 15, y = event.clientY - containerRect.top + 15;
+    if (x + tooltipWidth > width) x = event.clientX - containerRect.left - tooltipWidth - 15;
+    if (y + tooltipHeight > height) y = event.clientY - containerRect.top - tooltipHeight - 15;
+    tooltip.style('left', `${x}px`).style('top', `${y}px`);
+  })
+  .on('mouseout', function() {
+    d3.select(this).select('.hover-ring').transition().duration(200).style('opacity', 0);
+    tooltip.transition().duration(150).style('opacity', 0).style('display', 'none');
+  });
+}
+
+function generateDecolonialReport() {
+  const btn = $('report-gen-btn'); btn.disabled = true; btn.textContent = 'Generating...';
+  const container = $('report-output-container'), title = $('report-title'), body = $('report-body');
+  container.classList.add('hidden');
+  
+  safeFetch('/api/reports/unilag-subregion', data => {
+    title.textContent = data.title;
+    let html = `
+      <div>
+        <p class="text-xs uppercase tracking-wider text-muted mb-1">Generated: ${esc(data.metadata.generated_at)} | Focus: ${esc(data.metadata.institution)} (${esc(data.metadata.subregion)})</p>
+        <p class="text-sm italic leading-relaxed text-slate-300 border-l-2 border-accent pl-4 py-1">${esc(data.introduction)}</p>
+      </div>
+      <div class="space-y-3 pt-3">
+        <h4 class="text-base font-bold text-slate-100">I. Curated Literature Statistics & AU Renaissance Target 2 Compliance</h4>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="surface p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.02)">
+            <p class="text-xs text-muted">Total Curated Papers</p>
+            <p class="text-2xl font-bold text-accent">${data.statistics.total_curated}</p>
+          </div>
+          <div class="surface p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.02)">
+            <p class="text-xs text-muted">Compliant Papers</p>
+            <p class="text-2xl font-bold text-success">${data.statistics.compliant_count}</p>
+          </div>
+          <div class="surface p-4 rounded-xl text-center" style="background:rgba(255,255,255,0.02)">
+            <p class="text-xs text-muted">Compliance Rate</p>
+            <p class="text-2xl font-bold text-warning">${data.statistics.compliance_rate}%</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+          <div class="p-3 rounded-lg border border-success/10 bg-success/5">
+            <p class="text-xs font-bold text-success mb-1 uppercase tracking-wider">Linguistic Keywords Detected</p>
+            <p class="text-xs text-slate-300 leading-relaxed">${data.statistics.keywords_found.map(k => `<span class="chip text-[10px] py-0.5 px-2 mr-1 mb-1 inline-block">${esc(k)}</span>`).join('') || 'None detected'}</p>
+          </div>
+          <div class="p-3 rounded-lg border border-warning/10 bg-warning/5">
+            <p class="text-xs font-bold text-warning mb-1 uppercase tracking-wider">Critical Literature Gaps (Missing Targets)</p>
+            <p class="text-xs text-slate-300 leading-relaxed">${data.statistics.keywords_gap.slice(0, 15).map(k => `<span class="chip text-[10px] py-0.5 px-2 mr-1 mb-1 inline-block" style="background:rgba(239,68,68,0.1);color:#f87171">${esc(k)}</span>`).join('') || 'No gaps'}</p>
+          </div>
+        </div>
+      </div>
+      <div class="space-y-3 pt-3">
+        <h4 class="text-base font-bold text-slate-100">II. Comparative Sub-Regional Benchmark (UNILAG vs. West African Peers)</h4>
+        <p class="text-xs text-muted">Benchmark analysis comparing UNILAG's linguistic alignment against other major West African institutions (University of Ibadan and Covenant University).</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left" style="background:rgba(0,0,0,0.2); border-radius:8px">
+            <thead>
+              <tr class="border-b border-white/10" style="color:var(--text-muted)">
+                <th class="py-2.5 px-3">Institution / Region</th>
+                <th class="py-2.5 px-3 text-right">Compliant Count</th>
+                <th class="py-2.5 px-3 text-right">Compliance Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-white/5">
+                <td class="py-2.5 px-3 font-semibold text-slate-200">University of Lagos (UNILAG)</td>
+                <td class="py-2.5 px-3 text-right font-mono">${data.scores_and_trends.comparison.unilag_compliant}</td>
+                <td class="py-2.5 px-3 text-right font-mono text-success font-semibold">${data.scores_and_trends.comparison.unilag_rate}%</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 px-3 text-slate-400">West African Benchmark (UI & Covenant)</td>
+                <td class="py-2.5 px-3 text-right font-mono text-slate-400">${data.scores_and_trends.comparison.west_africa_compliant}</td>
+                <td class="py-2.5 px-3 text-right font-mono text-slate-400">${data.scores_and_trends.comparison.west_africa_rate}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3">
+          <p class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Yearly Compliance Trend</p>
+          <div class="flex gap-2 flex-wrap">
+            ${data.scores_and_trends.timeline.map(t => `
+              <div class="surface rounded-lg px-3 py-1.5 text-center min-w-[60px]" style="background:rgba(255,255,255,0.02)">
+                <p class="text-[10px] text-muted">${t.year}</p>
+                <p class="text-sm font-bold text-accent">${t.count}</p>
+              </div>`).join('') || '<p class="text-xs text-muted">No timeline data available</p>'}
+          </div>
+        </div>
+      </div>
+      <div class="space-y-3 pt-3 border-t border-white/5">
+        <h4 class="text-base font-bold text-slate-100">III. Strategic Decolonial Recommendation Outlook</h4>
+        <p class="text-sm leading-relaxed text-slate-300">${esc(data.conclusion)}</p>
+      </div>
+    `;
+    body.innerHTML = html;
+    container.classList.remove('hidden');
+    toast('Decolonial Report generated successfully', 'success');
+  }, () => {
+    toast('Failed to generate report', 'error');
+  })
+  .finally(() => {
+    btn.disabled = false; btn.textContent = 'Generate UNILAG Decolonial Report';
+  });
+}
+
+function copyReportToClipboard() {
+  const body = $('report-body'); if (!body) return;
+  const text = body.innerText || body.textContent;
+  navigator.clipboard.writeText(text)
+    .then(() => toast('Report text copied to clipboard', 'success'))
+    .catch(e => toast('Copy failed: ' + e.message, 'error'));
+}
+
+/**
+ * AU Charter for African Cultural Renaissance
+ */
+let auCharterLoaded = false;
+function loadAUCharterTab() {
+  if (auCharterLoaded) return;
+  auCharterLoaded = true;
+  $('au-loading').classList.remove('hidden');
+  $('au-content').classList.add('hidden');
+  safeFetch(withInst('/api/analytics/au-charter-alignment'), data => {
+    $('au-loading').classList.add('hidden');
+    $('au-content').classList.remove('hidden');
+
+    const totalAnalyzed = data.total_papers_analyzed || 0;
+    const totalTargeted = data.targets.reduce((s, t) => s + t.count, 0);
+    const overallRate = totalAnalyzed ? Math.round(totalTargeted / totalAnalyzed * 100) : 0;
+
+    // Summary banner
+    $('au-summary-cards').innerHTML = `
+      <div class="surface rounded-xl p-5" style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(99,102,241,0.08));border:1px solid rgba(34,197,94,0.2)">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--success)">AU Charter for African Cultural Renaissance — Overall Alignment</p>
+            <p class="text-sm" style="color:var(--text-muted)">Assessed across all 9 Targets · ${totalAnalyzed.toLocaleString()} papers analyzed · Institution: ${esc(data.institution_filter)}</p>
+          </div>
+          <div class="flex gap-6 text-center">
+            <div><p class="text-3xl font-bold" style="color:var(--success)">${overallRate}%</p><p class="text-xs text-muted">Overall Coverage</p></div>
+            <div><p class="text-3xl font-bold" style="color:var(--accent)">${totalAnalyzed.toLocaleString()}</p><p class="text-xs text-muted">Papers Analyzed</p></div>
+          </div>
+        </div>
+      </div>`;
+
+    // Target cards (9 targets)
+    const targetColors = ['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#ef4444'];
+    $('au-targets-grid').innerHTML = data.targets.map((t, i) => {
+      const color = targetColors[i % targetColors.length];
+      const barW = Math.min(100, t.compliance_rate * 2); // scale for visual
+      return `
+        <div class="surface rounded-xl p-5" style="border-top:3px solid ${color}">
+          <div class="flex justify-between items-start mb-3">
+            <div class="flex items-start gap-2">
+              <span class="text-xl font-extrabold" style="color:${color};line-height:1">${t.target_number}</span>
+              <p class="text-xs font-bold leading-tight" style="color:var(--text)">${esc(t.target_name)}</p>
+            </div>
+            <span class="text-xs font-mono font-bold ml-2 flex-shrink-0" style="color:${color}">${t.compliance_rate}%</span>
+          </div>
+          <div class="h-1.5 rounded-full mb-3" style="background:var(--input-bg)">
+            <div class="h-1.5 rounded-full" style="width:${barW}%;background:${color};transition:width 0.6s ease"></div>
+          </div>
+          <p class="text-xs text-muted mb-2">${t.count} papers aligned</p>
+          ${t.top_papers.length ? `
+            <div class="space-y-1.5 border-t border-white/5 pt-2">
+              ${t.top_papers.map(p => `
+                <div class="row-hover p-2 rounded-lg cursor-pointer" onclick="openPaperModal(${p.id})">
+                  <p class="text-xs font-medium leading-snug line-clamp-2">${esc(p.title)}</p>
+                  <div class="flex gap-1 mt-1 flex-wrap">
+                    ${p.matched_keywords.slice(0,3).map(k => `<span class="chip text-[9px] py-0.5 px-1.5" style="background:${color}18;color:${color}">${esc(k)}</span>`).join('')}
+                  </div>
+                </div>`).join('')}
+            </div>` : '<p class="text-xs text-muted italic">No papers matched yet.</p>'}
+        </div>`;
+    }).join('');
+  }, () => {
+    $('au-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load AU Charter data.</p>';
+  });
 }
 
 /**
@@ -685,23 +1171,144 @@ function loadSpecialTab() {
 }
 
 /**
+ * Language & Culture
+ */
+let chartLanguageInst = null;
+function loadLanguageTab() {
+  const url = withInst('/api/analytics/language-research');
+  safeFetch(url, data => {
+    // 1. Render Keywords Chart
+    const ctx = $('chart-language-kw');
+    if (ctx && data.top_keywords) {
+      if (chartLanguageInst) chartLanguageInst.destroy();
+      chartLanguageInst = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.top_keywords.map(k => k.keyword),
+          datasets: [{
+            label: 'Mentions',
+            data: data.top_keywords.map(k => k.count),
+            backgroundColor: 'rgba(79, 70, 229, 0.8)',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { font: { family: 'Inter', size: 10 } } },
+            y: { beginAtZero: true, ticks: { font: { family: 'Inter', size: 10 } } }
+          }
+        }
+      });
+    }
+    
+    // 2. Render Papers List
+    const papersEl = $('language-papers');
+    if (papersEl) {
+      if (!data.papers || data.papers.length === 0) {
+        papersEl.innerHTML = '<p class="text-sm text-center py-6 text-muted">No language research papers found for this institution.</p>';
+      } else {
+        papersEl.innerHTML = data.papers.map(p => `
+          <div class="surface rounded-lg p-3 row-hover cursor-pointer border-b" style="border-color:var(--border)" onclick="openPaperModal(${p.id})">
+            <p class="text-sm font-semibold mb-1">${esc(p.title)}</p>
+            <div class="flex justify-between items-center mt-2">
+              <p class="text-xs text-muted">${esc((p.authors || []).join(', '))}</p>
+              <div class="flex gap-1 flex-wrap justify-end">
+                ${(p.matched_terms || []).slice(0, 3).map(m => `<span class="chip text-[9px] py-0.5 px-1.5" style="background:var(--accent-10);color:var(--accent)">${esc(m)}</span>`).join('')}
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+  });
+}
+
+/**
+ * Staff Directory
+ */
+function loadStaffDirectory() {
+  const filterInst = $('staff-inst-filter')?.value || '';
+  const url = filterInst ? '/api/analytics/staff-directory?institution=' + filterInst : '/api/analytics/staff-directory';
+  
+  $('staff-loading')?.classList.remove('hidden');
+  $('staff-content')?.classList.add('hidden');
+  
+  safeFetch(url, data => {
+    $('staff-loading')?.classList.add('hidden');
+    $('staff-content')?.classList.remove('hidden');
+    
+    const container = $('staff-institutions-list');
+    if (!container) return;
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p class="text-sm text-center py-8 text-muted">No staff records found.</p>';
+      return;
+    }
+    
+    container.innerHTML = data.map(inst => `
+      <div class="surface rounded-2xl p-5 mb-4 border" style="border-color:var(--border)">
+        <div class="flex items-center justify-between mb-4 border-b pb-3" style="border-color:var(--border)">
+          <div>
+            <h3 class="text-lg font-bold" style="color:var(--accent)">${esc(inst.institution)}</h3>
+            <p class="text-xs text-muted mt-1">${inst.staff_count} Dynamic Staff Records • ${inst.staff_with_orcid} with ORCID</p>
+          </div>
+          <span class="badge-oa">${esc(inst.country)}</span>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          ${(inst.staff || []).map(s => `
+            <div class="surface rounded-xl p-3 border hover:border-[var(--accent)] transition-colors" style="border-color:var(--border)">
+              <p class="font-semibold text-sm mb-1">${esc(s.name)}</p>
+              ${s.department ? `<p class="text-xs text-muted mb-2 line-clamp-1">${esc(s.department)}</p>` : ''}
+              
+              <div class="space-y-1">
+                ${s.orcid ? `
+                  <div class="flex items-center gap-1.5 text-xs">
+                    <span class="w-10 font-bold" style="color:var(--success)">ORCID</span>
+                    <span class="font-mono bg-white/5 px-1 rounded">${esc(s.orcid)}</span>
+                  </div>
+                ` : `<p class="text-[10px] text-muted italic">No ORCID</p>`}
+                
+                ${s.ror ? `
+                  <div class="flex items-center gap-1.5 text-xs">
+                    <span class="w-10 font-bold" style="color:var(--warning)">ROR</span>
+                    <span class="font-mono bg-white/5 px-1 rounded">${esc(s.ror)}</span>
+                  </div>
+                ` : `<p class="text-[10px] text-muted italic">No ROR Verified</p>`}
+              </div>
+              
+              <div class="mt-3 pt-2 border-t flex justify-between" style="border-color:var(--border)">
+                <span class="text-[10px] text-muted">Papers Tracked</span>
+                <span class="text-xs font-bold" style="color:var(--accent)">${s.paper_count}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ${inst.staff?.length === 0 ? '<p class="text-sm italic text-muted">No authors tracked for this institution yet.</p>' : ''}
+      </div>
+    `).join('');
+  });
+}
+
+/**
  * Crawler Management
  */
 function startCrawler() {
   const s = $('btn-start'); if (s) s.disabled = true;
   const inst = $('crawler-institution').value;
   const t = Math.min(Math.max(parseInt($('target-count').value) || 20, 1), 250);
-  const boost = $('boost-special').checked;
-  const scOnly = $('sc-only').checked;
   
-  appendLog('// Starting crawler for ' + inst + ' — target: ' + t + ' papers' + (scOnly ? ' [SC ONLY]' : ''));
+  appendLog('// Starting crawler for ' + inst + ' — target: ' + t + ' papers [SC ONLY]');
   toast('Mining started for ' + inst, 'info');
   updateCrawlerUI({ status: 'initializing' });
   
   fetch('/api/crawler/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: t, institution: inst, boost_special: boost, sc_only: scOnly })
+    body: JSON.stringify({ target: t, institution: inst, boost_special: true, sc_only: true })
   })
   .then(r => r.json())
   .then(d => {

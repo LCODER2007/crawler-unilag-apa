@@ -14,7 +14,7 @@ class InstitutionConfig:
     """Configuration for a single institution"""
 
     def __init__(self, ror, name, short_name, country, staff_file,
-                 affiliation_patterns, faculties=None, crawler_settings=None):
+                 affiliation_patterns, faculties=None, crawler_settings=None, sub_region='Unknown'):
         self.ror = ror
         self.name = name
         self.short_name = short_name
@@ -23,6 +23,7 @@ class InstitutionConfig:
         self.affiliation_patterns = affiliation_patterns
         self.faculties = faculties or []
         self.crawler_settings = crawler_settings or {}
+        self.sub_region = sub_region
         self._raw_staff: List[Any] = self._load_staff_raw()
 
     def _resolve_staff_file(self) -> str:
@@ -130,18 +131,35 @@ class InstitutionConfig:
             'country': self.country, 'staff_file': self.staff_file,
             'affiliation_patterns': self.affiliation_patterns,
             'faculties': self.faculties, 'crawler_settings': self.crawler_settings,
+            'sub_region': self.sub_region,
             'staff_count': len(self.staff_names),
             'staff_with_orcid_count': len(self.staff_with_orcid),
         }
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'InstitutionConfig':
+        sub_region = data.get('sub_region')
+        if not sub_region:
+            country = data.get('country', '')
+            if country in ('Nigeria', 'Ghana'):
+                sub_region = 'West Africa'
+            elif country in ('South Africa', 'Zimbabwe', 'Zambia', 'Namibia', 'Botswana', 'Lesotho', 'Eswatini', 'Malawi', 'Mozambique'):
+                sub_region = 'Southern Africa'
+            elif country in ('Kenya', 'Uganda', 'Ethiopia', 'Rwanda', 'Tanzania'):
+                sub_region = 'East Africa'
+            elif country in ('Egypt', 'Morocco', 'Tunisia', 'Algeria', 'Libya', 'Sudan'):
+                sub_region = 'North Africa'
+            elif country in ('Cameroon', 'DR Congo', 'Angola', 'Gabon', 'Republic of the Congo'):
+                sub_region = 'Central Africa'
+            else:
+                sub_region = 'Unknown'
         return cls(
             ror=data['ror'], name=data['name'], short_name=data['short_name'],
             country=data['country'], staff_file=data['staff_file'],
             affiliation_patterns=data['affiliation_patterns'],
             faculties=data.get('faculties', []),
-            crawler_settings=data.get('crawler_settings', {})
+            crawler_settings=data.get('crawler_settings', {}),
+            sub_region=sub_region
         )
 
     @classmethod

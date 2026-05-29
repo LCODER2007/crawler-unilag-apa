@@ -94,29 +94,65 @@ class URAASAnalyticsEngine:
     def _year(item: Item) -> Optional[int]:
         return item.publication_date.year if item.publication_date else None
 
+    def _get_sc_item_ids(self, session, institution: Optional[str] = None) -> List[int]:
+        """
+        Returns a list of Item IDs that match the Special Collections criteria.
+        This forms the core pivot of the dashboard, restricting all analytics
+        exclusively to papers focused on Special Collections.
+        """
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"sc_item_ids_{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        q = session.query(Item.id, Item.title, Item.abstract, Item.dc_subject)
+        if inst_name:
+            q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+        items = q.all()
+        
+        valid_ids = []
+        for item_id, title, abstract, dc_subject in items:
+            cats = classify_special_collections(title or '', abstract or '', dc_subject or '')
+            if cats:  # if it matched at least one special collection category
+                valid_ids.append(item_id)
+        
+        analytics_cache.set(cache_key, valid_ids, ttl=3600)  # cache for 1 hour
+        return valid_ids
+
     #  Standard repository analytics 
 
-    def get_top_authors(self, limit: int = 15, community_id: Optional[int] = None) -> List[Dict]:
+    def get_top_authors(self, limit: int = 15, community_id: Optional[int] = None, institution: Optional[str] = None) -> List[Dict]:
         session = SessionLocal()
         try:
             q = session.query(
                 Author.name,
+                Author.orcid,
+                Author.ror,
                 func.count(Item.id).label("count"),
             ).join(Author.items)
             if community_id:
                 q = q.join(Item.collections).join(Collection.community).filter(Community.id == community_id)
-            rows = q.group_by(Author.name).order_by(desc("count")).limit(limit).all()
-            return [{"author": r[0], "count": r[1]} for r in rows]
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
+            rows = q.group_by(Author.name, Author.orcid, Author.ror).order_by(desc("count")).limit(limit).all()
+            return [{"author": r[0], "orcid": r[1] or "", "ror": r[2] or "", "count": r[3]} for r in rows]
         except Exception as e:
             logger.error("get_top_authors: %s", e)
             return []
         finally:
             session.close()
 
-    def get_department_collaboration_network(self) -> List[Dict]:
+    def get_department_collaboration_network(self, institution: Optional[str] = None) -> List[Dict]:
         session = SessionLocal()
         try:
-            docs = session.query(Item).options(joinedload(Item.collections)).all()
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                return []
+            docs = session.query(Item).filter(Item.id.in_(sc_ids)).options(joinedload(Item.collections)).all()
             edges: Dict[Tuple, int] = {}
             for doc in docs:
                 colls = sorted(c.name for c in doc.collections if c and c.name)
@@ -147,6 +183,11 @@ class URAASAnalyticsEngine:
                     )
                     if inst_name:
                         q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+                    sc_ids = self._get_sc_item_ids(session, institution)
+                    if sc_ids:
+                        q = q.filter(Item.id.in_(sc_ids))
+                    else:
+                        continue
                     
                     papers = q.all()
                     paper_list = []
@@ -172,6 +213,9 @@ class URAASAnalyticsEngine:
             unclassified_q = session.query(Item).filter(~Item.id.in_(seen)) if seen else session.query(Item)
             if inst_name:
                 unclassified_q = unclassified_q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                unclassified_q = unclassified_q.filter(Item.id.in_(sc_ids))
             unclassified = unclassified_q.all()
             if unclassified:
                 tree["Unclassified"] = {"General": [
@@ -193,8 +237,13 @@ class URAASAnalyticsEngine:
             q = session.query(db_year(Item.publication_date), func.count(Item.id))
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.filter(Item.publication_date.isnot(None)).group_by(db_year(Item.publication_date)).order_by(db_year(Item.publication_date))
-            return [{"year": r[0], "count": r[1]} for r in q.all()]
+            return [{"year": int(r[0]) if r[0] else 0, "count": r[1]} for r in q.all()]
         finally:
             session.close()
 
@@ -209,8 +258,13 @@ class URAASAnalyticsEngine:
             ).join(Item.collections).join(Collection.community)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.filter(Item.publication_date.isnot(None)).group_by(db_year(Item.publication_date), Community.name)
-            return [{"year": r[0], "faculty": r[1], "count": r[2]} for r in q.all()]
+            return [{"year": int(r[0]) if r[0] else 0, "faculty": r[1], "count": r[2]} for r in q.all()]
         finally:
             session.close()
 
@@ -221,6 +275,11 @@ class URAASAnalyticsEngine:
             q = session.query(Community.name, func.count(Item.id)).join(Item.collections).join(Collection.community)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.group_by(Community.name).order_by(desc(func.count(Item.id)))
             return [{"faculty": r[0], "count": r[1]} for r in q.all()]
         finally:
@@ -233,6 +292,11 @@ class URAASAnalyticsEngine:
             q = session.query(Item.dc_rights)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             items = q.all()
             counts = {"Open Access": 0, "Restricted": 0}
             for it in items:
@@ -249,6 +313,11 @@ class URAASAnalyticsEngine:
             q = session.query(Author.name, func.count(Item.id)).join(Author.items)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.group_by(Author.name).order_by(desc(func.count(Item.id))).limit(limit)
             return [{"author": r[0], "count": r[1]} for r in q.all()]
         finally:
@@ -261,6 +330,11 @@ class URAASAnalyticsEngine:
             q = session.query(Community.name, Item.dc_rights).join(Item.collections).join(Collection.community)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             rows = q.all()
             facs = defaultdict(lambda: {"oa": 0, "restricted": 0})
             for fac, rights in rows:
@@ -277,6 +351,11 @@ class URAASAnalyticsEngine:
             q = session.query(db_year_month(Item.created_at), func.count(Item.id))
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.group_by(db_year_month(Item.created_at)).order_by(db_year_month(Item.created_at))
             return [{"month": r[0], "count": r[1]} for r in q.all()]
         finally:
@@ -289,6 +368,11 @@ class URAASAnalyticsEngine:
             q = session.query(func.date(Item.created_at), func.count(Item.id))
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             q = q.group_by(func.date(Item.created_at)).order_by(func.date(Item.created_at))
             res = []
             total = 0
@@ -317,6 +401,11 @@ class URAASAnalyticsEngine:
             q = session.query(Item.id, Item.title, Item.abstract)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             items = q.all()
 
             # Pre-populate buckets for SDG 1 to 17
@@ -396,6 +485,11 @@ class URAASAnalyticsEngine:
             q = session.query(Item.title, Item.abstract)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             items = q.all()
 
             # Build corpus for IDF calculation
@@ -412,37 +506,6 @@ class URAASAnalyticsEngine:
             return result
         except Exception as e:
             logger.error("get_keyword_cloud: %s", e)
-            return []
-        finally:
-            session.close()
-
-    def get_research_trends(self, institution: Optional[str] = None) -> List[Dict]:
-        """AI-extracted research trends (not hardcoded). Cached 30 min."""
-        inst_name = self._resolve_institution_name(institution)
-        cache_key = f"research_trends:{inst_name or 'all'}"
-        cached = analytics_cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        session = SessionLocal()
-        try:
-            q = session.query(Item.id, Item.title, Item.abstract, Item.publication_date)
-            if inst_name:
-                q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
-            rows = q.all()
-
-            papers = [
-                {
-                    'id': r[0], 'title': r[1], 'abstract': r[2],
-                    'year': r[3].year if r[3] else None,
-                }
-                for r in rows
-            ]
-            result = extract_trends_from_corpus(papers, top_n=12)
-            analytics_cache.set(cache_key, result)
-            return result
-        except Exception as e:
-            logger.error("get_research_trends: %s", e)
             return []
         finally:
             session.close()
@@ -514,6 +577,11 @@ class URAASAnalyticsEngine:
             q = session.query(Item.content_type, Item.tk_label, Item.dc_type)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return []
             items = q.all()
             total = len(items)
             if total == 0:
@@ -705,6 +773,11 @@ class URAASAnalyticsEngine:
             q = session.query(Item.id, Item.title, Item.abstract, Item.dc_subject)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f'%{inst_name}%'))
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if sc_ids:
+                q = q.filter(Item.id.in_(sc_ids))
+            else:
+                return {'summary': [], 'total_special_items': 0, 'total_repository_items': q.count()}
             items = q.all()
             results: Dict[str, List] = {cat: [] for cat in SPECIAL_COLLECTIONS}
 

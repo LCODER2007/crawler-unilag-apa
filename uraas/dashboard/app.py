@@ -194,23 +194,21 @@ def analytics_overview():
     session = SessionLocal()
     institution = request.args.get('institution')
     try:
-        # Resolve short name to full name if provided
-        inst_name = analytics._resolve_institution_name(institution) if institution else None
+        sc_ids = analytics._get_sc_item_ids(session, institution)
+        if not sc_ids:
+            return jsonify({
+                "total_papers": 0, "total_authors": 0, "total_faculties": 0,
+                "open_access_papers": 0, "papers_with_local_pdf": 0, "oa_percentage": 0
+            })
 
-        q_item = session.query(Item)
-        q_author = session.query(Author)
-        q_comm = session.query(Community)
-        q_file = session.query(File)
-
-        if inst_name:
-            q_item = q_item.filter(Item.institution.ilike(f'%{inst_name}%'))
-            q_author = q_author.join(Author.items).filter(Item.institution.ilike(f'%{inst_name}%'))
-            q_comm = q_comm.filter(Community.name.ilike(f'%{inst_name}%') | Community.institution.ilike(f'%{inst_name}%'))
-            q_file = q_file.join(File.item).filter(Item.institution.ilike(f'%{inst_name}%'))
+        q_item = session.query(Item).filter(Item.id.in_(sc_ids))
+        q_author = session.query(Author).join(Author.items).filter(Item.id.in_(sc_ids))
+        q_comm = session.query(Community).filter(Community.collections.any(Collection.items.any(Item.id.in_(sc_ids))))
+        q_file = session.query(File).filter(File.item_id.in_(sc_ids))
 
         total = q_item.count()
         authors = q_author.distinct().count()
-        faculties = q_comm.count()
+        faculties = q_comm.distinct().count()
         oa = q_item.filter(Item.dc_rights.like('%openAccess%')).count()
         pdfs = q_file.count()
 
@@ -385,28 +383,16 @@ def list_faculties():
 @app.route('/api/institutions')
 def list_institutions():
     """List all configured institutions with their staff counts."""
-    from pathlib import Path
     from uraas.config.institutions import get_registry
     
-    # Debug directory existence
-    base_dir = Path(__file__).parent.parent.parent
-    config_dir = base_dir / 'config' / 'institutions'
-    print(f"[DEBUG] app.py base_dir: {base_dir}")
-    print(f"[DEBUG] app.py config_dir: {config_dir} (exists: {config_dir.exists()})")
-    if config_dir.exists():
-        print(f"[DEBUG] app.py config_files: {list(config_dir.glob('*.json'))}")
-
     registry = get_registry()
     results = []
-    print(f"[DEBUG] list_institutions: found {len(registry.list_all())} institutions")
     for inst in registry.list_all():
-        count = len(inst.staff_names)
-        print(f"[DEBUG]  - {inst.short_name}: {count} staff")
         results.append({
             "name": inst.name,
             "short_name": inst.short_name,
             "ror": inst.ror,
-            "staff_count": count
+            "staff_count": len(inst.staff_names)
         })
     return jsonify(results)
 
@@ -431,21 +417,13 @@ def author_network():
     author_name = request.args.get('author','').strip()
     return jsonify(analytics.get_author_network(author_name=author_name or None))
 
-@app.route('/api/analytics/sdg-alignment')
-def sdg_alignment():
-    institution = request.args.get('institution', None)
-    return jsonify(analytics.get_sdg_alignment(institution=institution))
-
 @app.route('/api/analytics/keyword-cloud')
 def keyword_cloud():
     institution = request.args.get('institution', None)
     top_n = min(int(request.args.get('top_n', 60)), 150)
     return jsonify(analytics.get_keyword_cloud(top_n=top_n, institution=institution))
 
-@app.route('/api/analytics/research-trends')
-def research_trends():
-    institution = request.args.get('institution', None)
-    return jsonify(analytics.get_research_trends(institution=institution))
+
 
 @app.route('/api/analytics/institution-leaderboard')
 def institution_leaderboard():
@@ -559,7 +537,11 @@ def lecturer_profile():
 def language_research():
     session = SessionLocal()
     try:
-        items = session.query(Item).all()
+        institution = request.args.get('institution', '').strip()
+        q = session.query(Item)
+        if institution:
+            q = q.filter(Item.institution.ilike(f'%{institution}%'))
+        items = q.all()
         TIER1 = __import__('re').compile(r'\b(yoruba|igbo|hausa|pidgin|efik|tiv|fulani|ibibio|ijaw|kanuri|sociolinguistics|lexicography|phonology|phonetics|morphosyntax|oral tradition|oral literature|oral poetry|oral narrative|proverbs|folklore|folktale|griot|african literature|nigerian literature|postcolonial literature|literary criticism|literary theory|narratology|language policy|multilingualism|bilingualism|code.switching|indigenous language|vernacular|dialect continuum|pragmatics|discourse analysis|stylistics|nollywood|yoruba drama|african theatre)\b',__import__('re').IGNORECASE)
         TIER2 = __import__('re').compile(r'\b(morphology|syntax|semantics|translation|literary|language|linguistic|dialect|narrative|discourse|rhetoric|poetry|prose|fiction|novel|drama|theatre|culture|cultural identity|cultural heritage|african studies|humanities)\b',__import__('re').IGNORECASE)
         EXCLUDE = __import__('re').compile(r'\b(machine learning|deep learning|neural network|artificial intelligence|clinical trial|randomized|patient|hospital|surgery|cancer|tumor|cardiovascular|hypertension|diabetes|preeclampsia|concrete|cement|compressive strength|tensile|alloy|composite|carbon emission|ecological footprint|gdp|economic growth|galaxy|astrophysic|ionosphere|plasma|quantum|semiconductor|mpox|covid|sars|influenza|malaria|hiv|antibiotic|cybersecurity|blockchain|iot|cloud computing|petroleum|crude oil|refinery|corrosion|mentoring|capacity building|faculty development)\b',__import__('re').IGNORECASE)
@@ -614,8 +596,8 @@ def compare_institutions():
         if not ror_ids or len(ror_ids) < 2:
             return jsonify({"error": "Provide at least 2 ROR IDs"}), 400
         
-        if len(ror_ids) > 10:
-            return jsonify({"error": "Maximum 10 institutions"}), 400
+        if len(ror_ids) > 15:
+            return jsonify({"error": "Maximum 15 institutions"}), 400
         
         comparison = ComparatorEngine.compare_institutions(ror_ids)
         return jsonify(comparison)
@@ -850,25 +832,6 @@ def special_collections():
     institution = request.args.get('institution', None)
     return jsonify(analytics.get_special_collections_metrics(institution=institution))
 
-@app.route('/api/analytics/sdg-alignment/export.csv')
-def export_sdg_csv():
-    """Download SDG alignment data as CSV."""
-    try:
-        rows = analytics.get_sdg_csv_data()
-        output = io.StringIO()
-        writer = csv.writer(output)
-        for row in rows:
-            writer.writerow(row)
-        output.seek(0)
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=uraas_sdg_alignment.csv'}
-        )
-    except Exception as e:
-        logger.error(f"export_sdg_csv: {e}")
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/api/analytics/special-collections/export.csv')
 def export_special_collections_csv():
     """Download special collections data as CSV."""
@@ -888,6 +851,66 @@ def export_special_collections_csv():
         logger.error(f"export_special_collections_csv: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/analytics/au-charter-alignment')
+def au_charter_alignment():
+    """
+    Score the repository against all 9 AU Charter for African Cultural Renaissance targets.
+    Returns per-target count, compliance rate, top matched papers, and metadata.
+    Query params: ?institution=unilag (optional)
+    """
+    session = SessionLocal()
+    try:
+        from uraas.utils.ai_classifier import classify_au_targets, AU_CHARTER_TARGETS
+
+        institution = request.args.get('institution', '').strip().lower()
+        from uraas.analytics.engine import analytics as _analytics
+        inst_name = _analytics._resolve_institution_name(institution) if institution else None
+
+        query = session.query(Item)
+        if inst_name:
+            query = query.filter(Item.institution.ilike(f'%{inst_name}%'))
+        items = query.all()
+        total = len(items)
+
+        # Aggregate per-target scores
+        target_results = {num: {'count': 0, 'top_papers': []} for num in AU_CHARTER_TARGETS}
+
+        for item in items:
+            results = classify_au_targets(item.title or '', item.abstract or '', item.dc_subject or '')
+            for r in results:
+                n = r['target_number']
+                target_results[n]['count'] += 1
+                if len(target_results[n]['top_papers']) < 3:
+                    target_results[n]['top_papers'].append({
+                        'id': item.id,
+                        'title': item.title or 'Untitled',
+                        'matched_keywords': r['matched_keywords'][:4]
+                    })
+
+        output = []
+        for num, defn in AU_CHARTER_TARGETS.items():
+            count = target_results[num]['count']
+            output.append({
+                'target_number': num,
+                'target_name': defn['name'],
+                'count': count,
+                'compliance_rate': round(count / total * 100, 1) if total else 0,
+                'top_papers': target_results[num]['top_papers'],
+                'total_papers': total
+            })
+
+        return jsonify({
+            'targets': output,
+            'total_papers_analyzed': total,
+            'institution_filter': inst_name or 'All Institutions'
+        })
+    except Exception as e:
+        logger.error(f"au_charter_alignment: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
 @app.route('/api/analytics/staff-directory')
 def staff_directory():
     """
@@ -903,13 +926,33 @@ def staff_directory():
     insts = [i for i in insts if i]  # filter None
 
     for inst in insts:
+        # Get dynamic authors from database
+        dynamic_authors = analytics.get_top_authors(limit=5000, institution=inst.short_name)
+        
+        # Merge dynamic ORCIDs/RORs with static departments
+        staff_data = []
+        static_lookup = {r['name'].lower(): r for r in inst.staff_records}
+        
+        for author in dynamic_authors:
+            a_name = author.get('author', '')
+            static_rec = static_lookup.get(a_name.lower(), {})
+            
+            staff_data.append({
+                'name': a_name,
+                'orcid': author.get('orcid') or static_rec.get('orcid'),
+                'ror': author.get('ror'),
+                'department': static_rec.get('department'),
+                'faculty': static_rec.get('faculty'),
+                'paper_count': author.get('count', 0)
+            })
+
         result.append({
             'institution': inst.name,
             'short_name': inst.short_name,
             'country': inst.country,
-            'staff': inst.staff_records,
-            'staff_count': len(inst.staff_records),
-            'staff_with_orcid': len(inst.staff_with_orcid),
+            'staff': staff_data,
+            'staff_count': len(staff_data),
+            'staff_with_orcid': sum(1 for s in staff_data if s.get('orcid')),
             'departments': inst.departments,
         })
 
@@ -995,7 +1038,7 @@ def start_crawler():
             if sc_only:
                 cmd.append('--sc-only')
 
-            print(f"DEBUG: Executing command: {' '.join(cmd)}", flush=True)
+            logger.info(f"Executing crawler command: {' '.join(cmd)}")
             
             # Pass PYTHONUNBUFFERED so terminal output appears in real-time order
             env = dict(os.environ, PYTHONUNBUFFERED='1')
@@ -1123,6 +1166,125 @@ def health_check():
     return jsonify(health_status), status_code
 
 
+@app.route('/api/university-registry', methods=['GET'])
+def get_university_registry():
+    """
+    Get the comprehensive 52-country African university registry.
+    """
+    try:
+        import json
+        registry_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'university_registry.json')
+        if not os.path.exists(registry_path):
+            registry_path = 'data/university_registry.json'
+            
+        with open(registry_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"get_university_registry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/reports/unilag-subregion', methods=['GET'])
+def get_unilag_report():
+    """
+    Generate draft report of UNILAG contributions to African languages in West Africa.
+    """
+    session = SessionLocal()
+    try:
+        import json
+        from datetime import datetime
+        from uraas.utils.ai_classifier import classify_au_targets, AU_CHARTER_TARGETS
+        
+        # UNILAG ROR
+        unilag_ror = "https://ror.org/05rk03822"
+        
+        # 1. Fetch UNILAG items
+        unilag_items = session.query(Item).filter(Item.ror == unilag_ror).all()
+        total_unilag = len(unilag_items)
+        
+        # 2. Fetch West Africa items (excluding UNILAG, e.g. UI and Covenant)
+        west_africa_rors = ["https://ror.org/01js2sh04", "https://ror.org/0545s4788"] # UI and Covenant
+        wa_items = session.query(Item).filter(Item.ror.in_(west_africa_rors)).all()
+        total_wa = len(wa_items)
+        
+        # 3. Analyze UNILAG papers against AU Charter Target 2 (African Languages)
+        target2_compliant = 0
+        keywords_found = set()
+        by_year = {}
+        
+        for item in unilag_items:
+            results = classify_au_targets(item.title or '', item.abstract or '', item.dc_subject or '')
+            for r in results:
+                if r['target_number'] == 2:
+                    target2_compliant += 1
+                    keywords_found.update(r['matched_keywords'])
+                    year = item.publication_date.year if item.publication_date else None
+                    if year:
+                        by_year[year] = by_year.get(year, 0) + 1
+        
+        # Determine gaps
+        all_t2_keywords = AU_CHARTER_TARGETS[2]["keywords"]
+        keywords_gap = [kw for kw in all_t2_keywords if kw not in keywords_found]
+        
+        # 4. Compare with West African average
+        wa_target2_compliant = 0
+        for item in wa_items:
+            results = classify_au_targets(item.title or '', item.abstract or '', item.dc_subject or '')
+            for r in results:
+                if r['target_number'] == 2:
+                    wa_target2_compliant += 1
+                    
+        unilag_compliance_rate = round(target2_compliant / total_unilag * 100, 1) if total_unilag else 0.0
+        wa_compliance_rate = round(wa_target2_compliant / total_wa * 100, 1) if total_wa else 0.0
+        
+        report_data = {
+            "title": "Decolonizing Knowledge: UNILAG Contributions to African Languages & Cultural Renaissance in West Africa",
+            "metadata": {
+                "institution": "University of Lagos (UNILAG)",
+                "subregion": "West Africa",
+                "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            },
+            "introduction": (
+                "This report evaluates the academic contributions of the University of Lagos (UNILAG) "
+                "toward the development of African languages and the decolonization of science in the West African sub-region. "
+                "Aligned with the African Union Charter for African Cultural Renaissance, specifically Target 2 (Development of African Languages), "
+                "this analysis highlights the intersection of linguistic preservation, local knowledge systems, and active "
+                "institutional engagement in decolonial research."
+            ),
+            "statistics": {
+                "total_curated": total_unilag,
+                "compliant_count": target2_compliant,
+                "compliance_rate": unilag_compliance_rate,
+                "gaps_count": total_unilag - target2_compliant,
+                "keywords_found": list(keywords_found),
+                "keywords_gap": keywords_gap
+            },
+            "scores_and_trends": {
+                "timeline": [{"year": y, "count": by_year[y]} for y in sorted(by_year.keys())],
+                "comparison": {
+                    "unilag_rate": unilag_compliance_rate,
+                    "west_africa_rate": wa_compliance_rate,
+                    "unilag_compliant": target2_compliant,
+                    "west_africa_compliant": wa_target2_compliant
+                }
+            },
+            "conclusion": (
+                f"UNILAG shows solid alignment with the African Union Charter targets, with a decolonial compliance rate of {unilag_compliance_rate}%. "
+                f"Linguistic preservation is robust, particularly with keywords like '{', '.join(list(keywords_found)[:4])}' being highly active. "
+                f"However, critical gaps remain in the development of scientific literature in local languages. "
+                f"To bridge this gap, future research should focus on areas like '{', '.join(keywords_gap[:4])}' to ensure a more comprehensive "
+                "contribution to the African Union's Renaissance targets."
+            )
+        }
+        return jsonify(report_data)
+    except Exception as e:
+        logger.error(f"get_unilag_report: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
+
 #  Error Handlers 
 
 @app.errorhandler(404)
@@ -1156,21 +1318,21 @@ if __name__ == '__main__':
     is_production = ProductionConfig.is_production()
     
     if is_production:
-        print("=" * 70)
-        print("URAAS Dashboard Starting (Production Mode)")
-        print("=" * 70)
-        print(f"Port: {port}")
-        print(f"Database: {os.getenv('DATABASE_URL', 'Not configured')[:50]}...")
-        print(f"Storage: {config.STORAGE_PATH}")
-        print(f"Health check: http://0.0.0.0:{port}/health")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("URAAS Dashboard Starting (Production Mode)")
+        logger.info("=" * 70)
+        logger.info(f"Port: {port}")
+        logger.info(f"Database: {os.getenv('DATABASE_URL', 'Not configured')[:50]}...")
+        logger.info(f"Storage: {config.STORAGE_PATH}")
+        logger.info(f"Health check: http://0.0.0.0:{port}/health")
+        logger.info("=" * 70)
     else:
-        print("=" * 70)
-        print("URAAS Dashboard Starting (Development Mode)")
-        print("=" * 70)
-        print(f"Dashboard URL: http://localhost:{port}")
-        print("Press Ctrl+C to stop")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("URAAS Dashboard Starting (Development Mode)")
+        logger.info("=" * 70)
+        logger.info(f"Dashboard URL: http://localhost:{port}")
+        logger.info("Press Ctrl+C to stop")
+        logger.info("=" * 70)
     
     # Run with SocketIO
     socketio.run(

@@ -55,7 +55,7 @@
       <div>
         <h1 class="text-3xl font-extrabold tracking-tight gradient-text leading-none mb-1">URAAS</h1>
         <p class="text-sm font-semibold tracking-wide uppercase" style="color:var(--text); opacity:0.9">African Research Archival &amp; Analytics System</p>
-        <p class="text-xs mt-1" style="color:var(--text-muted);opacity:.7">Africa PID Alliance DocID™ · TCC Africa · UNESCO-Aligned · 10 Institutions</p>
+        <p class="text-xs mt-1" style="color:var(--text-muted);opacity:.7">Africa PID Alliance DocID™ · TCC Africa · UNESCO-Aligned · 25 Demo Institutions · 52 Countries</p>
       </div>
     </div>
     <div class="flex items-center gap-3 flex-wrap">
@@ -144,16 +144,7 @@
           <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">TargetPapers (1–250)</label>
           <input type="number" id="target-count" min="1" max="250" value="20"/>
           
-          <div class="mt-4 space-y-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="boost-special" checked class="w-4 h-4" style="accent-color:var(--accent)"/>
-              <span class="text-xs font-semibold" style="color:var(--text)">Target Special Collections</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="sc-only" class="w-4 h-4" style="accent-color:var(--accent)"/>
-              <span class="text-xs font-semibold" style="color:var(--text)">SC Only (Skip General Crawl)</span>
-            </label>
-          </div>
+
           
           <p class="text-xs mt-3" id="staff-validation-text" style="color:var(--text-muted)">Validated against institutional registry</p>
         </div>
@@ -275,18 +266,43 @@
         </div>
       </div>
         <div class="flex items-center gap-2">
-          <select id="archive-institution-select" onchange="fetchArchive()" style="font-size:12px;padding:4px 28px 4px 10px;width:180px;height:28px">
+          <select id="archive-institution-select" onchange="fetchArchive()" style="font-size:12px;padding:4px 28px 4px 10px;width:220px;height:28px">
             <option value="">All Institutions</option>
-            <option value="unilag">University of Lagos</option>
-            <option value="ui">University of Ibadan</option>
-            <option value="knust">KNUST</option>
-            <option value="addis">Addis Ababa University</option>
-            <option value="stellenbosch">Stellenbosch University</option>
-            <option value="ghana">University of Ghana</option>
-            <option value="nairobi">University of Nairobi</option>
-            <option value="makerere">Makerere University</option>
-            <option value="uct">University of Cape Town</option>
-            <option value="covenant">Covenant University</option>
+            <optgroup label="🌐 North Africa">
+              <option value="cairo">Cairo University</option>
+              <option value="ainshams">Ain Shams University</option>
+              <option value="alexandria">Alexandria University</option>
+              <option value="tunis">Université de Tunis El Manar</option>
+              <option value="mohammed5">Université Mohammed V de Rabat</option>
+            </optgroup>
+            <optgroup label="🌍 West Africa">
+              <option value="unilag">University of Lagos</option>
+              <option value="ui">University of Ibadan</option>
+              <option value="covenant">Covenant University</option>
+              <option value="ghana">University of Ghana</option>
+              <option value="knust">KNUST</option>
+            </optgroup>
+            <optgroup label="🌍 East Africa">
+              <option value="nairobi">University of Nairobi</option>
+              <option value="makerere">Makerere University</option>
+              <option value="addis">Addis Ababa University</option>
+              <option value="dar">University of Dar es Salaam</option>
+              <option value="rwanda">University of Rwanda</option>
+            </optgroup>
+            <optgroup label="🌍 Southern Africa">
+              <option value="uct">University of Cape Town</option>
+              <option value="stellenbosch">Stellenbosch University</option>
+              <option value="wits">Univ. of the Witwatersrand</option>
+              <option value="pretoria">University of Pretoria</option>
+              <option value="zimbabwe">University of Zimbabwe</option>
+            </optgroup>
+            <optgroup label="🌍 Central Africa">
+              <option value="yaounde">Université de Yaoundé I</option>
+              <option value="kinshasa">Université de Kinshasa</option>
+              <option value="agostinho">Université Agostinho Neto</option>
+              <option value="marien">Université Marien Ngouabi</option>
+              <option value="masuku">Univ. des Sciences de Masuku</option>
+            </optgroup>
           </select>
           <div class="relative flex-1">
             <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
@@ -308,7 +324,7 @@
   <div id="tab-search" class="tab-content hidden">
     <!-- Advanced Search Help -->
     <div class="surface rounded-xl p-4 mb-4" style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2)">
-      <p class="text-xs font-semibold mb-2" style="color:var(--accent)">🚀 Advanced Search (Scopus-style Boolean operators)</p>
+      <p class="text-xs font-semibold mb-2" style="color:var(--accent)">Advanced Search — Scopus-style Boolean Operators</p>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs" style="color:var(--text-dim)">
         <div><code class="text-green-400">"phrase"</code> - Exact match</div>
         <div><code class="text-green-400">author:smith</code> - By author</div>
@@ -367,9 +383,8 @@
     <!-- Analytics Sub-tabs & Global Filter -->
     <div class="flex items-center justify-between gap-4 mb-5 pb-1" style="border-bottom:1px solid var(--border)">
       <div class="flex gap-1 overflow-x-auto flex-1">
-        <button class="tab-btn text-xs" id="atab-btn-overview" onclick="switchAtab('overview',this)">Overview</button>
-        <button class="tab-btn text-xs" id="atab-btn-sdg" onclick="switchAtab('sdg',this)">SDG Alignment</button>
-        <button class="tab-btn text-xs" id="atab-btn-trends" onclick="switchAtab('trends',this)">Trends</button>
+        <button class="tab-btn text-xs" id="atab-btn-overview" onclick="switchAtab('overview',this)">Special Collections Overview</button>
+        <button class="tab-btn text-xs" id="atab-btn-au" onclick="switchAtab('au',this)">AU Charter</button>
         <button class="tab-btn text-xs" id="atab-btn-network" onclick="switchAtab('network',this)">Network</button>
         <button class="tab-btn text-xs" id="atab-btn-compare" onclick="switchAtab('compare',this)">Compare</button>
         <button class="tab-btn text-xs" id="atab-btn-lecturer" onclick="switchAtab('lecturer',this)">Lecturer</button>
@@ -379,18 +394,43 @@
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
         <label for="global-institution-select" class="text-xs" style="color:var(--text-muted)">Filter:</label>
-        <select id="global-institution-select" onchange="applyGlobalInstitutionFilter()" style="font-size:12px;padding:4px 28px 4px 10px;width:180px;height:28px">
+        <select id="global-institution-select" onchange="applyGlobalInstitutionFilter()" style="font-size:12px;padding:4px 28px 4px 10px;width:200px;height:28px">
           <option value="">All Institutions</option>
-          <option value="unilag">University of Lagos</option>
-          <option value="ui">University of Ibadan</option>
-          <option value="knust">KNUST</option>
-          <option value="addis">Addis Ababa University</option>
-          <option value="stellenbosch">Stellenbosch University</option>
-          <option value="ghana">University of Ghana</option>
-          <option value="nairobi">University of Nairobi</option>
-          <option value="makerere">Makerere University</option>
-          <option value="uct">University of Cape Town</option>
-          <option value="covenant">Covenant University</option>
+          <optgroup label="North Africa">
+            <option value="cairo">Cairo University</option>
+            <option value="ainshams">Ain Shams University</option>
+            <option value="alexandria">Alexandria University</option>
+            <option value="tunis">Univ. Tunis El Manar</option>
+            <option value="mohammed5">Univ. Mohammed V Rabat</option>
+          </optgroup>
+          <optgroup label="West Africa">
+            <option value="unilag">University of Lagos</option>
+            <option value="ui">University of Ibadan</option>
+            <option value="covenant">Covenant University</option>
+            <option value="ghana">University of Ghana</option>
+            <option value="knust">KNUST</option>
+          </optgroup>
+          <optgroup label="East Africa">
+            <option value="nairobi">University of Nairobi</option>
+            <option value="makerere">Makerere University</option>
+            <option value="addis">Addis Ababa University</option>
+            <option value="dar">Univ. of Dar es Salaam</option>
+            <option value="rwanda">University of Rwanda</option>
+          </optgroup>
+          <optgroup label="Southern Africa">
+            <option value="uct">University of Cape Town</option>
+            <option value="stellenbosch">Stellenbosch University</option>
+            <option value="wits">Univ. of Witwatersrand</option>
+            <option value="pretoria">University of Pretoria</option>
+            <option value="zimbabwe">University of Zimbabwe</option>
+          </optgroup>
+          <optgroup label="Central Africa">
+            <option value="yaounde">Univ. de Yaoundé I</option>
+            <option value="kinshasa">Univ. de Kinshasa</option>
+            <option value="agostinho">Univ. Agostinho Neto</option>
+            <option value="marien">Univ. Marien Ngouabi</option>
+            <option value="masuku">Univ. des Sciences Masuku</option>
+          </optgroup>
         </select>
       </div>
     </div>
@@ -470,44 +510,27 @@
       </div>
     </div>
 
-    <!--  SDG ALIGNMENT  -->
-    <div id="atab-sdg" class="atab-content hidden">
+
+
+    <!--  AU CHARTER TARGETS  -->
+    <div id="atab-au" class="atab-content hidden">
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 class="text-xl font-bold  mb-1" style="color:var(--text)">UN Sustainable Development Goals Alignment</h2>
-          <p class="text-sm" style="color:var(--text-muted)">Research mapped to all 17 UN SDGs via AI (spaCy NLP). Click any goal to explore its papers.</p>
+          <h2 class="text-xl font-bold mb-1" style="color:var(--text)">African Union Charter for African Cultural Renaissance — 9 Targets</h2>
+          <p class="text-sm" style="color:var(--text-muted)">Repository alignment scored against all 9 AU Charter targets. Each target is matched using AI keyword classification over paper titles, abstracts and subject tags.</p>
         </div>
-        <a href="/api/analytics/sdg-alignment/export.csv" class="btn-ghost text-xs flex-shrink-0" id="sdg-csv-btn">
+        <a href="/api/analytics/au-charter-alignment" target="_blank" class="btn-ghost text-xs flex-shrink-0">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Download CSV
+          JSON Export
         </a>
       </div>
-      <div id="sdg-loading" class="flex items-center gap-3 py-10 justify-center">
+      <div id="au-loading" class="flex items-center gap-3 py-10 justify-center">
         <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
-        <p class="text-sm" style="color:var(--text-muted)">Analyzing SDG alignment...</p>
+        <p class="text-sm" style="color:var(--text-muted)">Scoring AU Charter alignment...</p>
       </div>
-      <div id="sdg-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-6 hidden"></div>
-      <div id="sdg-papers-panel" class="surface rounded-2xl p-6 hidden">
-        <div class="flex items-center justify-between mb-4">
-          <h3 id="sdg-panel-title" class="text-base font-bold " style="color:var(--text)"></h3>
-          <button onclick="closeSdgPanel()" class="btn-ghost text-xs">✕Close</button>
-        </div>
-        <div id="sdg-papers-list" class="space-y-2 overflow-y-auto" style="max-height:400px"></div>
-      </div>
-    </div>
-
-
-    <!--  TRENDS  -->
-    <div id="atab-trends" class="atab-content hidden">
-      <div class="surface rounded-2xl p-5 mb-5">
-        <p class="section-label">Research TopicTrends Over Time</p>
-        <p class="text-xs mb-4" style="color:var(--text-muted)">12 tracked research domains — click any topic chip to see its year-by-year trajectory</p>
-        <div id="trends-chips" class="flex flex-wrap gap-2 mb-5"></div>
-        <canvas id="chart-trends" height="200"></canvas>
-      </div>
-      <div class="surface rounded-2xl p-5">
-        <p class="section-label">Topic Leaderboard</p>
-        <div id="trends-leaderboard" class="space-y-2.5"></div>
+      <div id="au-content" class="hidden">
+        <div class="grid grid-cols-1 gap-3 mb-4" id="au-summary-cards"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3" id="au-targets-grid"></div>
       </div>
     </div>
 
@@ -615,11 +638,41 @@
         </div>
         <select id="staff-inst-filter" onchange="loadStaffDirectory()" style="width:auto;font-size:12px;padding:5px 10px">
           <option value="">All Institutions</option>
-          <option value="unilag">UNILAG</option><option value="covenant">Covenant</option>
-          <option value="ui">Univ. Ibadan</option><option value="uct">UCT</option>
-          <option value="stellenbosch">Stellenbosch</option><option value="nairobi">Nairobi</option>
-          <option value="makerere">Makerere</option><option value="ghana">Univ. Ghana</option>
-          <option value="addisababa">Addis Ababa</option><option value="knust">KNUST</option>
+          <optgroup label="North Africa">
+            <option value="cairo">Cairo University</option>
+            <option value="ainshams">Ain Shams University</option>
+            <option value="alexandria">Alexandria University</option>
+            <option value="tunis">Univ. Tunis El Manar</option>
+            <option value="mohammed5">Univ. Mohammed V Rabat</option>
+          </optgroup>
+          <optgroup label="West Africa">
+            <option value="unilag">UNILAG</option>
+            <option value="ui">Univ. Ibadan</option>
+            <option value="covenant">Covenant</option>
+            <option value="ghana">Univ. Ghana</option>
+            <option value="knust">KNUST</option>
+          </optgroup>
+          <optgroup label="East Africa">
+            <option value="nairobi">Nairobi</option>
+            <option value="makerere">Makerere</option>
+            <option value="addisababa">Addis Ababa</option>
+            <option value="dar">Dar es Salaam</option>
+            <option value="rwanda">Univ. Rwanda</option>
+          </optgroup>
+          <optgroup label="Southern Africa">
+            <option value="uct">UCT</option>
+            <option value="stellenbosch">Stellenbosch</option>
+            <option value="wits">Wits</option>
+            <option value="pretoria">Pretoria</option>
+            <option value="zimbabwe">Zimbabwe</option>
+          </optgroup>
+          <optgroup label="Central Africa">
+            <option value="yaounde">Yaoundé I</option>
+            <option value="kinshasa">Kinshasa</option>
+            <option value="agostinho">Agostinho Neto</option>
+            <option value="marien">Marien Ngouabi</option>
+            <option value="masuku">Sciences Masuku</option>
+          </optgroup>
         </select>
       </div>
       <div id="staff-loading" class="flex items-center gap-3 py-10 justify-center">
@@ -641,31 +694,34 @@
     <!-- Institution Selection -->
     <div class="surface rounded-2xl p-6 mb-5">
       <p class="section-label">Multi-Institution Comparator</p>
-      <p class="text-xs mb-4" style="color:var(--text-muted)">Compare up to 10 African institutions across strategic metrics. Select institutions by ROR ID or name.</p>
+      <p class="text-xs mb-4" style="color:var(--text-muted)">Compare up to 15 African institutions across strategic metrics. Browse all 52 African countries using the sub-region drill-down, or enter a ROR ID / name directly.</p>
       
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div class="lg:col-span-2">
-          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Add Institution (ROR ID or Name)</label>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4 border-b border-white/5 pb-4">
+        <div>
+          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Add Institution directly (ROR ID or Name)</label>
           <div class="flex gap-2">
-            <input type="text" id="comp-institution-input" placeholder="e.g., https://ror.org/03qcnxw14 or University of Lagos" class="flex-1"/>
+            <input type="text" id="comp-institution-input" placeholder="e.g., https://ror.org/05rk03822 or University of Lagos" class="flex-1"/>
             <button onclick="addInstitutionToComparison()" class="btn-primary">Add</button>
           </div>
         </div>
         <div>
-          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Quick Add</label>
-          <select id="comp-quick-add" onchange="quickAddInstitution(this.value)" class="w-full">
-            <option value="">Select institution...</option>
-            <option value="https://ror.org/03qcnxw14">University of Lagos (UNILAG)</option>
-            <option value="https://ror.org/0545s4788">Covenant University</option>
-            <option value="https://ror.org/01js2sh04">University of Ibadan (UI)</option>
-            <option value="https://ror.org/03rp50x72">University of Cape Town (UCT)</option>
-            <option value="https://ror.org/05bk57929">Stellenbosch University</option>
-            <option value="https://ror.org/03s7gtk40">University of Nairobi</option>
-            <option value="https://ror.org/03s1g0h21">Makerere University</option>
-            <option value="https://ror.org/05qghxh33">University of Ghana</option>
-            <option value="https://ror.org/02kst3000">Addis Ababa University</option>
-            <option value="https://ror.org/00g0c5a86">KNUST Ghana</option>
-          </select>
+          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Browse All 52 African Countries by Sub-region</label>
+          <div class="grid grid-cols-3 gap-2">
+            <select id="comp-subregion-select" onchange="onSubregionChange()" style="font-size:12px">
+              <option value="">Sub-region...</option>
+              <option value="North Africa">North Africa</option>
+              <option value="West Africa">West Africa</option>
+              <option value="East Africa">East Africa</option>
+              <option value="Southern Africa">Southern Africa</option>
+              <option value="Central Africa">Central Africa</option>
+            </select>
+            <select id="comp-country-select" onchange="onCountryChange()" style="font-size:12px" disabled>
+              <option value="">Country...</option>
+            </select>
+            <select id="comp-university-select" onchange="onUniversityChange(this.value)" style="font-size:12px" disabled>
+              <option value="">University...</option>
+            </select>
+          </div>
         </div>
       </div>
       
@@ -756,14 +812,38 @@
       </div>
       
       <!-- Collaboration Mesh Visualization -->
-      <div class="surface rounded-2xl p-6">
-        <p class="section-label">Collaboration Mesh</p>
-        <p class="text-xs mb-4" style="color:var(--text-muted)">Interactive network showing research partnerships between institutions</p>
-        <div id="comp-collaboration-viz" style="height:400px;position:relative;background:var(--input-bg);border-radius:12px;display:flex;align-items:center;justify-center">
-          <p class="text-xs" style="color:var(--text-muted)">Collaboration visualization will appear here</p>
+      <div class="surface rounded-2xl p-6 mb-5">
+        <p class="section-label">African Collaboration Network Map</p>
+        <p class="text-xs mb-4" style="color:var(--text-muted)">Interactive geographic network of selected universities projected over the African Continent. Nodes represent universities (colored by sub-region), and edges represent collaboration strength.</p>
+        <div id="comp-collaboration-viz" style="height:520px;position:relative;background:var(--input-bg);border-radius:12px;overflow:hidden">
+          <svg id="comp-map-svg" width="100%" height="100%"></svg>
+          <div id="comp-map-tooltip" class="absolute hidden surface border rounded-lg p-3 text-xs pointer-events-none" style="z-index:20;background:rgba(15,23,42,0.95);border-color:var(--border);color:var(--text)"></div>
         </div>
       </div>
-      
- <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+      <!-- Decolonial Report Generator -->
+      <div class="surface rounded-2xl p-6">
+        <p class="section-label">Decolonial &amp; Linguistic Report Generator</p>
+        <p class="text-xs mb-4" style="color:var(--text-muted)">Generate a detailed, evidence-based academic report assessing the University of Lagos (UNILAG) research contributions to African languages and decolonial science in West Africa compared to regional peers.</p>
+        <button onclick="generateDecolonialReport()" class="btn-primary mb-4" id="report-gen-btn">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          Generate UNILAG Decolonial Report
+        </button>
+        
+        <div id="report-output-container" class="hidden surface p-6 rounded-xl border border-white/5 space-y-6" style="background:var(--terminal-bg)">
+          <div class="flex justify-between items-center border-b border-white/10 pb-3">
+            <h3 class="text-lg font-bold text-slate-100" id="report-title"></h3>
+            <button onclick="copyReportToClipboard()" class="btn-ghost text-xs">Copy Report</button>
+          </div>
+          
+          <div class="space-y-4 text-sm leading-relaxed text-slate-300" id="report-body">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div><!-- end comp-results -->
+  </div><!-- end tab-comparator -->
+</div><!-- end main container -->
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

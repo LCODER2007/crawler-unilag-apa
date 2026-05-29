@@ -33,19 +33,16 @@ class OpenAlexSpider(scrapy.Spider):
         'CONCURRENT_REQUESTS': 1,
     }
 
-    def __init__(self, institution='unilag', target=20, boost_special=True,
-                 sc_only=False, *args, **kwargs):
+    def __init__(self, institution='unilag', target=20, *args, **kwargs):
         """
-        boost_special: fire extra crawl waves seeded with Special Collections
-                       keywords/concepts (default True — heavy SC weight).
-        sc_only:       if True, SKIP the general ROR-only wave and crawl ONLY
-                       the SC-seeded waves. Use when you want a pure SC harvest.
+        Permanently forced to crawl exclusively using Special Collections seeds.
+        General ROR-only waves have been disabled.
         """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
-        # Truthy-string handling for scrapy CLI args ("False"/"0" → False)
-        self.boost_special = str(boost_special).lower() not in ('false', '0', 'no', 'off')
-        self.sc_only = str(sc_only).lower() in ('true', '1', 'yes', 'on')
+        
+        self.boost_special = True
+        self.sc_only = True
         registry = get_registry()
         self.institution_config = registry.get(institution)
         if not self.institution_config:
@@ -146,29 +143,43 @@ class OpenAlexSpider(scrapy.Spider):
                 self.logger.debug(f"Gate 2 FAIL (no ROR match): {title[:60]}")
                 continue
 
-            # Extract author data
             authors = []
             author_orcids = []
+            authors_full = []
             affiliations = []
             author_depts = []
 
             for authorship in authorships:
                 author_name = authorship.get('author', {}).get('display_name', '')
                 author_orcid = authorship.get('author', {}).get('orcid', '')
+                if author_orcid:
+                    author_orcid = author_orcid.replace('https://orcid.org/', '')
+
+                author_ror = ''
 
                 if author_name:
                     authors.append(author_name)
                     if author_orcid:
-                        author_orcids.append(author_orcid.replace('https://orcid.org/', ''))
+                        author_orcids.append(author_orcid)
 
                     for inst in authorship.get('institutions', []):
                         inst_name = inst.get('display_name', '')
+                        inst_ror = inst.get('ror', '')
+                        if inst_ror:
+                            author_ror = inst_ror.replace('https://ror.org/', '')
+                        
                         if inst_name:
                             affiliations.append(inst_name)
                         # Collect sub-institution if available
                         sub = inst.get('lineage', [])
                         if sub and len(sub) > 1:
                             author_depts.append(sub[-1])
+
+                    authors_full.append({
+                        'name': author_name,
+                        'orcid': author_orcid,
+                        'ror': author_ror
+                    })
 
             raw_affiliation = ' | '.join(set(affiliations)) if affiliations else self.institution_name
 
@@ -205,6 +216,7 @@ class OpenAlexSpider(scrapy.Spider):
                 'abstract': abstract,
                 'authors': authors,
                 'author_orcids': author_orcids,
+                'authors_full': authors_full,
                 'doi': doi,
                 'url': url,
                 'pdf_url': pdf_url,

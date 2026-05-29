@@ -101,7 +101,7 @@ class DocIDGenerator:
             # Metadata
             'title': paper_data.get('title'),
             'institution': paper_data.get('institution', 'University of Lagos'),
-            'institution_ror': 'https://ror.org/03qcnxw14',  # UNILAG ROR ID
+            'institution_ror': 'https://ror.org/05rk03822',  # UNILAG ROR ID
             
             # Provenance
             'source_repository': paper_data.get('source_repository', 'UNILAG Institutional Repository'),

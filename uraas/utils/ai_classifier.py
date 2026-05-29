@@ -46,10 +46,14 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "indigenous knowledge", "traditional knowledge", "indigenous epistemology",
         "ethnobotany", "ethnobotanical", "traditional ecological knowledge",
         "indigenous medicine", "traditional healing", "ancestral wisdom",
-        "indigenous language", "community knowledge", "precolonial knowledge",
-        "traditional practices", "indigenous technology", "folk medicine",
-        "oral traditions", "folklore", "cultural transmission", "indigenous cosmology",
-        "traditional farming", "indigenous peoples", "traditional religion",
+        "precolonial knowledge", "traditional practices", "indigenous technology",
+        "folk medicine", "oral traditions", "folklore", "cultural transmission",
+        "indigenous cosmology", "traditional farming", "indigenous peoples",
+        "traditional religion", "traditional medicine", "ethno-medicine",
+        "indigenous farming", "ethnoveterinary", "indigenous architecture",
+        "traditional weather forecasting", "local ecological knowledge",
+        "indigenous forestry", "indigenous land management", "traditional food systems",
+        "indigenous soil conservation", "indigenous metallurgy", "traditional pottery"
     ],
     "African Literature": [
         "postcolonial literature", "african literature", "negritude", "afrocentrism",
@@ -58,7 +62,9 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "decolonizing the mind", "colonial literature", "nigerian literature",
         "kenyan literature", "african narrative", "wole soyinka", "chinua achebe",
         "ngugi wa thiongo", "african writers", "african storytelling",
-        "griots", "afrofuturism", "african literary criticism",
+        "griots", "afrofuturism", "african literary criticism", "oral narrative",
+        "indigenous drama", "decolonial literature", "black aesthetics",
+        "african theatre", "contemporary african writing"
     ],
     "Cultural Heritage": [
         "cultural heritage", "intangible heritage", "cultural identity",
@@ -67,7 +73,20 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "postcolonial heritage", "traditional customs", "cultural continuity",
         "ethnography", "cultural landscape", "cultural practices",
         "heritage conservation", "world heritage", "cultural diversity",
-        "indigenous heritage", "living heritage",
+        "indigenous heritage", "living heritage", "ancestral heritage",
+        "cultural preservation", "traditional ceremonies", "indigenous art",
+        "monuments preservation", "archaeological heritage", "sacred groves",
+        "rock art preservation", "indigenous textiles"
+    ],
+    "Ethnic Languages & Groups": [
+        "ethnic group", "ethnic language", "indigenous language", "yoruba", 
+        "igbo", "hausa", "swahili", "kiswahili", "amharic", "zulu", "xhosa", 
+        "shona", "somali", "kinyarwanda", "oromo", "twi", "fante", "ewe", 
+        "wolof", "luganda", "lingala", "bambara", "tigrinya", "chewa", 
+        "ndebele", "sotho", "sesotho", "setswana", "tsonga", "ss", "venda", 
+        "fulani", "maasai", "igboland", "yorubaland", "hausaland", "kikuyu", 
+        "oromoland", "luo", "akan", "ganda", "shona culture", "zulu kingdom", 
+        "ashanti", "yoruba cosmology", "igbo metaphysics", "swahili coast"
     ],
     "Postcolonial Studies": [
         "postcolonialism", "decolonization", "colonialism", "imperialism",
@@ -75,26 +94,137 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "postcolonial theory", "colonial legacy", "neo-colonialism",
         "independence movements", "african nationalism", "resistance literature",
         "colonial history", "settler colonialism", "decolonial thought",
+        "decoloniality", "epistemic decolonization", "postcolonial identity",
+        "colonial violence", "anti-colonial resistance", "decolonial turn"
     ],
     "Pan-African Studies": [
         "pan-africanism", "african unity", "african union", "african identity",
         "african renaissance", "afrocentricity", "african development",
         "african continental", "afro-optimism", "black consciousness",
-        "african solidarity", "african geopolitics", "ecowas",
+        "african solidarity", "african geopolitics", "ecowas", "sadc",
+        "east african community", "african integration", "black diaspora",
+        "panafrican", "african economic community", "agenda 2063"
     ],
     "African Philosophy": [
         "ubuntu", "african philosophy", "african ethics", "communalism",
         "african metaphysics", "african ontology", "african logic",
         "african epistemology", "african humanism", "african thought",
-        "african worldview", "indigenous philosophy",
+        "african worldview", "indigenous philosophy", "sage philosophy",
+        "negritude philosophy", "ubuntu ethics", "african communitarianism"
     ],
     "Ethnomusicology": [
         "ethnomusicology", "african music", "traditional music", "folk music",
         "african drumming", "musical heritage", "afrobeats", "highlife",
         "african rhythm", "musical traditions", "indigenous music",
-        "oral musical tradition", "african instruments",
+        "oral musical tradition", "african instruments", "kora music",
+        "mbira music", "djembe drumming", "traditional chants"
     ],
 }
+
+# ── African Union Charter Targets ─────────────────────────────────────────────
+AU_CHARTER_TARGETS: Dict[int, Dict] = {
+    1: {
+        "name": "Tangible & Intangible Cultural Heritage Preservation",
+        "keywords": [
+            "cultural heritage", "intangible heritage", "heritage preservation", 
+            "material culture", "museum studies", "cultural artifacts", 
+            "heritage conservation", "world heritage", "sacred sites", 
+            "living heritage", "archaeological", "rock art", "sacred groves"
+        ]
+    },
+    2: {
+        "name": "Development of African Languages & Decolonization of Science",
+        "keywords": [
+            "indigenous language", "yoruba", "igbo", "hausa", "swahili", 
+            "amharic", "zulu", "xhosa", "shona", "somali", "kinyarwanda", 
+            "oromo", "twi", "fante", "ewe", "wolof", "luganda", "lingala", 
+            "bambara", "tigrinya", "chewa", "ndebele", "sotho", "african language", 
+            "ethnic language", "decolonizing science", "linguistic diversity"
+        ]
+    },
+    3: {
+        "name": "Integration of Cultural Values & Indigenous Knowledge Systems",
+        "keywords": [
+            "indigenous knowledge", "traditional knowledge", "indigenous epistemology",
+            "ethnobotany", "traditional ecological knowledge", "indigenous medicine", 
+            "traditional healing", "ancestral wisdom", "traditional practices", 
+            "precolonial knowledge", "indigenous cosmology", "traditional religion"
+        ]
+    },
+    4: {
+        "name": "Inter-Institutional Cultural Exchange & Regional Integration",
+        "keywords": [
+            "cultural exchange", "regional integration", "pan-africanism", 
+            "african solidarity", "african union", "african continental", 
+            "cross-border", "ecowas", "sadc", "east african community"
+        ]
+    },
+    5: {
+        "name": "Support for Creative and Cultural Industries",
+        "keywords": [
+            "creative industry", "cultural industry", "african literature", 
+            "african music", "african novel", "african drama", "oral literature", 
+            "traditional music", "african drumming", "highlife", "afrobeats", 
+            "performing arts", "african cinema", "storytelling", "folklore"
+        ]
+    },
+    6: {
+        "name": "Scientific Innovation & Traditional Technology Integration",
+        "keywords": [
+            "traditional technology", "indigenous technology", "traditional farming", 
+            "traditional agriculture", "ethnoveterinary", "indigenous agriculture", 
+            "traditional metallurgy", "traditional medicine production"
+        ]
+    },
+    7: {
+        "name": "Youth Engagement & Cultural Education",
+        "keywords": [
+            "cultural transmission", "cultural education", "pedagogy", 
+            "oral history", "folklore", "oral tradition", "youth engagement", 
+            "cultural values"
+        ]
+    },
+    8: {
+        "name": "Intellectual Property, Open Access, and Copyright Protection",
+        "keywords": [
+            "intellectual property", "open access", "copyright", "traditional knowledge rights", 
+            "biopiracy", "patent protection", "indigenous rights", "open science"
+        ]
+    },
+    9: {
+        "name": "Decolonial Philosophy & African Thought Systems (Ubuntu)",
+        "keywords": [
+            "ubuntu", "african philosophy", "african thought", "african ethics", 
+            "communalism", "decolonial", "decolonization", "postcolonialism", 
+            "negritude", "afrocentricity", "decolonial thought", "subaltern", 
+            "african worldview"
+        ]
+    }
+}
+
+def classify_au_targets(title: str, abstract: str, dc_subject: str = '') -> List[Dict]:
+    """
+    Classify a paper against the 9 African Union Charter Targets.
+    Returns list of {target_number, target_name, score, matched_keywords}.
+    """
+    text = _clean_text(f"{title or ''} {abstract or ''} {dc_subject or ''}").lower()
+    if not text.strip():
+        return []
+
+    results = []
+    for num, defn in AU_CHARTER_TARGETS.items():
+        score, matched = _keyword_score(text, defn['keywords'])
+        if score >= 1:
+            results.append({
+                'target_number': num,
+                'target_name': defn['name'],
+                'score': score,
+                'matched_keywords': matched[:6],
+            })
+
+    results.sort(key=lambda x: -x['score'])
+    return results
+
 
 # ── Comprehensive Stop Words ──────────────────────────────────────────────────
 # Covers: common English, academic filler, metadata artifacts, XML/JATS tags,
@@ -231,10 +361,16 @@ def _load_nlp():
 
 # ── Core classification functions ─────────────────────────────────────────────
 
+import re
+
 def _keyword_score(text: str, keywords: List[str]) -> Tuple[int, List[str]]:
     """Score text against a keyword list, return (score, matched_keywords)."""
     text_lower = text.lower()
-    matched = [kw for kw in keywords if kw.lower() in text_lower]
+    matched = []
+    for kw in keywords:
+        kw_lower = kw.lower()
+        if re.search(rf"\b{re.escape(kw_lower)}\b", text_lower):
+            matched.append(kw)
     return len(matched), matched
 
 
@@ -345,9 +481,14 @@ def extract_keywords(title: str, abstract: str, top_n: int = 60,
     idf_scores: Dict[str, float] = {}
     if all_texts and len(all_texts) > 1:
         N = len(all_texts)
-        for term in term_freq:
-            doc_count = sum(1 for doc in all_texts if term in doc.lower())
+        all_texts_lower = [doc.lower() for doc in all_texts]
+        candidate_terms = sorted(term_freq.keys(), key=lambda t: -term_freq[t])[:1500]
+        for term in candidate_terms:
+            doc_count = sum(1 for doc in all_texts_lower if term in doc)
             idf_scores[term] = math.log((N + 1) / (doc_count + 1)) + 1
+        for term in term_freq:
+            if term not in idf_scores:
+                idf_scores[term] = 1.0
     else:
         # Without corpus, use log(freq+1) as a proxy
         for term in term_freq:
@@ -445,13 +586,17 @@ def extract_trends_from_corpus(papers: List[Dict], top_n: int = 12) -> List[Dict
 
     # Score terms: frequency × year spread
     N_docs = len(all_texts)
+    all_texts_lower = [t.lower() for t in all_texts]
+    candidate_terms = sorted(global_freq.keys(), key=lambda t: -global_freq[t])[:1500]
     trend_scores: Dict[str, float] = {}
     for term, freq in global_freq.items():
-        year_spread = len(global_year_presence.get(term, set()))
-        # IDF across corpus
-        doc_count = sum(1 for t in all_texts if term in t.lower())
-        idf = math.log((N_docs + 1) / (doc_count + 1)) + 1
-        trend_scores[term] = freq * year_spread * idf
+        if term in candidate_terms:
+            year_spread = len(global_year_presence.get(term, set()))
+            doc_count = sum(1 for t in all_texts_lower if term in t)
+            idf = math.log((N_docs + 1) / (doc_count + 1)) + 1
+            trend_scores[term] = freq * year_spread * idf
+        else:
+            trend_scores[term] = 0.0
 
     # Get top terms as seed topics
     top_terms = sorted(trend_scores.items(), key=lambda x: -x[1])[:top_n * 3]
@@ -513,6 +658,7 @@ def extract_trends_from_corpus(papers: List[Dict], top_n: int = 12) -> List[Dict
             'topic': label,
             'keywords': related[:6],
             'paper_count': len(trend_papers),
+            'total': len(trend_papers),
             'by_year': by_year,
             'papers': [{'id': p.get('id'), 'title': p.get('title'), 'year': p.get('year')} for p in trend_papers[:20]],
         })

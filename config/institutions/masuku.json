@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/059gqse72",
+  "name": "Université des Sciences et Techniques de Masuku",
+  "short_name": "USTM Masuku",
+  "country": "Gabon",
+  "sub_region": "Central Africa",
+  "staff_file": "data/ustm_masuku_staff.json",
+  "affiliation_patterns": [
+    "Université des Sciences et Techniques de Masuku",
+    "USTM Masuku",
+    "Université des Sciences et Techniques de Masuku Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

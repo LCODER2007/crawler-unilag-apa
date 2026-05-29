@@ -17,9 +17,27 @@ class SearchQuery:
     """Parse and execute advanced search queries."""
     
     @staticmethod
-    def parse_boolean_query(query: str) -> List[Tuple[str, str, str]]:
+    def ast_to_string(node) -> str:
+        if node is None:
+            return ""
+        node_type = node[0]
+        if node_type in ('AND', 'OR'):
+            return f"({SearchQuery.ast_to_string(node[1])} {node_type} {SearchQuery.ast_to_string(node[2])})"
+        elif node_type == 'NOT':
+            return f"(NOT {SearchQuery.ast_to_string(node[1])})"
+        elif node_type == 'FIELD_VAL':
+            field, val = node[1]
+            return f"{field}:{val}"
+        elif node_type == 'PHRASE':
+            return f'"{node[1]}"'
+        elif node_type == 'TERM':
+            return node[1]
+        return str(node)
+
+    @staticmethod
+    def parse_boolean_query(query: str):
         """
-        Parse Boolean search query into structured format.
+        Parse Boolean search query into structured format (AST).
         
         Supports:
         - AND, OR, NOT operators
@@ -28,142 +46,259 @@ class SearchQuery:
         - Phrase searches: "machine learning"
         - Wildcards: machin* (suffix), *learning (prefix)
         
-        Examples:
-            "machine learning" AND author:smith
-            (covid OR pandemic) AND year:2020
-            title:cancer NOT lung
-        
         Returns:
-            List of (field, operator, value) tuples
+            AST node (tuple)
         """
-        # Normalize query
         query = query.strip()
-        
-        # Extract field:value patterns
-        field_pattern = r'(\w+):(["\']?)([^"\'\s]+|[^"\']+)\2'
-        matches = re.findall(field_pattern, query)
-        
-        parsed = []
-        for field, _, value in matches:
-            parsed.append((field.lower(), 'EQUALS', value))
-        
-        # Extract quoted phrases
-        phrase_pattern = r'"([^"]+)"'
-        phrases = re.findall(phrase_pattern, query)
-        for phrase in phrases:
-            parsed.append(('all', 'PHRASE', phrase))
-        
-        # Extract remaining keywords
-        # Remove field:value and phrases from query
-        remaining = re.sub(field_pattern, '', query)
-        remaining = re.sub(phrase_pattern, '', remaining)
-        
-        # Split by Boolean operators
-        keywords = re.split(r'\s+(?:AND|OR|NOT)\s+|\s+', remaining)
-        keywords = [k.strip() for k in keywords if k.strip() and k.upper() not in ('AND', 'OR', 'NOT')]
-        
-        for keyword in keywords:
-            if keyword:
-                parsed.append(('all', 'KEYWORD', keyword))
-        
-        return parsed
+        if not query:
+            return None
+            
+        try:
+            # Tokenize
+            token_specification = [
+                ('LPAR',     r'\('),
+                ('RPAR',     r'\)'),
+                ('AND',      r'\bAND\b'),
+                ('OR',       r'\bOR\b'),
+                ('NOT',      r'\bNOT\b'),
+                ('FIELD_VAL',r'\b(\w+):(?:(?:"([^"]+)")|(?:\'([^\']+)\')|([^\s\)\(]+))'),
+                ('PHRASE',   r'"([^"]+)"|\'([^\']+)\''),
+                ('TERM',     r'[^\s\)\(]+'),
+                ('SKIP',     r'\s+'),
+            ]
+            tok_regex = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in token_specification)
+            tokens = []
+            for mo in re.finditer(tok_regex, query):
+                kind = mo.lastgroup
+                if kind == 'SKIP':
+                    continue
+                val = mo.group(kind)
+                if kind == 'FIELD_VAL':
+                    field_match = re.match(r'^(\w+):(.*)$', val)
+                    field = field_match.group(1).lower()
+                    raw_val = field_match.group(2)
+                    if (raw_val.startswith('"') and raw_val.endswith('"')) or (raw_val.startswith("'") and raw_val.endswith("'")):
+                        raw_val = raw_val[1:-1]
+                    tokens.append(('FIELD_VAL', (field, raw_val)))
+                elif kind == 'PHRASE':
+                    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                        val = val[1:-1]
+                    tokens.append(('PHRASE', val))
+                elif kind == 'TERM':
+                    tokens.append(('TERM', val))
+                else:
+                    tokens.append((kind, val))
+                    
+            # Insert implicit ANDs
+            operand_types = {'TERM', 'PHRASE', 'FIELD_VAL', 'RPAR'}
+            start_operand_types = {'TERM', 'PHRASE', 'FIELD_VAL', 'LPAR', 'NOT'}
+            tokens_with_ands = []
+            for i, tok in enumerate(tokens):
+                if i > 0:
+                    prev_tok = tokens[i-1]
+                    if prev_tok[0] in operand_types and tok[0] in start_operand_types:
+                        tokens_with_ands.append(('AND', 'AND'))
+                tokens_with_ands.append(tok)
+                
+            # Parse to AST using Shunting-yard
+            precedence = {'NOT': 3, 'AND': 2, 'OR': 1}
+            output_stack = []
+            operator_stack = []
+            
+            for tok_type, val in tokens_with_ands:
+                if tok_type in {'TERM', 'PHRASE', 'FIELD_VAL'}:
+                    output_stack.append((tok_type, val))
+                elif tok_type == 'LPAR':
+                    operator_stack.append((tok_type, val))
+                elif tok_type == 'RPAR':
+                    while operator_stack and operator_stack[-1][0] != 'LPAR':
+                        op = operator_stack.pop()
+                        if op[0] == 'NOT':
+                            if not output_stack:
+                                raise ValueError("Invalid NOT query")
+                            arg = output_stack.pop()
+                            output_stack.append(('NOT', arg))
+                        else:
+                            if len(output_stack) < 2:
+                                raise ValueError(f"Invalid query: missing arguments for {op[0]}")
+                            right = output_stack.pop()
+                            left = output_stack.pop()
+                            output_stack.append((op[0], left, right))
+                    if not operator_stack:
+                        raise ValueError("Mismatched parentheses")
+                    operator_stack.pop() # pop LPAR
+                elif tok_type in {'AND', 'OR', 'NOT'}:
+                    while (operator_stack and operator_stack[-1][0] in precedence and
+                           precedence[operator_stack[-1][0]] >= precedence[tok_type]):
+                        op = operator_stack.pop()
+                        if op[0] == 'NOT':
+                            if not output_stack:
+                                raise ValueError("Invalid NOT query")
+                            arg = output_stack.pop()
+                            output_stack.append(('NOT', arg))
+                        else:
+                            if len(output_stack) < 2:
+                                raise ValueError(f"Invalid query: missing arguments for {op[0]}")
+                            right = output_stack.pop()
+                            left = output_stack.pop()
+                            output_stack.append((op[0], left, right))
+                    operator_stack.append((tok_type, val))
+                    
+            while operator_stack:
+                op = operator_stack.pop()
+                if op[0] == 'LPAR':
+                    raise ValueError("Mismatched parentheses")
+                if op[0] == 'NOT':
+                    if not output_stack:
+                        raise ValueError("Invalid NOT query")
+                    arg = output_stack.pop()
+                    output_stack.append(('NOT', arg))
+                else:
+                    if len(output_stack) < 2:
+                        raise ValueError(f"Invalid query: missing arguments for {op[0]}")
+                    right = output_stack.pop()
+                    left = output_stack.pop()
+                    output_stack.append((op[0], left, right))
+                    
+            if not output_stack:
+                return None
+            if len(output_stack) > 1:
+                raise ValueError("Invalid query expression")
+            return output_stack[0]
+            
+        except Exception as e:
+            logger.warning(f"Boolean parsing failed for query '{query}': {e}. Falling back to simple parsing.")
+            # Fallback to simple split AND-join
+            words = query.split()
+            if not words:
+                return None
+            node = ('TERM', words[0])
+            for w in words[1:]:
+                node = ('AND', node, ('TERM', w))
+            return node
     
     @staticmethod
-    def build_sql_filter(parsed_query: List[Tuple[str, str, str]]):
+    def build_sql_filter(parsed_query, session=None):
         """
         Build SQLAlchemy filter from parsed query.
         
         Returns:
             SQLAlchemy filter expression
         """
-        filters = []
-        
-        for field, operator, value in parsed_query:
+        if parsed_query is None:
+            return None
+            
+        if session is None:
+            session = SessionLocal()
+            
+        def evaluate_node(node):
+            if node is None:
+                return None
+            
+            node_type = node[0]
+            if node_type == 'AND':
+                left = evaluate_node(node[1])
+                right = evaluate_node(node[2])
+                if left is not None and right is not None:
+                    return and_(left, right)
+                return left or right
+                
+            elif node_type == 'OR':
+                left = evaluate_node(node[1])
+                right = evaluate_node(node[2])
+                if left is not None and right is not None:
+                    return or_(left, right)
+                return left or right
+                
+            elif node_type == 'NOT':
+                arg = evaluate_node(node[1])
+                if arg is not None:
+                    return not_(arg)
+                return None
+                
+            elif node_type == 'FIELD_VAL':
+                field, val = node[1]
+                return build_field_filter(field, val)
+                
+            elif node_type == 'PHRASE':
+                val = node[1]
+                return or_(
+                    Item.title.ilike(f'%{val}%'),
+                    Item.abstract.ilike(f'%{val}%'),
+                    Item.ai_keywords.ilike(f'%{val}%')
+                )
+                
+            elif node_type == 'TERM':
+                val = node[1]
+                if '*' in val:
+                    sql_val = val.replace('*', '%')
+                else:
+                    sql_val = f'%{val}%'
+                return or_(
+                    Item.title.ilike(sql_val),
+                    Item.abstract.ilike(sql_val),
+                    Item.doi.ilike(sql_val),
+                    Item.ai_keywords.ilike(sql_val)
+                )
+            return None
+            
+        def build_field_filter(field, value):
+            if '*' in value:
+                sql_val = value.replace('*', '%')
+            else:
+                sql_val = f'%{value}%'
+                
             if field == 'title':
-                filters.append(Item.title.ilike(f'%{value}%'))
-            
+                return Item.title.ilike(sql_val)
             elif field == 'abstract':
-                filters.append(Item.abstract.ilike(f'%{value}%'))
-            
+                return Item.abstract.ilike(sql_val)
             elif field == 'author':
-                # Subquery for author name
-                filters.append(
-                    Item.id.in_(
-                        SessionLocal().query(Item.id).join(Item.authors).filter(
-                            Author.name.ilike(f'%{value}%')
-                        )
+                return Item.id.in_(
+                    session.query(Item.id).join(Item.authors).filter(
+                        Author.name.ilike(sql_val)
                     )
                 )
-            
             elif field == 'year':
                 try:
                     year = int(value)
-                    filters.append(db_year(Item.publication_date) == str(year))
+                    return db_year(Item.publication_date) == str(year)
                 except ValueError:
-                    pass
-            
+                    return None
             elif field == 'doi':
-                filters.append(Item.doi.ilike(f'%{value}%'))
-            
+                return Item.doi.ilike(sql_val)
             elif field == 'faculty':
-                filters.append(
-                    Item.id.in_(
-                        SessionLocal().query(Item.id).join(Item.collections).join(
-                            Collection.community
-                        ).filter(Community.name.ilike(f'%{value}%'))
-                    )
+                return Item.id.in_(
+                    session.query(Item.id).join(Item.collections).join(
+                        Collection.community
+                    ).filter(Community.name.ilike(sql_val))
                 )
-            
             elif field == 'department':
-                filters.append(
-                    Item.id.in_(
-                        SessionLocal().query(Item.id).join(Item.collections).filter(
-                            Collection.name.ilike(f'%{value}%')
-                        )
+                return Item.id.in_(
+                    session.query(Item.id).join(Item.collections).filter(
+                        Collection.name.ilike(sql_val)
                     )
                 )
-            
             elif field == 'keyword':
-                filters.append(
-                    or_(
-                        Item.ai_keywords.ilike(f'%{value}%'),
-                        Item.dc_subject.ilike(f'%{value}%')
-                    )
+                return or_(
+                    Item.ai_keywords.ilike(sql_val),
+                    Item.dc_subject.ilike(sql_val)
                 )
-            
             elif field == 'language':
-                filters.append(Item.language_code == value.lower())
-            
+                return Item.language_code == value.lower()
             elif field == 'oa' or field == 'openaccess':
                 if value.lower() in ('true', 'yes', '1'):
-                    filters.append(Item.dc_rights.like('%openAccess%'))
+                    return Item.dc_rights.like('%openAccess%')
                 else:
-                    filters.append(~Item.dc_rights.like('%openAccess%'))
-            
-            elif field == 'all':
-                # Search across all text fields
-                if operator == 'PHRASE':
-                    filters.append(
-                        or_(
-                            Item.title.ilike(f'%{value}%'),
-                            Item.abstract.ilike(f'%{value}%'),
-                            Item.ai_keywords.ilike(f'%{value}%')
-                        )
-                    )
-                else:
-                    filters.append(
-                        or_(
-                            Item.title.ilike(f'%{value}%'),
-                            Item.abstract.ilike(f'%{value}%'),
-                            Item.doi.ilike(f'%{value}%'),
-                            Item.ai_keywords.ilike(f'%{value}%')
-                        )
-                    )
-        
-        # Combine filters with AND
-        if filters:
-            return and_(*filters)
-        return None
+                    return ~Item.dc_rights.like('%openAccess%')
+            else:
+                return or_(
+                    Item.title.ilike(sql_val),
+                    Item.abstract.ilike(sql_val),
+                    Item.doi.ilike(sql_val),
+                    Item.ai_keywords.ilike(sql_val)
+                )
+                
+        return evaluate_node(parsed_query)
     
     @staticmethod
     def execute_search(
@@ -203,7 +338,7 @@ class SearchQuery:
             q = session.query(Item)
             
             # Apply parsed query filters
-            sql_filter = SearchQuery.build_sql_filter(parsed)
+            sql_filter = SearchQuery.build_sql_filter(parsed, session)
             if sql_filter is not None:
                 q = q.filter(sql_filter)
             
@@ -272,7 +407,7 @@ class SearchQuery:
             return {
                 'total': total,
                 'results': formatted_results,
-                'query_parsed': str(parsed),
+                'query_parsed': SearchQuery.ast_to_string(parsed),
                 'took_ms': round(took_ms, 2),
                 'page': offset // limit + 1,
                 'pages': (total + limit - 1) // limit

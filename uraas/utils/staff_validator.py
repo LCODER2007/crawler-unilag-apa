@@ -5,8 +5,11 @@ Supports multi-institution with ROR-based configuration.
 import os
 import json
 import re
+import logging
 from typing import List, Set, Optional, Dict, Tuple
 from thefuzz import fuzz
+
+logger = logging.getLogger(__name__)
 
 
 class StaffValidator:
@@ -40,7 +43,7 @@ class StaffValidator:
                 os.path.dirname(__file__), '..', '..', 'data', 'unilag_staff.json'
             )
             self.institution_name = "University of Lagos"
-            self.ror = "https://ror.org/03qcnxw14"
+            self.ror = "https://ror.org/05rk03822"
         
         self.staff_names: Set[str] = set()
         self.normalized_staff: Set[str] = set()
@@ -57,7 +60,7 @@ class StaffValidator:
     def load_staff_cache(self):
         """Load staff names from JSON file"""
         if not os.path.exists(self.staff_cache_path):
-            print(f"Warning: Staff file not found: {self.staff_cache_path}")
+            logger.warning(f"Staff file not found: {self.staff_cache_path}")
             return
         
         try:
@@ -82,16 +85,23 @@ class StaffValidator:
             else:
                 staff_list = []
             
-            for name in staff_list:
+            for entry in staff_list:
+                # Each entry may be a plain string or a dict with a 'name' key
+                if isinstance(entry, dict):
+                    name = entry.get('name', '')
+                elif isinstance(entry, str):
+                    name = entry
+                else:
+                    continue
                 cleaned = self._clean_name(name)
                 if cleaned:
                     self.staff_names.add(cleaned)
                     self.normalized_staff.add(self._normalize_name(cleaned))
             
-            print(f"Loaded {len(self.staff_names)} staff members for {self.institution_name}")
+            logger.info(f"Loaded {len(self.staff_names)} staff members for {self.institution_name}")
         
         except Exception as e:
-            print(f"Error loading staff cache from {self.staff_cache_path}: {e}")
+            logger.error(f"Error loading staff cache from {self.staff_cache_path}: {e}")
 
     def _load_faculty_map(self):
         """Load faculty and department mappings"""
@@ -138,7 +148,7 @@ class StaffValidator:
                                 self._surname_to_dept[surname] = dept
                 return
             except Exception as e:
-                print(f"Warning: could not load detailed staff records: {e}")
+                logger.warning(f"Could not load detailed staff records: {e}")
 
         # Fallback: keyword map (UNILAG-specific, may not exist for other institutions)
         self._detailed_records = []
@@ -188,6 +198,11 @@ class StaffValidator:
         """Check if author is a staff member of this institution"""
         if not author_name:
             return False
+        
+        # If no staff directory loaded, bypass and rely on ROR and affiliation gates
+        if not self.normalized_staff:
+            return True
+            
         cleaned = self._clean_name(author_name)
         normalized = self._normalize_name(cleaned)
         

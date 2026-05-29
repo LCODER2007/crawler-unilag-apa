@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/03w489125",
+  "name": "University of Zimbabwe",
+  "short_name": "UZ",
+  "country": "Zimbabwe",
+  "sub_region": "Southern Africa",
+  "staff_file": "data/uz_staff.json",
+  "affiliation_patterns": [
+    "University of Zimbabwe",
+    "UZ",
+    "University of Zimbabwe Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}
