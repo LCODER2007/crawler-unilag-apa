@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import desc, extract, func, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import aliased, joinedload
 
 from uraas.config.institutions import get_registry
 from uraas.database import (
@@ -33,9 +33,9 @@ from uraas.database import (
     db_year,
     db_year_month,
 )
+from uraas.services.sc_engine import SC_FILTER, category_breakdown, is_special_collection
 from uraas.utils.ai_classifier import (
     SPECIAL_COLLECTIONS,
-    classify_special_collections,
     extract_keywords,
     extract_trends_from_corpus,
 )
@@ -189,9 +189,13 @@ class URAASAnalyticsEngine:
 
     def _get_sc_item_ids(self, session, institution: Optional[str] = None) -> List[int]:
         """
-        Returns a list of Item IDs that match the Special Collections criteria.
-        This forms the core pivot of the dashboard, restricting all analytics
-        exclusively to papers focused on Special Collections.
+        Returns a list of Item IDs that are Special Collections.
+
+        The authoritative SC signal is the stored ``special_collection_score``
+        column (computed by the SC decision engine at crawl time / via the
+        re-classify script). This is a cheap indexed query — no per-row
+        re-classification — so the dashboard count updates immediately after a
+        crawl or prune (once the analytics cache is flushed).
         """
         inst_name = self._resolve_institution_name(institution)
         cache_key = f"sc_item_ids_{inst_name or 'all'}"
@@ -199,18 +203,10 @@ class URAASAnalyticsEngine:
         if cached is not None:
             return cached
 
-        q = session.query(Item.id, Item.title, Item.abstract, Item.dc_subject)
+        q = session.query(Item.id).filter(SC_FILTER)
         if inst_name:
             q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
-        items = q.all()
-
-        valid_ids = []
-        for item_id, title, abstract, dc_subject in items:
-            cats = classify_special_collections(
-                title or "", abstract or "", dc_subject or ""
-            )
-            if cats:  # if it matched at least one special collection category
-                valid_ids.append(item_id)
+        valid_ids = [row[0] for row in q.all()]
 
         analytics_cache.set(cache_key, valid_ids, ttl=3600)  # cache for 1 hour
         return valid_ids
@@ -796,7 +792,7 @@ class URAASAnalyticsEngine:
             if sc_ids:
                 q = q.filter(Item.id.in_(sc_ids))
             else:
-                return []
+                return {"score": 0, "breakdown": {}, "total_items": 0, "tk_items": 0}
             items = q.all()
             total = len(items)
             if total == 0:
@@ -891,121 +887,6 @@ class URAASAnalyticsEngine:
         finally:
             session.close()
 
-    def get_patent_velocity(self) -> Dict:
-        """
-        Patent-to-Paper Velocity  measures the innovation lifecycle.
-        Calculates average days from paper publication to patent filing.
-        """
-        session = SessionLocal()
-        try:
-            items = (
-                session.query(
-                    Item.title, Item.publication_date, Item.patent_id, Item.patent_date
-                )
-                .filter(
-                    Item.patent_id.isnot(None),
-                    Item.publication_date.isnot(None),
-                    Item.patent_date.isnot(None),
-                )
-                .all()
-            )
-
-            if not items:
-                return {
-                    "total_patents": 0,
-                    "avg_days_to_patent": None,
-                    "fast_movers": [],
-                    "velocity_distribution": [],
-                }
-
-            velocities = []
-            for title, pub_date, patent_id, patent_date in items:
-                delta = (patent_date - pub_date).days
-                if delta >= 0:
-                    velocities.append(
-                        {
-                            "title": title,
-                            "patent_id": patent_id,
-                            "publication_date": pub_date.isoformat(),
-                            "patent_date": patent_date.isoformat(),
-                            "days_to_patent": delta,
-                        }
-                    )
-
-            velocities.sort(key=lambda x: x["days_to_patent"])
-            avg = (
-                round(sum(v["days_to_patent"] for v in velocities) / len(velocities))
-                if velocities
-                else None
-            )
-
-            # Distribution buckets
-            buckets = {"< 1 year": 0, "1-2 years": 0, "2-5 years": 0, "> 5 years": 0}
-            for v in velocities:
-                d = v["days_to_patent"]
-                if d < 365:
-                    buckets["< 1 year"] += 1
-                elif d < 730:
-                    buckets["1-2 years"] += 1
-                elif d < 1825:
-                    buckets["2-5 years"] += 1
-                else:
-                    buckets["> 5 years"] += 1
-
-            return {
-                "total_patents": len(velocities),
-                "avg_days_to_patent": avg,
-                "fast_movers": velocities[:10],
-                "velocity_distribution": [
-                    {"range": k, "count": v} for k, v in buckets.items()
-                ],
-            }
-        except Exception as e:
-            logger.error("get_patent_velocity: %s", e)
-            return {
-                "total_patents": 0,
-                "avg_days_to_patent": None,
-                "fast_movers": [],
-                "velocity_distribution": [],
-            }
-        finally:
-            session.close()
-
-    def get_docid_coverage(self) -> Dict:
-        """DocID assignment coverage across the repository."""
-        session = SessionLocal()
-        try:
-            total = session.query(Item).count()
-            with_docid = session.query(Item).filter(Item.docid.isnot(None)).count()
-            coverage = round(with_docid / total * 100, 1) if total else 0
-
-            # By content type
-            by_type = (
-                session.query(Item.content_type, func.count(Item.id))
-                .filter(Item.docid.isnot(None))
-                .group_by(Item.content_type)
-                .all()
-            )
-
-            return {
-                "total_papers": total,
-                "docid_assigned": with_docid,
-                "coverage_percent": coverage,
-                "by_content_type": [
-                    {"type": r[0] or "research_paper", "count": r[1]} for r in by_type
-                ],
-            }
-        except Exception as e:
-            logger.error("get_docid_coverage: %s", e)
-            return {
-                "total_papers": 0,
-                "docid_assigned": 0,
-                "coverage_percent": 0,
-                "by_content_type": [],
-            }
-        finally:
-            session.close()
-
     def get_special_collections_metrics(
         self, institution: Optional[str] = None
     ) -> Dict:
@@ -1036,7 +917,7 @@ class URAASAnalyticsEngine:
             results: Dict[str, List] = {cat: [] for cat in SPECIAL_COLLECTIONS}
 
             for item_id, title, abstract, dc_subject in items:
-                cats = classify_special_collections(
+                cats = category_breakdown(
                     title or "", abstract or "", dc_subject or ""
                 )
                 for cat_result in cats:
@@ -1077,6 +958,207 @@ class URAASAnalyticsEngine:
                 "total_special_items": 0,
                 "total_repository_items": 0,
             }
+        finally:
+            session.close()
+
+    def get_special_collections_overview(
+        self, institution: Optional[str] = None
+    ) -> Dict:
+        """
+        Special Collections Overview analytics — purpose-built for indigenous
+        knowledge / African literature / cultural-heritage collections rather
+        than the citation-prestige lens of commercial bibliometric platforms.
+
+        Returns thematic composition + theme co-occurrence, knowledge
+        sovereignty (African custodianship), SDG/development alignment, top
+        institutional custodians, a cultural lexicon, and the most influential
+        works. All metrics are restricted to genuine Special Collections via the
+        stored ``special_collection_score`` gate (``_get_sc_item_ids``) and are
+        computed only over fields populated for SC items. Cached 30 min.
+        """
+        from uraas.config.african_countries import COUNTRY_NAMES
+
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"sc_overview:{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        canonical = list(SPECIAL_COLLECTIONS.keys())
+        empty = {
+            "kpis": {
+                "total_items": 0,
+                "repo_total": 0,
+                "pct_of_repo": 0,
+                "themes_represented": 0,
+                "total_citations": 0,
+                "intra_african_pct": 0,
+            },
+            "themes": [{"category": c, "count": 0} for c in canonical],
+            "co_occurrence": {"labels": canonical, "matrix": [[0] * len(canonical) for _ in canonical]},
+            "countries": [],
+            "sdgs": [],
+            "keywords": [],
+            "custodians": [],
+            "influential": [],
+        }
+
+        session = SessionLocal()
+        try:
+            repo_q = session.query(func.count(Item.id))
+            if inst_name:
+                repo_q = repo_q.filter(Item.institution.ilike(f"%{inst_name}%"))
+            repo_total = repo_q.scalar() or 0
+
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                empty["kpis"]["repo_total"] = repo_total
+                return empty
+
+            rows = (
+                session.query(
+                    Item.id,
+                    Item.title,
+                    Item.cited_by_count,
+                    Item.special_collection_categories,
+                    Item.coauthor_countries,
+                    Item.is_intra_african,
+                    Item.sdg_tags,
+                    Item.ai_keywords,
+                    Item.institution,
+                )
+                .filter(Item.id.in_(sc_ids))
+                .all()
+            )
+
+            cat_idx = {c: i for i, c in enumerate(canonical)}
+            theme_counts = {c: 0 for c in canonical}
+            matrix = [[0] * len(canonical) for _ in canonical]
+            country_counts: Dict[str, int] = defaultdict(int)
+            sdg_counts: Dict[str, int] = defaultdict(int)
+            kw_counts: Dict[str, int] = defaultdict(int)
+            custodian_counts: Dict[str, int] = defaultdict(int)
+            total_citations = 0
+            intra_african = 0
+            influential: List[Dict] = []
+
+            for (
+                item_id,
+                title,
+                cited,
+                categories,
+                countries,
+                is_intra,
+                sdgs,
+                keywords,
+                inst,
+            ) in rows:
+                cited = int(cited or 0)
+                total_citations += cited
+                if is_intra:
+                    intra_african += 1
+
+                # Themes (canonical, multi-valued) + co-occurrence matrix.
+                item_cats = [
+                    c.strip()
+                    for c in (categories or "").split(",")
+                    if c.strip() in cat_idx
+                ]
+                item_cats = sorted(set(item_cats))
+                for c in item_cats:
+                    theme_counts[c] += 1
+                if len(item_cats) == 1:
+                    i = cat_idx[item_cats[0]]
+                    matrix[i][i] += 1
+                else:
+                    for a, b in itertools.combinations(item_cats, 2):
+                        ia, ib = cat_idx[a], cat_idx[b]
+                        matrix[ia][ib] += 1
+                        matrix[ib][ia] += 1
+
+                # Knowledge sovereignty — contributing African countries.
+                for code in (countries or "").split(","):
+                    code = code.strip().upper()
+                    if code in COUNTRY_NAMES:
+                        country_counts[code] += 1
+
+                # SDG alignment.
+                for sdg in (sdgs or "").split(","):
+                    sdg = sdg.strip()
+                    if sdg:
+                        sdg_counts[sdg] += 1
+
+                # Cultural lexicon.
+                for kw in (keywords or "").split(","):
+                    kw = kw.strip().lower()
+                    if len(kw) > 2:
+                        kw_counts[kw] += 1
+
+                # Custodian institutions.
+                if inst:
+                    custodian_counts[inst] += 1
+
+                if cited > 0:
+                    influential.append(
+                        {
+                            "id": item_id,
+                            "title": title or "Untitled",
+                            "citations": cited,
+                            "categories": item_cats,
+                        }
+                    )
+
+            total_items = len(rows)
+            themes_represented = sum(1 for v in theme_counts.values() if v > 0)
+            influential.sort(key=lambda x: -x["citations"])
+
+            result = {
+                "kpis": {
+                    "total_items": total_items,
+                    "repo_total": repo_total,
+                    "pct_of_repo": round(total_items / repo_total * 100, 1)
+                    if repo_total
+                    else 0,
+                    "themes_represented": themes_represented,
+                    "total_citations": total_citations,
+                    "intra_african_pct": round(intra_african / total_items * 100, 1)
+                    if total_items
+                    else 0,
+                },
+                "themes": [
+                    {"category": c, "count": theme_counts[c]} for c in canonical
+                ],
+                "co_occurrence": {"labels": canonical, "matrix": matrix},
+                "countries": [
+                    {"code": code, "name": COUNTRY_NAMES.get(code, code), "papers": n}
+                    for code, n in sorted(country_counts.items(), key=lambda x: -x[1])
+                ],
+                "sdgs": [
+                    {"sdg": sdg, "count": n}
+                    for sdg, n in sorted(
+                        sdg_counts.items(),
+                        key=lambda x: -x[1],
+                    )
+                ],
+                "keywords": [
+                    {"word": w, "count": n}
+                    for w, n in sorted(kw_counts.items(), key=lambda x: -x[1])[:30]
+                ],
+                "custodians": [
+                    {"institution": inst, "count": n}
+                    for inst, n in sorted(
+                        custodian_counts.items(), key=lambda x: -x[1]
+                    )[:10]
+                ],
+                "influential": influential[:15],
+            }
+            # Sort themes descending by count for display.
+            result["themes"].sort(key=lambda x: -x["count"])
+            analytics_cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error("get_special_collections_overview: %s", e)
+            return empty
         finally:
             session.close()
 
@@ -1166,18 +1248,371 @@ class URAASAnalyticsEngine:
                     for pair in itertools.combinations(sorted(names), 2):
                         edges[pair] = edges.get(pair, 0) + 1
 
-                return {
-                    "nodes": [{"id": n, "count": node_counts[n]} for n in top_names],
-                    "edges": [
-                        {"source": k[0], "target": k[1], "weight": v}
-                        for k, v in edges.items()
-                    ],
-                }
+                return self._annotate_network(
+                    {
+                        "nodes": [
+                            {"id": n, "count": node_counts[n]} for n in top_names
+                        ],
+                        "edges": [
+                            {"source": k[0], "target": k[1], "weight": v}
+                            for k, v in edges.items()
+                        ],
+                    }
+                )
         except Exception as e:
             logger.error("get_author_network: %s", e)
             return {"nodes": [], "edges": []}
         finally:
             session.close()
+
+    @staticmethod
+    def _annotate_network(graph: Dict) -> Dict:
+        """Add Louvain community + degree centrality to network nodes.
+
+        Gephi/VOSviewer-standard visual grammar: color by community, size by
+        centrality. Deterministic (seed=42) so the layout story is stable."""
+        try:
+            import networkx as nx
+
+            G = nx.Graph()
+            G.add_nodes_from(n["id"] for n in graph["nodes"])
+            G.add_weighted_edges_from(
+                (e["source"], e["target"], e["weight"]) for e in graph["edges"]
+            )
+            if G.number_of_edges():
+                communities = nx.community.louvain_communities(
+                    G, weight="weight", seed=42
+                )
+                membership = {
+                    node: idx for idx, comm in enumerate(communities) for node in comm
+                }
+                centrality = nx.degree_centrality(G)
+                for n in graph["nodes"]:
+                    n["community"] = membership.get(n["id"], 0)
+                    n["centrality"] = round(centrality.get(n["id"], 0.0), 3)
+        except Exception as e:
+            logger.warning("_annotate_network: %s", e)
+        return graph
+
+    #  Intra-African collaboration analytics
+
+    # Continental baseline: share of African co-publications involving >=2
+    # African countries, 2002-2019 (Research Policy, 2022).
+    INTRA_AFRICAN_BASELINE_PCT = 8.4
+
+    def get_collaboration_overview(self, institution: Optional[str] = None) -> Dict:
+        """Intra-African Collaboration Index — Scimago-compatible definition
+        (works whose affiliations span >=2 distinct African countries),
+        benchmarked against the continental average."""
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"collab_overview_{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        session = SessionLocal()
+        try:
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                return {"total_papers": 0, "papers_with_affiliation_data": 0}
+
+            from uraas.config.african_countries import COUNTRY_NAMES
+            from uraas.database import ItemAffiliation
+
+            covered = {
+                i
+                for (i,) in session.query(ItemAffiliation.item_id)
+                .filter(ItemAffiliation.item_id.in_(sc_ids))
+                .distinct()
+            }
+            intra_count = (
+                session.query(func.count(Item.id))
+                .filter(Item.id.in_(sc_ids), Item.is_intra_african.is_(True))
+                .scalar()
+                or 0
+            )
+            denominator = len(covered)
+            pct = round(intra_count / denominator * 100, 1) if denominator else 0.0
+
+            # Per-country paper counts (partners), excluding none
+            country_rows = (
+                session.query(
+                    ItemAffiliation.country_code,
+                    func.count(func.distinct(ItemAffiliation.item_id)),
+                )
+                .filter(
+                    ItemAffiliation.item_id.in_(sc_ids),
+                    ItemAffiliation.country_code.in_(list(COUNTRY_NAMES)),
+                )
+                .group_by(ItemAffiliation.country_code)
+                .all()
+            )
+            home_codes = set()
+            if inst_name:
+                # Home country dominates counts; surface partners separately.
+                reg_inst = get_registry().get(institution or "")
+                if reg_inst:
+                    home_codes = {
+                        code
+                        for code, name in COUNTRY_NAMES.items()
+                        if name.lower() == reg_inst.country.lower()
+                    }
+            partners = sorted(
+                (
+                    {"code": c, "name": COUNTRY_NAMES.get(c, c), "count": n}
+                    for c, n in country_rows
+                    if c not in home_codes
+                ),
+                key=lambda r: -r["count"],
+            )
+
+            result = {
+                "total_papers": len(sc_ids),
+                "papers_with_affiliation_data": denominator,
+                "intra_african_count": intra_count,
+                "intra_african_pct": pct,
+                "baseline_pct": self.INTRA_AFRICAN_BASELINE_PCT,
+                "ratio_vs_baseline": (
+                    round(pct / self.INTRA_AFRICAN_BASELINE_PCT, 2) if pct else 0.0
+                ),
+                "country_count": len(country_rows),
+                "top_partner_countries": partners[:10],
+            }
+            analytics_cache.set(cache_key, result, ttl=1800)
+            return result
+        except Exception as e:
+            logger.error("get_collaboration_overview: %s", e)
+            return {"total_papers": 0, "papers_with_affiliation_data": 0}
+        finally:
+            session.close()
+
+    def get_country_pair_matrix(self, institution: Optional[str] = None) -> Dict:
+        """Unordered African country-pair co-publication counts (full counting)."""
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"collab_pairs_{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        session = SessionLocal()
+        try:
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                return {"pairs": [], "countries": []}
+
+            from uraas.config.african_countries import COUNTRY_NAMES
+            from uraas.database import ItemAffiliation
+
+            a1 = aliased(ItemAffiliation)
+            a2 = aliased(ItemAffiliation)
+            rows = (
+                session.query(
+                    a1.country_code,
+                    a2.country_code,
+                    func.count(func.distinct(a1.item_id)),
+                )
+                .join(a2, a1.item_id == a2.item_id)
+                .filter(
+                    a1.country_code < a2.country_code,
+                    a1.country_code.in_(list(COUNTRY_NAMES)),
+                    a2.country_code.in_(list(COUNTRY_NAMES)),
+                    a1.item_id.in_(sc_ids),
+                )
+                .group_by(a1.country_code, a2.country_code)
+                .all()
+            )
+            pairs = sorted(
+                (
+                    {
+                        "source": s,
+                        "target": t,
+                        "source_name": COUNTRY_NAMES.get(s, s),
+                        "target_name": COUNTRY_NAMES.get(t, t),
+                        "count": n,
+                    }
+                    for s, t, n in rows
+                ),
+                key=lambda p: -p["count"],
+            )
+            countries = sorted({p["source"] for p in pairs} | {p["target"] for p in pairs})
+            result = {"pairs": pairs, "countries": countries}
+            analytics_cache.set(cache_key, result, ttl=1800)
+            return result
+        except Exception as e:
+            logger.error("get_country_pair_matrix: %s", e)
+            return {"pairs": [], "countries": []}
+        finally:
+            session.close()
+
+    def get_country_aggregates(self, institution: Optional[str] = None) -> List[Dict]:
+        """Per-African-country paper counts for the choropleth."""
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"collab_countries_{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        session = SessionLocal()
+        try:
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                return []
+
+            from uraas.config.african_countries import COUNTRY_NAMES
+            from uraas.database import ItemAffiliation
+
+            rows = (
+                session.query(
+                    ItemAffiliation.country_code,
+                    func.count(func.distinct(ItemAffiliation.item_id)),
+                )
+                .filter(
+                    ItemAffiliation.item_id.in_(sc_ids),
+                    ItemAffiliation.country_code.in_(list(COUNTRY_NAMES)),
+                )
+                .group_by(ItemAffiliation.country_code)
+                .all()
+            )
+            intra = dict(
+                session.query(
+                    ItemAffiliation.country_code,
+                    func.count(func.distinct(ItemAffiliation.item_id)),
+                )
+                .join(Item, Item.id == ItemAffiliation.item_id)
+                .filter(
+                    ItemAffiliation.item_id.in_(sc_ids),
+                    Item.is_intra_african.is_(True),
+                    ItemAffiliation.country_code.in_(list(COUNTRY_NAMES)),
+                )
+                .group_by(ItemAffiliation.country_code)
+                .all()
+            )
+            result = sorted(
+                (
+                    {
+                        "code": c,
+                        "name": COUNTRY_NAMES.get(c, c),
+                        "papers": n,
+                        "intra_african": intra.get(c, 0),
+                    }
+                    for c, n in rows
+                ),
+                key=lambda r: -r["papers"],
+            )
+            analytics_cache.set(cache_key, result, ttl=1800)
+            return result
+        except Exception as e:
+            logger.error("get_country_aggregates: %s", e)
+            return []
+        finally:
+            session.close()
+
+    def get_citation_velocity(self, institution: Optional[str] = None) -> Dict:
+        """Repository-level citation velocity from stored counts_by_year, plus
+        citation-weighted Pan-African citation share."""
+        import json as _json
+
+        inst_name = self._resolve_institution_name(institution)
+        cache_key = f"citation_velocity_{inst_name or 'all'}"
+        cached = analytics_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        session = SessionLocal()
+        try:
+            sc_ids = self._get_sc_item_ids(session, institution)
+            if not sc_ids:
+                return {"by_year": [], "items_covered": 0}
+
+            rows = (
+                session.query(
+                    Item.counts_by_year,
+                    Item.cited_by_count,
+                    Item.african_citation_share,
+                    Item.publication_date,
+                )
+                .filter(Item.id.in_(sc_ids), Item.counts_by_year.isnot(None))
+                .all()
+            )
+            by_year: Dict[int, int] = {}
+            first2y: List[int] = []
+            share_weighted = share_weight = 0.0
+            share_covered = 0
+            for counts_json, cited, share, pub_date in rows:
+                try:
+                    counts = _json.loads(counts_json)
+                except Exception:
+                    continue
+                year_map = {
+                    c["year"]: c.get("cited_by_count", 0)
+                    for c in counts
+                    if isinstance(c, dict) and "year" in c
+                }
+                for y, n in year_map.items():
+                    by_year[y] = by_year.get(y, 0) + n
+                if pub_date:
+                    first2y.append(
+                        year_map.get(pub_date.year, 0)
+                        + year_map.get(pub_date.year + 1, 0)
+                    )
+                if share is not None:
+                    share_covered += 1
+                    weight = max(cited or 0, 1)
+                    share_weighted += share * weight
+                    share_weight += weight
+
+            result = {
+                "by_year": [
+                    {"year": y, "citations": by_year[y]} for y in sorted(by_year)
+                ],
+                "items_covered": len(rows),
+                "avg_first2y": (
+                    round(sum(first2y) / len(first2y), 1) if first2y else 0.0
+                ),
+                "pan_african_share_pct": (
+                    round(share_weighted / share_weight, 1) if share_weight else None
+                ),
+                "pan_african_share_items": share_covered,
+            }
+            analytics_cache.set(cache_key, result, ttl=1800)
+            return result
+        except Exception as e:
+            logger.error("get_citation_velocity: %s", e)
+            return {"by_year": [], "items_covered": 0}
+        finally:
+            session.close()
+
+    def get_collaboration_arcs(self, institution: Optional[str] = None) -> Dict:
+        """GeoJSON FeatureCollection of great-circle arcs for country pairs."""
+        from uraas.config.african_countries import COUNTRY_CENTROIDS
+        from uraas.utils.geo import great_circle_arc
+
+        matrix = self.get_country_pair_matrix(institution)
+        features = []
+        for pair in matrix["pairs"]:
+            src = COUNTRY_CENTROIDS.get(pair["source"])
+            dst = COUNTRY_CENTROIDS.get(pair["target"])
+            if not (src and dst):
+                continue
+            features.append(
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "source": pair["source"],
+                        "target": pair["target"],
+                        "source_name": pair["source_name"],
+                        "target_name": pair["target_name"],
+                        "count": pair["count"],
+                    },
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": great_circle_arc(
+                            src[0], src[1], dst[0], dst[1]
+                        ),
+                    },
+                }
+            )
+        return {"type": "FeatureCollection", "features": features}
 
 
 analytics = URAASAnalyticsEngine()

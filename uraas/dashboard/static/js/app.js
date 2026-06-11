@@ -116,7 +116,8 @@ function switchAtab(name, btn) {
   if (t) t.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   
-  if (name === 'au') loadAUCharterTab();
+  if (name === 'au') loadAlignmentTab();
+  if (name === 'collab') loadCollabTab();
   if (name === 'compare') loadCompareDDs();
   if (name === 'language') loadLanguageTab();
   if (name === 'special') loadSpecialTab();
@@ -141,11 +142,12 @@ function withInst(url) {
 function applyGlobalInstitutionFilter() {
   invalidateCaches();
   const inst = getInstitutionParam();
-  const sdgCsv = $('sdg-csv-btn'); if (sdgCsv) sdgCsv.href = '/api/analytics/sdg-alignment/export.csv' + inst;
   const specCsv = $('special-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
   
   if (currentAtab === 'overview') loadAnalyticsOverview();
-  
+
+  else if (currentAtab === 'au') { loadAlignmentTab(); }
+  else if (currentAtab === 'collab') { loadCollabTab(); }
   else if (currentAtab === 'language') { loadLanguageTab(); }
   else if (currentAtab === 'special') { loadSpecialTab(); }
   else if (currentAtab === 'staff') { loadStaffDirectory(); }
@@ -226,14 +228,12 @@ function loadImpactCards() {
   });
 
   if (!$('adv-metrics-cards')) {
-    $('impact-cards').insertAdjacentHTML('afterend', '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="adv-metrics-cards"></div>');
+    $('impact-cards').insertAdjacentHTML('afterend', '<div class="grid grid-cols-2 gap-3 mb-5" id="adv-metrics-cards"></div>');
   }
-  
+
   const advMetrics = [
     { id: 'tk_vitality', l: 'TK Vitality Score', c: '#a855f7', api: '/api/analytics/tk-vitality-score', f: d => d.score + '/100' },
-    { id: 'ling_div', l: 'Linguistic Diversity', c: '#ec4899', api: '/api/analytics/linguistic-diversity-index', f: d => d.index },
-    { id: 'pat_vel', l: 'Patent Velocity', c: '#14b8a6', api: '/api/analytics/patent-velocity', f: d => (d.avg_days_to_patent ? (d.avg_days_to_patent / 365).toFixed(1) : '0') + ' yrs' },
-    { id: 'docid_cov', l: 'DocID™ Coverage', c: '#6366f1', api: '/api/analytics/docid-coverage', f: d => d.coverage_percent + '%' }
+    { id: 'ling_div', l: 'Linguistic Diversity', c: '#ec4899', api: '/api/analytics/linguistic-diversity-index', f: d => d.index }
   ];
   
   const advContainer = $('adv-metrics-cards');
@@ -409,68 +409,6 @@ function loadTimelineChart() {
 }
 
 /**
- * SDG Alignment
- */
-const SDG_COLORS = { 'SDG 1': '#E5243B', 'SDG 2': '#DDA63A', 'SDG 3': '#4C9F38', 'SDG 4': '#C5192D', 'SDG 5': '#FF3A21', 'SDG 6': '#26BDE2', 'SDG 7': '#FCC30B', 'SDG 8': '#A21942', 'SDG 9': '#FD6925', 'SDG 10': '#DD1367', 'SDG 11': '#FD9D24', 'SDG 12': '#BF8B2E', 'SDG 13': '#3F7E44', 'SDG 14': '#0A97D9', 'SDG 15': '#56C02B', 'SDG 16': '#00689D', 'SDG 17': '#19486A' };
-
-function loadSDGTab() {
-  if (sdgLoaded) return;
-  safeFetch(withInst('/api/analytics/sdg-alignment'), data => {
-    sdgLoaded = true; sdgData = data;
-    const loading = $('sdg-loading'), grid = $('sdg-grid');
-    if (loading) loading.classList.add('hidden');
-    if (grid) grid.classList.remove('hidden');
-    renderSDGGrid(data);
-  });
-}
-
-function renderSDGGrid(data) {
-  const grid = $('sdg-grid'); if (!grid) return;
-  if (!data || !data.length) {
-    grid.innerHTML = '<p class="col-span-full text-center py-10 text-sm">No SDG data found.</p>';
-    return;
-  }
-  const maxCount = Math.max(...data.map(d => d.count));
-  grid.innerHTML = data.map((item, idx) => {
-    const sdgNum = item.sdg.match(/SDG (\d+)/)?.[1] || (idx + 1);
-    const color = SDG_COLORS['SDG ' + sdgNum] || '#6366f1';
-    const barWidth = Math.max(10, Math.round(item.count / maxCount * 100));
-    return `
-      <div class="sdg-card surface" style="border-color:${color}40; background:${color}08" onclick="openSDGPanel(${idx})">
-        <div style="font-size:12px; font-weight:700; color:${color}; opacity:0.8; margin-bottom:4px">SDG ${sdgNum}</div>
-        <p style="font-size:11px; font-weight:600; color:${color}; line-height:1.2; height:2.4em; overflow:hidden">${esc(item.sdg)}</p>
-        <div class="flex items-end justify-between mt-2">
-          <span style="font-size:1.5rem; font-weight:800; color:${color}">${item.count}</span>
-          <span class="text-[10px]" style="color:${color}; opacity:0.6">papers</span>
-        </div>
-        <div style="margin-top:8px; height:4px; border-radius:4px; background:${color}20">
-          <div style="width:${barWidth}%; height:100%; background:${color}; border-radius:4px;"></div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function openSDGPanel(idx) {
-  if (!sdgData || !sdgData[idx]) return;
-  const item = sdgData[idx];
-  const panel = $('sdg-papers-panel'), title = $('sdg-panel-title'), list = $('sdg-papers-list');
-  title.textContent = item.sdg + ' — ' + item.count + ' papers';
-  list.innerHTML = (item.papers || []).map(p => `
-    <div class="row-hover p-3 rounded-lg cursor-pointer" onclick="openPaperModal(${p.id})">
-      <p class="text-sm font-medium">${esc(p.title)}</p>
-      <div class="flex items-center gap-2 mt-1">
-        <span class="text-xs text-muted">Score: ${p.score}</span>
-        ${(p.keywords || []).slice(0, 3).map(k => `<span class="chip text-[10px] py-0.5 px-2">${esc(k)}</span>`).join('')}
-      </div>
-    </div>`).join('') || '<p class="text-xs text-center py-4">No paper details available.</p>';
-  panel.classList.remove('hidden');
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function closeSdgPanel() { $('sdg-papers-panel')?.classList.add('hidden'); }
-
-/**
  * Collaboration Network (D3.js)
  */
 let netTimer = null, curNetAuthor = null, d3Sim = null;
@@ -640,6 +578,46 @@ function loadCompareDDs() {
   });
 }
 
+// Shared cache of configured institutions ({name, short_name, ror, sub_region}).
+// Used by the comparator autocomplete and the crawler region filter.
+function loadInstitutionsCache(cb) {
+  if (window.institutionsCache) { if (cb) cb(window.institutionsCache); return; }
+  safeFetch('/api/institutions', data => {
+    window.institutionsCache = data || [];
+    if (cb) cb(window.institutionsCache);
+  }, () => { if (cb) cb([]); });
+}
+
+let compSearchTimer = null;
+function debCompSearch() { clearTimeout(compSearchTimer); compSearchTimer = setTimeout(compSearch, 250); }
+
+function compSearch() {
+  const input = $('comp-institution-input');
+  const box = $('comp-suggestions');
+  if (!input || !box) return;
+  const q = input.value.trim().toLowerCase();
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  loadInstitutionsCache(list => {
+    const matches = list.filter(i =>
+      (i.name || '').toLowerCase().includes(q) || (i.short_name || '').toLowerCase().includes(q)
+    ).slice(0, 8);
+    if (!matches.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.innerHTML = matches.map(i => {
+      const ror = (i.ror || '').replace(/'/g, "\\'");
+      return `<button type="button" class="w-full text-left px-3 py-2 text-sm row-hover" style="border-bottom:1px solid var(--border)" onclick="pickCompInstitution('${ror}')">
+        <span class="font-medium">${esc(i.name)}</span> <span class="text-xs text-muted">(${esc(i.short_name)})</span>
+      </button>`;
+    }).join('');
+    box.classList.remove('hidden');
+  });
+}
+
+function pickCompInstitution(ror) {
+  if (ror) quickAddInstitution(ror);
+  const input = $('comp-institution-input'); if (input) input.value = '';
+  const box = $('comp-suggestions'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+}
+
 function onSubregionChange() {
   const subregion = $('comp-subregion-select').value;
   const countrySel = $('comp-country-select');
@@ -695,10 +673,20 @@ function onUniversityChange(value) {
 
 function addInstitutionToComparison() {
   const input = $('comp-institution-input');
-  const value = input.value.trim();
-  if (!value || selectedInstitutions.includes(value) || selectedInstitutions.length >= 15) return;
+  let value = input.value.trim();
+  if (!value) return;
+  // If the typed text matches a known institution name, resolve it to its ROR
+  // so the backend (which compares by ROR) can find its papers.
+  if (window.institutionsCache && !value.startsWith('http')) {
+    const m = window.institutionsCache.find(i =>
+      (i.name || '').toLowerCase() === value.toLowerCase() ||
+      (i.short_name || '').toLowerCase() === value.toLowerCase());
+    if (m && m.ror) value = m.ror;
+  }
+  if (selectedInstitutions.includes(value) || selectedInstitutions.length >= 15) return;
   selectedInstitutions.push(value);
   input.value = '';
+  const box = $('comp-suggestions'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
   renderSelectedInstitutions();
 }
 
@@ -718,11 +706,17 @@ function renderSelectedInstitutions() {
   if (selectedInstitutions.length === 0) { container.innerHTML = '<p class="text-xs text-muted">No institutions selected.</p>'; return; }
   container.innerHTML = selectedInstitutions.map(ror => {
     let name = ror.split('/').pop();
+    // Prefer the human-readable name from the institutions cache when known.
+    if (window.institutionsCache) {
+      const m = window.institutionsCache.find(i => i.ror === ror);
+      if (m) name = m.name;
+    }
     if (name.startsWith('local/')) {
       name = decodeURIComponent(name.replace('local/', ''));
     }
     if (name.length > 25) name = name.substring(0, 22) + '...';
-    return `<div class="chip active">${esc(name)} <button onclick="removeInstitution('${ror}')" class="ml-1">×</button></div>`;
+    const safeRor = ror.replace(/'/g, "\\'");
+    return `<div class="chip active">${esc(name)} <button onclick="removeInstitution('${safeRor}')" class="ml-1">×</button></div>`;
   }).join('');
 }
 
@@ -755,18 +749,21 @@ function renderComparisonResults(data) {
   $('comp-avg-oa').textContent = data.executive_summary.average_oa_rate + '%';
   $('comp-collaborations').textContent = data.executive_summary.total_collaborations;
 
-  // Table Matrix
+  // Table Matrix — Special-Collections metrics
   const tbody = $('comp-table-body');
-  tbody.innerHTML = data.detailed_comparison.institutions.map(inst => `
+  tbody.innerHTML = data.detailed_comparison.institutions.map(inst => {
+    const m = inst.metrics;
+    return `
     <tr class="row-hover border-b border-white/5">
       <td class="py-3 px-2 font-medium">${esc(inst.name)}</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.total_papers.toLocaleString()}</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.total_authors.toLocaleString()}</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.oa_rate}%</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.tk_rate}%</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.patents}</td>
-      <td class="py-3 px-2 text-right">${inst.metrics.growth_rate}%</td>
-    </tr>`).join('');
+      <td class="py-3 px-2 text-right">${(m.total_papers || 0).toLocaleString()}</td>
+      <td class="py-3 px-2 text-right">${(m.total_authors || 0).toLocaleString()}</td>
+      <td class="py-3 px-2 text-right">${m.oa_rate || 0}%</td>
+      <td class="py-3 px-2 text-right">${(m.indigenous_knowledge || 0).toLocaleString()}</td>
+      <td class="py-3 px-2 text-right">${(m.african_literature || 0).toLocaleString()}</td>
+      <td class="py-3 px-2 text-right">${m.papers_per_author || 0}</td>
+    </tr>`;
+  }).join('');
 
   // Rankings
   const renderRanks = (list, unit) => {
@@ -781,8 +778,8 @@ function renderComparisonResults(data) {
   const rankings = data.detailed_comparison.rankings;
   $('comp-rank-volume').innerHTML = renderRanks(rankings.total_papers, ' papers');
   $('comp-rank-oa').innerHTML = renderRanks(rankings.oa_rate, '%');
-  $('comp-rank-tk').innerHTML = renderRanks(rankings.tk_rate, '%');
-  $('comp-rank-patent').innerHTML = renderRanks(rankings.patent_rate || rankings.patents_per_100_papers, '%');
+  $('comp-rank-ik').innerHTML = renderRanks(rankings.indigenous_knowledge, ' papers');
+  $('comp-rank-lit').innerHTML = renderRanks(rankings.african_literature, ' papers');
 
   // Insights
   const insightsEl = $('comp-insights');
@@ -843,111 +840,156 @@ function generateSenateReport() {
     .catch(e => { console.error(e); toast('Report download failed: ' + e.message, 'error'); });
 }
 
-function renderAfricanCollaborationMap(networkData) {
-  const svg = d3.select('#comp-map-svg');
-  svg.selectAll('*').remove();
-  const container = document.getElementById('comp-collaboration-viz');
-  const width = container.clientWidth || 800, height = 520;
-  svg.attr('viewBox', `0 0 ${width} ${height}`);
+const REGION_COLORS = { "North Africa": "#3b82f6", "West Africa": "#22c55e", "East Africa": "#f59e0b", "Southern Africa": "#8b5cf6", "Central Africa": "#ec4899", "Unknown": "#64748b" };
 
-  const africaOutline = [
-    {lat: 37.0, lon: 10.0}, {lat: 31.0, lon: 32.0}, {lat: 12.0, lon: 51.0},
-    {lat: -4.0, lon: 40.0}, {lat: -26.0, lon: 33.0}, {lat: -34.0, lon: 18.4},
-    {lat: -15.0, lon: 12.0}, {lat: -5.0, lon: 12.0}, {lat: 4.0, lon: 9.0},
-    {lat: 6.0, lon: 3.0}, {lat: 5.0, lon: -8.0}, {lat: 14.7, lon: -17.4},
-    {lat: 21.0, lon: -17.0}, {lat: 35.8, lon: -5.8}, {lat: 36.8, lon: 3.0}
-  ];
-
-  function projectCoords(lat, lon) {
-    const minLat = -36, maxLat = 39, minLon = -22, maxLon = 53;
-    const xPct = (lon - minLon) / (maxLon - minLon);
-    const yPct = 1 - (lat - minLat) / (maxLat - minLat);
-    const padding = 50;
-    return { x: padding + xPct * (width - 2 * padding), y: padding + yPct * (height - 2 * padding) };
-  }
-
-  const pointsString = africaOutline.map(p => {
-    const proj = projectCoords(p.lat, p.lon);
-    return `${proj.x},${proj.y}`;
-  }).join(' ');
-
-  const defs = svg.append('defs');
-  const glowFilter = defs.append('filter').attr('id', 'map-glow').attr('x', '-20%').attr('y', '-20%').attr('width', '140%').attr('height', '140%');
-  glowFilter.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'blur');
-  glowFilter.append('feMerge').selectAll('feMergeNode').data(['blur', 'SourceGraphic']).enter().append('feMergeNode').attr('in', d => d);
-
-  svg.append('polygon').attr('points', pointsString).attr('fill', 'rgba(255, 255, 255, 0.015)').attr('stroke', 'rgba(255, 255, 255, 0.05)').attr('stroke-width', 2.5).attr('stroke-dasharray', '5,5');
-
-  const nodes = [], nodesMap = {};
-  networkData.nodes.forEach(node => {
-    let lat = 0, lon = 20, name = node.label, region = 'Unknown';
-    const uRor = node.id;
-    if (UNIVERSITY_COORDS[uRor]) {
-      lat = UNIVERSITY_COORDS[uRor].lat; lon = UNIVERSITY_COORDS[uRor].lon;
-      name = UNIVERSITY_COORDS[uRor].name; region = UNIVERSITY_COORDS[uRor].sub_region;
-    } else {
+// Resolve a network node to {lon, lat, name, region} using the demo coords,
+// then the dynamic registry + capital fallback (same lookup the D3 map used).
+function resolveNodeGeo(node) {
+  let lat = null, lon = null, name = node.label, region = 'Unknown';
+  const uRor = node.id;
+  if (UNIVERSITY_COORDS[uRor]) {
+    lat = UNIVERSITY_COORDS[uRor].lat; lon = UNIVERSITY_COORDS[uRor].lon;
+    name = UNIVERSITY_COORDS[uRor].name; region = UNIVERSITY_COORDS[uRor].sub_region;
+  } else if (window.universityRegistry) {
+    for (const [subReg, countries] of Object.entries(window.universityRegistry)) {
       let found = false;
-      if (window.universityRegistry) {
-        for (const [subReg, countries] of Object.entries(window.universityRegistry)) {
-          for (const [country, unis] of Object.entries(countries)) {
-            const uni = unis.find(u => u.ror === uRor || u.name === name);
-            if (uni) {
-              const countryCoords = COUNTRY_CAPITAL_COORDS[country];
-              if (countryCoords) { lat = countryCoords.lat; lon = countryCoords.lon; }
-              name = uni.name; region = subReg; found = true; break;
-            }
-          }
-          if (found) break;
+      for (const [country, unis] of Object.entries(countries)) {
+        const uni = unis.find(u => u.ror === uRor || u.name === name);
+        if (uni) {
+          const cc = COUNTRY_CAPITAL_COORDS[country];
+          if (cc) { lat = cc.lat; lon = cc.lon; }
+          name = uni.name; region = subReg; found = true; break;
         }
       }
+      if (found) break;
     }
-    const proj = projectCoords(lat, lon);
-    const n = { id: node.id, label: name, lat, lon, x: proj.x, y: proj.y, region };
-    nodes.push(n); nodesMap[node.id] = n;
-  });
+  }
+  if (lat === null || lon === null) return null; // unknown location — skip
+  return { id: node.id, lon, lat, name, region };
+}
 
-  const links = networkData.edges.map(e => ({ source: nodesMap[e.source], target: nodesMap[e.target], weight: e.weight })).filter(l => l.source && l.target);
+// MapLibre-backed collaboration map over a real African basemap (no API key).
+function renderAfricanCollaborationMap(networkData) {
+  const container = document.getElementById('comp-collaboration-viz');
+  const mapEl = document.getElementById('comp-map');
+  if (!mapEl) return;
 
-  const regionColors = { "North Africa": "#3b82f6", "West Africa": "#22c55e", "East Africa": "#f59e0b", "Southern Africa": "#8b5cf6", "Central Africa": "#ec4899", "Unknown": "#64748b" };
+  if (typeof maplibregl === 'undefined') {
+    mapEl.innerHTML = '<div class="flex items-center justify-center h-full text-sm text-muted">Map unavailable (MapLibre failed to load).</div>';
+    return;
+  }
 
-  svg.append('g').selectAll('line').data(links).enter().append('line')
-    .attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y)
-    .attr('stroke', 'rgba(251, 191, 36, 0.4)').attr('stroke-width', d => Math.max(1.5, Math.min(d.weight * 1.5, 8))).attr('filter', 'url(#map-glow)').style('stroke-linecap', 'round');
+  // Build node geo + edge GeoJSON once, reused on every render.
+  const geoNodes = (networkData.nodes || []).map(resolveNodeGeo).filter(Boolean);
+  const nodeById = {}; geoNodes.forEach(n => nodeById[n.id] = n);
+  const nodeFeatures = geoNodes.map(n => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
+    properties: { id: n.id, name: n.name, region: n.region, color: REGION_COLORS[n.region] || REGION_COLORS.Unknown }
+  }));
+  const edgeFeatures = (networkData.edges || []).map(e => {
+    const s = nodeById[e.source], t = nodeById[e.target];
+    if (!s || !t) return null;
+    return {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: [[s.lon, s.lat], [t.lon, t.lat]] },
+      properties: { weight: e.weight, width: Math.max(1.5, Math.min(e.weight * 1.5, 8)) }
+    };
+  }).filter(Boolean);
+  const nodeFC = { type: 'FeatureCollection', features: nodeFeatures };
+  const edgeFC = { type: 'FeatureCollection', features: edgeFeatures };
 
-  const nodeGroup = svg.append('g').selectAll('g').data(nodes).enter().append('g').attr('transform', d => `translate(${d.x},${d.y})`).style('cursor', 'pointer');
-  nodeGroup.append('circle').attr('r', 16).attr('fill', 'none').attr('stroke', d => regionColors[d.region] || '#64748b').attr('stroke-width', 1.5).attr('opacity', 0).attr('class', 'hover-ring');
-  nodeGroup.append('circle').attr('r', 9).attr('fill', d => regionColors[d.region] || '#64748b').attr('stroke', '#0f172a').attr('stroke-width', 1.5);
-  nodeGroup.append('text').attr('text-anchor', 'middle').attr('y', -14).attr('font-size', '10px').attr('font-weight', '600').attr('fill', '#e2e8f0').attr('paint-order', 'stroke').attr('stroke', '#0f172a').attr('stroke-width', '2.5px').text(d => d.label.length > 20 ? d.label.substring(0, 18) + '...' : d.label);
+  const applyData = (map) => {
+    map.getSource('collab-edges').setData(edgeFC);
+    map.getSource('collab-nodes').setData(nodeFC);
+  };
 
-  const tooltip = d3.select('#comp-map-tooltip');
-  nodeGroup.on('mouseover', function(event, d) {
-    d3.select(this).select('.hover-ring').transition().duration(200).style('opacity', 0.8).attr('r', 18);
-    tooltip.transition().duration(150).style('opacity', 1).style('display', 'block');
-    let metricsHtml = `<p class="font-bold text-slate-100">${esc(d.label)}</p><p class="text-[10px] text-muted mb-2">${esc(d.region)}</p>`;
-    if (window.lastCompareData) {
-      const inst = window.lastCompareData.detailed_comparison.institutions.find(i => i.ror_id === d.id);
-      if (inst) {
-        metricsHtml += `
-          <div class="space-y-1 mt-1 border-t border-white/10 pt-1">
-            <div class="flex justify-between gap-4"><span>Papers:</span><span class="font-mono text-accent">${inst.metrics.total_papers.toLocaleString()}</span></div>
-            <div class="flex justify-between gap-4"><span>OA Rate:</span><span class="font-mono text-success">${inst.metrics.oa_rate}%</span></div>
-            <div class="flex justify-between gap-4"><span>IK Rate:</span><span class="font-mono text-warning">${inst.metrics.tk_rate}%</span></div>
-            <div class="flex justify-between gap-4"><span>Patents:</span><span class="font-mono">${inst.metrics.patents}</span></div>
-          </div>`;
+  // Reuse the map instance across comparisons.
+  if (window.compMap) {
+    if (window.compMap.isStyleLoaded()) applyData(window.compMap);
+    else window.compMap.once('load', () => applyData(window.compMap));
+    setTimeout(() => window.compMap.resize(), 50);
+    return;
+  }
+
+  let map;
+  try {
+    map = new maplibregl.Map({
+      container: 'comp-map',
+      style: {
+        version: 8,
+        sources: {
+          'carto-dark': {
+            type: 'raster',
+            tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                    'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors © CARTO'
+          }
+        },
+        layers: [{ id: 'carto-dark', type: 'raster', source: 'carto-dark' }]
+      },
+      center: [20, 2],
+      zoom: 2.3,
+      attributionControl: false
+    });
+  } catch (err) {
+    console.error('MapLibre init failed', err);
+    mapEl.innerHTML = '<div class="flex items-center justify-center h-full text-sm text-muted">Map unavailable.</div>';
+    return;
+  }
+  window.compMap = map;
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+  map.on('load', () => {
+    map.addSource('collab-edges', { type: 'geojson', data: edgeFC });
+    map.addLayer({
+      id: 'collab-edges', type: 'line', source: 'collab-edges',
+      paint: { 'line-color': 'rgba(251,191,36,0.5)', 'line-width': ['get', 'width'] }
+    });
+    map.addSource('collab-nodes', { type: 'geojson', data: nodeFC });
+    map.addLayer({
+      id: 'collab-nodes', type: 'circle', source: 'collab-nodes',
+      paint: {
+        'circle-radius': 7,
+        'circle-color': ['get', 'color'],
+        'circle-stroke-color': '#0f172a',
+        'circle-stroke-width': 1.5
       }
-    }
-    tooltip.html(metricsHtml);
-  })
-  .on('mousemove', function(event) {
-    const containerRect = container.getBoundingClientRect(), tooltipWidth = tooltip.node().offsetWidth, tooltipHeight = tooltip.node().offsetHeight;
-    let x = event.clientX - containerRect.left + 15, y = event.clientY - containerRect.top + 15;
-    if (x + tooltipWidth > width) x = event.clientX - containerRect.left - tooltipWidth - 15;
-    if (y + tooltipHeight > height) y = event.clientY - containerRect.top - tooltipHeight - 15;
-    tooltip.style('left', `${x}px`).style('top', `${y}px`);
-  })
-  .on('mouseout', function() {
-    d3.select(this).select('.hover-ring').transition().duration(200).style('opacity', 0);
-    tooltip.transition().duration(150).style('opacity', 0).style('display', 'none');
+    });
+
+    const tooltip = $('comp-map-tooltip');
+    map.on('mouseenter', 'collab-nodes', (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      const p = e.features[0].properties;
+      let html = `<p class="font-bold text-slate-100">${esc(p.name)}</p><p class="text-[10px] text-muted mb-2">${esc(p.region)}</p>`;
+      if (window.lastCompareData) {
+        const inst = window.lastCompareData.detailed_comparison.institutions.find(i => i.ror_id === p.id);
+        if (inst) {
+          const m = inst.metrics;
+          html += `
+            <div class="space-y-1 mt-1 border-t border-white/10 pt-1">
+              <div class="flex justify-between gap-4"><span>SC Papers:</span><span class="font-mono text-accent">${(m.total_papers || 0).toLocaleString()}</span></div>
+              <div class="flex justify-between gap-4"><span>OA Rate:</span><span class="font-mono text-success">${m.oa_rate || 0}%</span></div>
+              <div class="flex justify-between gap-4"><span>Indigenous Knowledge:</span><span class="font-mono text-warning">${(m.indigenous_knowledge || 0).toLocaleString()}</span></div>
+              <div class="flex justify-between gap-4"><span>African Literature:</span><span class="font-mono">${(m.african_literature || 0).toLocaleString()}</span></div>
+            </div>`;
+        }
+      }
+      tooltip.innerHTML = html;
+      tooltip.classList.remove('hidden');
+      const rect = container.getBoundingClientRect();
+      tooltip.style.left = (e.point.x + 15) + 'px';
+      tooltip.style.top = (e.point.y + 15) + 'px';
+    });
+    map.on('mousemove', 'collab-nodes', (e) => {
+      tooltip.style.left = (e.point.x + 15) + 'px';
+      tooltip.style.top = (e.point.y + 15) + 'px';
+    });
+    map.on('mouseleave', 'collab-nodes', () => {
+      map.getCanvas().style.cursor = '';
+      tooltip.classList.add('hidden');
+    });
   });
 }
 
@@ -1052,122 +1094,527 @@ function copyReportToClipboard() {
 }
 
 /**
- * AU Charter for African Cultural Renaissance
+ * Charter Alignment & Gap Analysis (AU charters / Agenda 2063 / regional blocs)
+ * Profiles are precomputed server-side; this tab only renders.
  */
-let auCharterLoaded = false;
-function loadAUCharterTab() {
-  if (auCharterLoaded) return;
-  auCharterLoaded = true;
-  $('au-loading').classList.remove('hidden');
-  $('au-content').classList.add('hidden');
-  safeFetch(withInst('/api/analytics/au-charter-alignment'), data => {
-    $('au-loading').classList.add('hidden');
-    $('au-content').classList.remove('hidden');
+let alignFrameworksCache = null;
 
-    const totalAnalyzed = data.total_papers_analyzed || 0;
-    const totalTargeted = data.targets.reduce((s, t) => s + t.count, 0);
-    const overallRate = totalAnalyzed ? Math.round(totalTargeted / totalAnalyzed * 100) : 0;
+function loadAlignmentFrameworks(cb) {
+  if (alignFrameworksCache) return cb(alignFrameworksCache);
+  safeFetch('/api/alignment/frameworks', resp => {
+    alignFrameworksCache = resp.data;
+    const sel = $('align-framework-select');
+    sel.innerHTML = Object.entries(alignFrameworksCache.groups).map(([group, keys]) => `
+      <optgroup label="${esc(group)}">
+        ${keys.map(k => {
+          const f = alignFrameworksCache.frameworks.find(fw => fw.key === k);
+          return f ? `<option value="${f.key}">${esc(f.name)}</option>` : '';
+        }).join('')}
+      </optgroup>`).join('');
+    sel.value = 'agenda2063';
+    const badge = $('align-mode-badge');
+    if (badge && alignFrameworksCache.mode === 'keyword_only') {
+      badge.innerHTML = '<span class="chip text-[9px] py-0.5 px-1.5" style="background:#f59e0b18;color:#f59e0b">keyword-only mode</span>';
+    }
+    cb(alignFrameworksCache);
+  }, () => {
+    $('align-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load frameworks.</p>';
+  });
+}
 
-    // Summary banner
-    $('au-summary-cards').innerHTML = `
-      <div class="surface rounded-xl p-5" style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(99,102,241,0.08));border:1px solid rgba(34,197,94,0.2)">
-        <div class="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--success)">AU Charter for African Cultural Renaissance — Overall Alignment</p>
-            <p class="text-sm" style="color:var(--text-muted)">Assessed across all 9 Targets · ${totalAnalyzed.toLocaleString()} papers analyzed · Institution: ${esc(data.institution_filter)}</p>
-          </div>
-          <div class="flex gap-6 text-center">
-            <div><p class="text-3xl font-bold" style="color:var(--success)">${overallRate}%</p><p class="text-xs text-muted">Overall Coverage</p></div>
-            <div><p class="text-3xl font-bold" style="color:var(--accent)">${totalAnalyzed.toLocaleString()}</p><p class="text-xs text-muted">Papers Analyzed</p></div>
-          </div>
-        </div>
-      </div>`;
+function loadAlignmentTab() {
+  loadAlignmentFrameworks(() => {
+    const fw = $('align-framework-select').value || 'agenda2063';
+    $('align-loading').classList.remove('hidden');
+    $('align-content').classList.add('hidden');
+    $('align-csv-link').href = withInst('/api/alignment/export.csv');
 
-    // Target cards (9 targets)
-    const targetColors = ['#3b82f6','#22c55e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#ef4444'];
-    $('au-targets-grid').innerHTML = data.targets.map((t, i) => {
-      const color = targetColors[i % targetColors.length];
-      const barW = Math.min(100, t.compliance_rate * 2); // scale for visual
-      return `
-        <div class="surface rounded-xl p-5" style="border-top:3px solid ${color}">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex items-start gap-2">
-              <span class="text-xl font-extrabold" style="color:${color};line-height:1">${t.target_number}</span>
-              <p class="text-xs font-bold leading-tight" style="color:var(--text)">${esc(t.target_name)}</p>
-            </div>
-            <span class="text-xs font-mono font-bold ml-2 flex-shrink-0" style="color:${color}">${t.compliance_rate}%</span>
+    safeFetch(withInst(`/api/alignment/profile?framework=${fw}`), resp => {
+      const d = resp.data;
+      $('align-loading').classList.add('hidden');
+      $('align-content').classList.remove('hidden');
+      $('align-narrative').textContent = resp.narrative || '';
+
+      // ── Radar: fixed 0-100 scale (never auto-scale a radar) ──────────
+      destroyChart('align-radar');
+      charts['align-radar'] = new Chart($('chart-align-radar'), {
+        type: 'radar',
+        data: {
+          labels: d.pillars.map(p => p.name),
+          datasets: [{
+            label: d.institution,
+            data: d.pillars.map(p => p.avg_score),
+            backgroundColor: d.color + '33',
+            borderColor: d.color,
+            borderWidth: 2,
+            pointBackgroundColor: d.color,
+            fill: true,
+          }, {
+            label: `Gap threshold (${d.gap_threshold})`,
+            data: d.pillars.map(() => d.gap_threshold),
+            borderColor: '#ef4444',
+            borderDash: [6, 4],
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: false,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, backdropColor: 'transparent' },
+                         pointLabels: { font: { size: 11 } } } },
+          plugins: { legend: { labels: { font: { size: 11 } } } },
+        },
+      });
+
+      // ── Pillar detail cards with evidence chips ──────────────────────
+      $('align-pillars').innerHTML = d.pillars.map(p => `
+        <div class="surface rounded-xl p-4" style="border-top:3px solid ${p.is_gap ? '#ef4444' : d.color}">
+          <div class="flex justify-between items-start mb-2">
+            <p class="text-xs font-bold leading-tight" style="color:var(--text)">${esc(p.name)}</p>
+            <span class="text-xs font-mono font-bold ml-2 flex-shrink-0" style="color:${p.is_gap ? '#ef4444' : d.color}">${p.avg_score}</span>
           </div>
-          <div class="h-1.5 rounded-full mb-3" style="background:var(--input-bg)">
-            <div class="h-1.5 rounded-full" style="width:${barW}%;background:${color};transition:width 0.6s ease"></div>
+          <div class="h-1.5 rounded-full mb-2" style="background:var(--input-bg)">
+            <div class="h-1.5 rounded-full" style="width:${Math.min(100, p.avg_score)}%;background:${p.is_gap ? '#ef4444' : d.color};transition:width 0.6s ease"></div>
           </div>
-          <p class="text-xs text-muted mb-2">${t.count} papers aligned</p>
-          ${t.top_papers.length ? `
+          <p class="text-xs text-muted mb-2">${p.paper_count} aligned papers${p.is_gap ? ' · <span style="color:#ef4444;font-weight:600">GAP</span>' : ''}</p>
+          ${p.top_papers.length ? `
             <div class="space-y-1.5 border-t border-white/5 pt-2">
-              ${t.top_papers.map(p => `
-                <div class="row-hover p-2 rounded-lg cursor-pointer" onclick="openPaperModal(${p.id})">
-                  <p class="text-xs font-medium leading-snug line-clamp-2">${esc(p.title)}</p>
+              ${p.top_papers.slice(0, 3).map(tp => `
+                <div class="row-hover p-2 rounded-lg cursor-pointer" onclick="openPaperModal(${tp.id})">
+                  <p class="text-xs font-medium leading-snug line-clamp-2">${esc(tp.title)}</p>
                   <div class="flex gap-1 mt-1 flex-wrap">
-                    ${p.matched_keywords.slice(0,3).map(k => `<span class="chip text-[9px] py-0.5 px-1.5" style="background:${color}18;color:${color}">${esc(k)}</span>`).join('')}
+                    ${tp.matched_keywords.slice(0, 3).map(k => `<span class="chip text-[9px] py-0.5 px-1.5" style="background:${d.color}18;color:${d.color}">${esc(k)}</span>`).join('')}
                   </div>
                 </div>`).join('')}
             </div>` : '<p class="text-xs text-muted italic">No papers matched yet.</p>'}
+        </div>`).join('');
+
+      loadAlignmentGaps();
+      loadAlignmentMatrix();
+    }, () => {
+      $('align-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load alignment data.</p>';
+    });
+  });
+}
+
+function loadAlignmentGaps() {
+  safeFetch(withInst('/api/alignment/gaps'), resp => {
+    $('gaps-narrative').textContent = resp.narrative || '';
+    const gaps = resp.data.gaps || [];
+    $('align-gaps').innerHTML = gaps.length ? gaps.map(g => {
+      const sev = g.avg_score < resp.data.threshold / 2 ? '#ef4444' : '#f59e0b';
+      return `
+        <div class="flex items-center justify-between p-2 rounded-lg row-hover">
+          <div class="min-w-0">
+            <p class="text-xs font-medium truncate" style="color:var(--text)">${esc(g.pillar_name)}</p>
+            <p class="text-[10px] text-muted truncate">${esc(g.framework_name)}</p>
+          </div>
+          <span class="chip text-[10px] py-0.5 px-2 ml-2 flex-shrink-0" style="background:${sev}18;color:${sev}">${g.avg_score}</span>
         </div>`;
-    }).join('');
-  }, () => {
-    $('au-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load AU Charter data.</p>';
+    }).join('') : '<p class="text-xs text-muted italic">No gaps below threshold — strong coverage across all pillars.</p>';
+  });
+}
+
+function loadAlignmentMatrix() {
+  safeFetch(withInst('/api/alignment/matrix'), resp => {
+    const cells = resp.data.cells || [];
+    const byFw = {};
+    cells.forEach(c => (byFw[c.framework] = byFw[c.framework] || []).push(c));
+    const maxPillars = Math.max(...Object.values(byFw).map(a => a.length));
+    const fwMeta = Object.fromEntries(resp.data.frameworks.map(f => [f.key, f]));
+    const heat = s => s <= 0 ? 'var(--input-bg)' :
+      `hsl(${Math.round(s * 1.2)},65%,${38 + Math.round(s * 0.12)}%)`;
+    $('align-matrix').innerHTML = `
+      <table class="w-full" style="border-collapse:separate;border-spacing:2px">
+        ${Object.entries(byFw).map(([fk, arr]) => `
+          <tr>
+            <td class="text-xs font-medium pr-3 whitespace-nowrap" style="color:var(--text-muted);max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(fwMeta[fk] ? fwMeta[fk].name : fk)}</td>
+            ${arr.map(c => `
+              <td title="${esc(c.pillar_name)}: ${c.avg_score}/100 (${c.paper_count} papers)"
+                  style="background:${heat(c.avg_score)};height:26px;min-width:34px;border-radius:4px;text-align:center;font-size:9px;color:${c.avg_score > 0 ? '#fff' : 'var(--text-dim)'};cursor:default">${c.avg_score > 0 ? Math.round(c.avg_score) : ''}</td>`).join('')}
+            ${Array(maxPillars - arr.length).fill('<td></td>').join('')}
+          </tr>`).join('')}
+      </table>
+      <p class="text-[10px] mt-2" style="color:var(--text-dim)">Cell = institutional average alignment score (0–100) per framework pillar. Hover for pillar names.</p>`;
   });
 }
 
 /**
- * Special Collections
+ * Intra-African Collaboration tab — index, choropleth + arc map, citation
+ * velocity and Louvain-community author network.
  */
+let collabMap = null;
+
+function loadCollabTab() {
+  $('collab-loading').classList.remove('hidden');
+  $('collab-content').classList.add('hidden');
+
+  safeFetch(withInst('/api/collaboration/overview'), resp => {
+    const d = resp.data;
+    $('collab-loading').classList.add('hidden');
+    $('collab-content').classList.remove('hidden');
+    $('collab-narrative').textContent = resp.narrative || '';
+
+    const ratioColor = d.intra_african_pct >= d.baseline_pct ? 'var(--success)' : 'var(--warning)';
+    $('collab-cards').innerHTML = `
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Intra-African Index</p>
+        <p class="text-2xl font-bold" style="color:${ratioColor}">${d.intra_african_pct || 0}%</p>
+        <p class="text-[10px] text-muted">vs ${d.baseline_pct}% continental avg ${d.ratio_vs_baseline ? `(${d.ratio_vs_baseline}×)` : ''}</p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Intra-African Papers</p>
+        <p class="text-2xl font-bold" style="color:var(--accent)">${(d.intra_african_count || 0).toLocaleString()}</p>
+        <p class="text-[10px] text-muted">≥2 African countries</p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Partner Countries</p>
+        <p class="text-2xl font-bold" style="color:var(--text)">${d.country_count || 0}</p>
+        <p class="text-[10px] text-muted">with affiliations on record</p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Affiliation Coverage</p>
+        <p class="text-2xl font-bold" style="color:var(--text)">${d.total_papers ? Math.round((d.papers_with_affiliation_data || 0) / d.total_papers * 100) : 0}%</p>
+        <p class="text-[10px] text-muted">${(d.papers_with_affiliation_data || 0).toLocaleString()} of ${(d.total_papers || 0).toLocaleString()} papers</p>
+      </div>`;
+
+    renderCollabMap();
+    loadCollabPairs();
+    loadCitationVelocity();
+    loadCollabNetwork();
+  }, () => {
+    $('collab-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load collaboration data.</p>';
+  });
+}
+
+function renderCollabMap() {
+  const mapEl = $('collab-map');
+  if (!mapEl || typeof maplibregl === 'undefined') {
+    if (mapEl) mapEl.innerHTML = '<div class="flex items-center justify-center h-full text-sm text-muted">Map unavailable.</div>';
+    return;
+  }
+  if (collabMap) { try { collabMap.remove(); } catch (e) { } collabMap = null; }
+
+  collabMap = new maplibregl.Map({
+    container: 'collab-map',
+    style: {
+      version: 8,
+      sources: {
+        carto: {
+          type: 'raster',
+          tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '© CARTO © OpenStreetMap contributors',
+        },
+      },
+      layers: [{ id: 'carto', type: 'raster', source: 'carto' }],
+    },
+    center: [17, 2],
+    zoom: 2.2,
+    attributionControl: false,
+  });
+
+  collabMap.on('load', () => {
+    // ── Choropleth: country fill by paper count ───────────────────────
+    safeFetch(withInst('/api/collaboration/countries'), resp => {
+      const counts = {};
+      (resp.data.countries || []).forEach(c => counts[c.code] = c);
+      const maxPapers = Math.max(1, ...Object.values(counts).map(c => c.papers));
+
+      fetch('/static/data/africa_admin0.geojson').then(r => r.json()).then(geo => {
+        geo.features.forEach(f => {
+          const c = counts[f.properties.iso_a2];
+          f.properties.papers = c ? c.papers : 0;
+          f.properties.intensity = c ? c.papers / maxPapers : 0;
+        });
+        if (!collabMap) return;
+        collabMap.addSource('africa', { type: 'geojson', data: geo });
+        collabMap.addLayer({
+          id: 'africa-fill', type: 'fill', source: 'africa',
+          paint: {
+            'fill-color': ['interpolate', ['linear'], ['get', 'intensity'],
+              0, 'rgba(59,130,246,0.04)', 0.05, 'rgba(59,130,246,0.25)',
+              0.4, 'rgba(34,197,94,0.55)', 1, 'rgba(34,197,94,0.85)'],
+            'fill-outline-color': 'rgba(148,163,184,0.35)',
+          },
+        });
+        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+        collabMap.on('mousemove', 'africa-fill', e => {
+          const p = e.features[0].properties;
+          if (p.papers > 0) popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br>${p.papers} papers`).addTo(collabMap);
+        });
+        collabMap.on('mouseleave', 'africa-fill', () => popup.remove());
+
+        // ── Arcs above the fill ───────────────────────────────────────
+        safeFetch(withInst('/api/collaboration/arcs'), arcs => {
+          if (!collabMap || !arcs.features) return;
+          const maxCount = Math.max(1, ...arcs.features.map(f => f.properties.count));
+          arcs.features.forEach(f => f.properties.w = 1 + 4 * (f.properties.count / maxCount));
+          collabMap.addSource('arcs', { type: 'geojson', data: arcs });
+          collabMap.addLayer({
+            id: 'arcs-line', type: 'line', source: 'arcs',
+            paint: { 'line-color': '#f59e0b', 'line-opacity': 0.55, 'line-width': ['get', 'w'] },
+          });
+        });
+      });
+    });
+  });
+}
+
+function loadCollabPairs() {
+  safeFetch(withInst('/api/collaboration/matrix'), resp => {
+    const pairs = resp.data.pairs || [];
+    $('collab-pairs').innerHTML = pairs.length ? pairs.slice(0, 40).map(p => `
+      <div class="flex items-center justify-between p-2 rounded-lg row-hover">
+        <p class="text-xs font-medium" style="color:var(--text)">${esc(p.source_name)} – ${esc(p.target_name)}</p>
+        <span class="chip text-[10px] py-0.5 px-2" style="background:#f59e0b18;color:#f59e0b">${p.count}</span>
+      </div>`).join('')
+      : '<p class="text-xs text-muted italic">No intra-African co-publications recorded yet. Run the collaboration backfill to enrich affiliation data.</p>';
+  });
+}
+
+function loadCitationVelocity() {
+  safeFetch(withInst('/api/citations/velocity'), resp => {
+    const d = resp.data || {};
+    $('velocity-narrative').textContent = resp.narrative || '';
+    const series = d.by_year || [];
+    destroyChart('citation-velocity');
+    if (!series.length) return;
+    charts['citation-velocity'] = new Chart($('chart-citation-velocity'), {
+      type: 'line',
+      data: {
+        labels: series.map(r => r.year),
+        datasets: [{
+          label: 'Citations received',
+          data: series.map(r => r.citations),
+          borderColor: '#22c55e', backgroundColor: '#22c55e22',
+          fill: true, tension: 0.3, pointRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }, () => { /* velocity endpoint optional until citation backfill runs */ });
+}
+
+const COMMUNITY_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#ef4444'];
+
+function loadCollabNetwork() {
+  safeFetch('/api/collaboration/network?limit=25', resp => {
+    const data = resp.data || { nodes: [], edges: [] };
+    const el = $('collab-network');
+    el.innerHTML = '';
+    if (!data.nodes.length) {
+      el.innerHTML = '<p class="text-xs text-muted italic text-center pt-16">No network data yet.</p>';
+      return;
+    }
+    const W = el.offsetWidth || 500, H = 240;
+    const svg = d3.select(el).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('width', '100%').attr('height', H);
+    const nodes = data.nodes.map(n => ({ ...n }));
+    const links = data.edges.map(e => ({ ...e }));
+
+    const lnk = svg.append('g').selectAll('line').data(links).enter().append('line')
+      .attr('stroke', 'rgba(148,163,184,0.25)').attr('stroke-width', d => Math.max(1, Math.min(d.weight, 4)));
+    const nd = svg.append('g').selectAll('circle').data(nodes).enter().append('circle')
+      .attr('r', d => 4 + (d.centrality || 0) * 18)
+      .attr('fill', d => COMMUNITY_COLORS[(d.community || 0) % COMMUNITY_COLORS.length])
+      .attr('stroke', '#fff').attr('stroke-width', 0.8)
+      .style('cursor', 'pointer');
+    nd.append('title').text(d => `${d.id} — community ${(d.community || 0) + 1}, centrality ${d.centrality || 0}`);
+
+    d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(60))
+      .force('charge', d3.forceManyBody().strength(-90))
+      .force('center', d3.forceCenter(W / 2, H / 2))
+      .on('tick', () => {
+        lnk.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        nd.attr('cx', d => Math.max(8, Math.min(W - 8, d.x))).attr('cy', d => Math.max(8, Math.min(H - 8, d.y)));
+      });
+  });
+}
+
+/**
+ * Special Collections — purpose-built analytics for indigenous knowledge,
+ * African literature & cultural-heritage collections. Reframes impact away
+ * from the citation-prestige lens of commercial bibliometric platforms.
+ */
+const SC_EMPTY = '<p class="text-xs text-muted italic text-center py-6">No data yet.</p>';
+
+function scHbar(items, labelKey, valueKey, color, onClick) {
+  if (!items || !items.length) return SC_EMPTY;
+  const max = Math.max(1, ...items.map(i => i[valueKey]));
+  return items.map(i => {
+    const pct = Math.round(i[valueKey] / max * 100);
+    const click = onClick ? ` onclick="${onClick(i)}" style="cursor:pointer"` : '';
+    return `
+      <div class="row-hover p-2 rounded-lg"${click}>
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-xs font-medium truncate" style="color:var(--text);max-width:80%">${esc(i[labelKey])}</p>
+          <span class="text-xs font-semibold" style="color:${color}">${i[valueKey]}</span>
+        </div>
+        <div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function loadSpecialTab() {
   $('special-loading').classList.remove('hidden');
   $('special-content').classList.add('hidden');
-  safeFetch(withInst('/api/analytics/special-collections'), data => {
+  safeFetch(withInst('/api/analytics/special-collections/overview'), data => {
     $('special-loading').classList.add('hidden');
     $('special-content').classList.remove('hidden');
-    
-    // Stats
-    const statsEl = $('special-stats');
-    statsEl.innerHTML = `
-      <div class="surface rounded-xl p-5 stat-card">
-        <p class="section-label">Total Special Items</p>
-        <p class="text-3xl font-bold" style="color:var(--accent)">${data.total_special_items}</p>
-        <p class="text-xs mt-1 text-muted">${Math.round(data.total_special_items / data.total_repository_items * 100) || 0}% of repository</p>
+
+    const k = data.kpis || {};
+    // ── KPI strip ──────────────────────────────────────────────────────
+    $('sc-kpis').innerHTML = `
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Special Items</p>
+        <p class="text-3xl font-bold" style="color:var(--accent)">${k.total_items || 0}</p>
+        <p class="text-xs mt-1 text-muted">${k.pct_of_repo || 0}% of repository</p>
       </div>
-      <div class="surface rounded-xl p-5 stat-card">
-        <p class="section-label">Categories Tracked</p>
-        <p class="text-3xl font-bold" style="color:var(--success)">${data.summary.length}</p>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Themes Represented</p>
+        <p class="text-3xl font-bold" style="color:var(--success)">${k.themes_represented || 0}<span class="text-base text-muted">/8</span></p>
       </div>
-      <div class="surface rounded-xl p-5 stat-card">
-        <p class="section-label">Classification Status</p>
-        <p class="text-3xl font-bold" style="color:var(--warning)">OPTIMIZED</p>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Total Citations</p>
+        <p class="text-3xl font-bold" style="color:#8b5cf6">${(k.total_citations || 0).toLocaleString()}</p>
       </div>
-    `;
-    
-    // Categories
-    const catEl = $('special-categories');
-    catEl.innerHTML = data.summary.map(cat => `
-      <div class="surface rounded-xl p-5">
-        <div class="flex justify-between items-center mb-4">
-          <p class="section-label mb-0">${esc(cat.category)}</p>
-          <span class="badge-oa">${cat.count} items</span>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Intra-African Share</p>
+        <p class="text-3xl font-bold" style="color:var(--warning)">${k.intra_african_pct || 0}%</p>
+      </div>`;
+
+    // ── Thematic composition (doughnut) ────────────────────────────────
+    const themes = (data.themes || []).filter(t => t.count > 0);
+    destroyChart('sc-themes');
+    if (themes.length) {
+      charts['sc-themes'] = new Chart($('sc-themes-chart'), {
+        type: 'doughnut',
+        data: {
+          labels: themes.map(t => t.category),
+          datasets: [{
+            data: themes.map(t => t.count),
+            backgroundColor: themes.map((_, i) => COLORS[i % COLORS.length]),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '58%',
+          plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
+        },
+      });
+    }
+
+    // ── Theme co-occurrence (D3 chord) ─────────────────────────────────
+    renderScChord(data.co_occurrence || { labels: [], matrix: [] });
+
+    // ── Knowledge sovereignty ──────────────────────────────────────────
+    $('sc-intra-african').textContent = `${k.intra_african_pct || 0}% intra-African`;
+    $('sc-countries').innerHTML = scHbar(data.countries, 'name', 'papers', '#22c55e');
+
+    // ── SDG alignment (horizontal bar) ─────────────────────────────────
+    const sdgs = data.sdgs || [];
+    destroyChart('sc-sdg');
+    if (sdgs.length) {
+      charts['sc-sdg'] = new Chart($('sc-sdg-chart'), {
+        type: 'bar',
+        data: {
+          labels: sdgs.map(s => 'SDG ' + s.sdg),
+          datasets: [{
+            label: 'Works', data: sdgs.map(s => s.count),
+            backgroundColor: '#0ea5e9', borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
+    }
+
+    // ── Custodians ──────────────────────────────────────────────────────
+    $('sc-custodians').innerHTML = scHbar(data.custodians, 'institution', 'count', '#f59e0b');
+
+    // ── Cultural lexicon ────────────────────────────────────────────────
+    const kws = data.keywords || [];
+    if (kws.length) {
+      const maxKw = Math.max(1, ...kws.map(w => w.count));
+      $('sc-lexicon').innerHTML = kws.map(w => {
+        const size = 10 + Math.round((w.count / maxKw) * 8);
+        const op = 0.45 + (w.count / maxKw) * 0.55;
+        return `<span class="chip" style="font-size:${size}px;background:var(--accent-10);color:var(--accent);opacity:${op.toFixed(2)}">${esc(w.word)} <span style="opacity:0.6">${w.count}</span></span>`;
+      }).join('');
+    } else {
+      $('sc-lexicon').innerHTML = SC_EMPTY;
+    }
+
+    // ── Most influential works ──────────────────────────────────────────
+    const inf = data.influential || [];
+    $('sc-influential').innerHTML = inf.length ? inf.map((p, i) => `
+      <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
+        <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate">${esc(p.title)}</p>
+          <div class="flex gap-1 mt-1 flex-wrap">
+            ${(p.categories || []).slice(0, 3).map(c => `<span class="chip text-[9px] py-0.5 px-1.5">${esc(c)}</span>`).join('')}
+          </div>
         </div>
-        <div class="space-y-2" style="max-height:300px; overflow-y:auto">
-          ${cat.top_papers.map(p => `
-            <div class="row-hover p-2.5 rounded-lg cursor-pointer border-b" style="border-color:var(--border)" onclick="openPaperModal(${p.id})">
-              <p class="text-sm font-medium">${esc(p.title)}</p>
-              <div class="flex gap-1 mt-1 flex-wrap">
-                ${p.matches.slice(0, 3).map(m => `<span class="chip text-[10px] py-0.5 px-1.5">${esc(m)}</span>`).join('')}
-              </div>
-            </div>
-          `).join('')}
-          ${cat.count === 0 ? '<p class="text-xs text-center py-4 text-muted">No items found.</p>' : ''}
-        </div>
-      </div>
-    `).join('');
+        <span class="chip text-[10px] py-0.5 px-2 flex-shrink-0" style="background:#8b5cf618;color:#8b5cf6">${p.citations} cites</span>
+      </div>`).join('') : SC_EMPTY;
   });
+}
+
+/**
+ * D3 chord diagram of theme co-occurrence. data = {labels:[...], matrix:[[...]]}.
+ * Mirrors the D3 SVG approach used by loadCollabNetwork.
+ */
+function renderScChord(data) {
+  const el = $('sc-chord');
+  if (!el) return;
+  el.innerHTML = '';
+  const labels = data.labels || [], matrix = data.matrix || [];
+  const hasLinks = matrix.some(row => row.some(v => v > 0));
+  if (!labels.length || !hasLinks || typeof d3 === 'undefined') {
+    el.innerHTML = SC_EMPTY;
+    return;
+  }
+  const W = el.offsetWidth || 400, H = 280;
+  const outer = Math.min(W, H) * 0.5 - 18, inner = outer - 12;
+  const svg = d3.select(el).append('svg')
+    .attr('viewBox', `0 0 ${W} ${H}`).attr('width', '100%').attr('height', H)
+    .append('g').attr('transform', `translate(${W / 2},${H / 2})`);
+
+  const chord = d3.chord().padAngle(0.05).sortSubgroups(d3.descending)(matrix);
+  const arc = d3.arc().innerRadius(inner).outerRadius(outer);
+  const ribbon = d3.ribbon().radius(inner);
+  const color = i => COLORS[i % COLORS.length];
+
+  const group = svg.append('g').selectAll('g').data(chord.groups).enter().append('g');
+  group.append('path').attr('d', arc)
+    .attr('fill', d => color(d.index)).attr('stroke', 'rgba(0,0,0,0.15)')
+    .append('title').text(d => `${labels[d.index]} — ${d.value} co-tags`);
+  group.append('text')
+    .each(d => { d.angle = (d.startAngle + d.endAngle) / 2; })
+    .attr('dy', '0.35em')
+    .attr('transform', d => `rotate(${d.angle * 180 / Math.PI - 90}) translate(${outer + 6}) ${d.angle > Math.PI ? 'rotate(180)' : ''}`)
+    .attr('text-anchor', d => d.angle > Math.PI ? 'end' : 'start')
+    .style('font-size', '9px').style('fill', 'var(--text-muted)')
+    .text(d => labels[d.index]);
+
+  svg.append('g').attr('fill-opacity', 0.6).selectAll('path').data(chord).enter().append('path')
+    .attr('d', ribbon)
+    .attr('fill', d => color(d.source.index))
+    .attr('stroke', 'rgba(0,0,0,0.1)')
+    .append('title').text(d => `${labels[d.source.index]} ↔ ${labels[d.target.index]}: ${d.source.value}`);
 }
 
 /**
@@ -1497,10 +1944,12 @@ function runAdvancedSearch() {
   const yf = $('search-year-from').value, yt = $('search-year-to').value;
   const oa = $('search-oa-only').checked;
   
+  const hasPdf = $('search-has-pdf') && $('search-has-pdf').checked;
   let url = `/api/search/advanced?limit=50&q=${encodeURIComponent(q)}&sort=${sort}`;
   if (yf) url += '&year_from=' + yf;
   if (yt) url += '&year_to=' + yt;
   if (oa) url += '&oa_only=true';
+  if (hasPdf) url += '&has_pdf=true';
   
   const el = $('search-results'), cnt = $('search-result-count');
   el.innerHTML = '<div class="flex justify-center py-12"><div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div></div>';
@@ -1532,6 +1981,15 @@ function runAdvancedSearch() {
 }
 
 function runSearch() { runAdvancedSearch(); }
+
+function clearSearch() {
+  ['search-q', 'search-year-from', 'search-year-to'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const oa = $('search-oa-only'); if (oa) oa.checked = false;
+  const pdf = $('search-has-pdf'); if (pdf) pdf.checked = false;
+  const sort = $('search-sort'); if (sort) sort.value = 'relevance';
+  const res = $('search-results'); if (res) res.innerHTML = '';
+  const cnt = $('search-result-count'); if (cnt) cnt.textContent = '';
+}
 
 function loadSearchFaculties() {
   safeFetch('/api/analytics/faculties', facs => {
@@ -1583,33 +2041,182 @@ function fetchRecentPapers() {
   });
 }
 
+// Populate the crawler institution dropdown, filtered by the selected region.
 function loadCrawlerInstitutions() {
-  safeFetch('/api/institutions', data => {
-    const sel = $('crawler-institution');
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '';
-    
-    // Grouping by region for better UX
-    const groups = { 'Nigeria': [], 'Africa': [] };
-    data.forEach(inst => {
-      const region = ['unilag', 'covenant', 'ui'].includes(inst.short_name.toLowerCase()) ? 'Nigeria' : 'Africa';
-      groups[region].push(inst);
-    });
+  loadInstitutionsCache(() => populateCrawlerInstitutions());
+}
 
-    for (const [region, insts] of Object.entries(groups)) {
-      const group = document.createElement('optgroup');
-      group.label = region === 'Nigeria' ? '🇳🇬 Nigeria' : '🌍 Africa';
-      insts.forEach(inst => {
-        const opt = document.createElement('option');
-        opt.value = inst.short_name.toLowerCase();
-        opt.textContent = `${inst.name} (${inst.short_name})`;
-        group.appendChild(opt);
-      });
-      sel.appendChild(group);
-    }
-    if (current) sel.value = current;
+function onCrawlerRegionChange() {
+  populateCrawlerInstitutions();
+}
+
+function populateCrawlerInstitutions() {
+  const sel = $('crawler-institution');
+  if (!sel) return;
+  const list = window.institutionsCache || [];
+  const region = $('crawler-region') ? $('crawler-region').value : '';
+  const current = sel.value;
+  const filtered = region ? list.filter(i => (i.sub_region || 'Unknown') === region) : list;
+  sel.innerHTML = '';
+  if (!filtered.length) {
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = 'No institutions in this region';
+    sel.appendChild(opt);
+    return;
+  }
+  filtered
+    .slice()
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    .forEach(inst => {
+      const opt = document.createElement('option');
+      opt.value = (inst.short_name || '').toLowerCase();
+      opt.textContent = `${inst.name} (${inst.short_name})`;
+      sel.appendChild(opt);
+    });
+  // Preserve the previous selection if it survived the filter.
+  if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+/**
+ * Generic UI helpers (live-feed clear, archive filter, chart fullscreen)
+ */
+function clearTerm(id) {
+  const term = $(id);
+  if (term) term.innerHTML = '<div style="color:#334155">// Cleared.</div>';
+}
+
+function filterArchive(q) {
+  renderTree(archiveData, (q || '').toLowerCase());
+}
+
+let fsChart = null;
+function openFS(chartId, title) {
+  const src = charts[chartId];
+  if (!src) { toast('Chart not ready', 'warning'); return; }
+  const overlay = $('fs-overlay'); if (!overlay) return;
+  const titleEl = $('fs-title'); if (titleEl) titleEl.textContent = title || '';
+  overlay.classList.add('open');
+  if (fsChart) { try { fsChart.destroy(); } catch (e) {} fsChart = null; }
+  // Clone the source chart's config into the fullscreen canvas.
+  const cfg = { type: src.config.type, data: src.config.data, options: { ...src.config.options, maintainAspectRatio: false } };
+  fsChart = new Chart($('fs-canvas'), cfg);
+}
+
+function closeFullscreen() {
+  const overlay = $('fs-overlay'); if (overlay) overlay.classList.remove('open');
+  if (fsChart) { try { fsChart.destroy(); } catch (e) {} fsChart = null; }
+}
+
+function downloadNetData() {
+  if (!networkEdgeData || !networkEdgeData.length) { toast('No network data to export', 'warning'); return; }
+  const rows = [['Source', 'Target', 'Joint Papers']];
+  networkEdgeData.forEach(e => rows.push([e.source, e.target, e.weight]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = window.URL.createObjectURL(blob);
+  a.download = `collaboration_network_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a); a.click();
+  window.URL.revokeObjectURL(a.href); a.remove();
+}
+
+/**
+ * Faculty / Department comparison (analytics → Compare sub-tab)
+ */
+function runFacComparison() {
+  const facs = ['cmp-faculty-a', 'cmp-faculty-b', 'cmp-faculty-c']
+    .map(id => $(id) ? $(id).value : '').filter(Boolean);
+  if (facs.length < 2) { toast('Select at least 2 faculties', 'warning'); return; }
+  const qs = facs.map(f => 'faculty=' + encodeURIComponent(f)).join('&');
+  safeFetch('/api/analytics/faculty-comparison?' + qs, data => {
+    const el = $('faculty-comparison-result'); if (!el) return;
+    const entries = Object.entries(data || {});
+    if (!entries.length) { el.innerHTML = '<p class="text-sm text-muted py-4">No comparison data.</p>'; return; }
+    el.innerHTML = `
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted)">
+          <th class="text-left py-2 px-2">Faculty</th><th class="text-right py-2 px-2">Papers</th>
+          <th class="text-right py-2 px-2">OA Rate</th><th class="text-right py-2 px-2">Authors</th>
+          <th class="text-right py-2 px-2">Departments</th>
+        </tr></thead><tbody>
+        ${entries.map(([name, m]) => `
+          <tr class="row-hover border-b border-white/5">
+            <td class="py-2 px-2 font-medium">${esc(name)}</td>
+            <td class="py-2 px-2 text-right">${(m.total_papers || 0).toLocaleString()}</td>
+            <td class="py-2 px-2 text-right">${m.oa_rate || 0}%</td>
+            <td class="py-2 px-2 text-right">${(m.unique_authors || 0).toLocaleString()}</td>
+            <td class="py-2 px-2 text-right">${m.departments || 0}</td>
+          </tr>`).join('')}
+        </tbody></table></div>`;
   });
+}
+
+function runDeptComparison() {
+  const faculty = $('dept-cmp-faculty') ? $('dept-cmp-faculty').value : '';
+  if (!faculty) { toast('Select a faculty', 'warning'); return; }
+  safeFetch('/api/analytics/department-comparison?faculty=' + encodeURIComponent(faculty), data => {
+    destroyChart('dept-compare');
+    const entries = Object.entries(data || {});
+    if (!entries.length) { toast('No departments found', 'info'); return; }
+    charts['dept-compare'] = new Chart($('chart-dept-compare'), {
+      type: 'bar',
+      data: {
+        labels: entries.map(([name]) => name),
+        datasets: [
+          { label: 'Open Access', data: entries.map(([, m]) => m.open_access || 0), backgroundColor: 'rgba(16,185,129,0.7)', borderRadius: 4 },
+          { label: 'Restricted', data: entries.map(([, m]) => m.restricted || 0), backgroundColor: 'rgba(239,68,68,0.5)', borderRadius: 4 }
+        ]
+      },
+      options: { indexAxis: 'y', plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true, grid: { display: false } } } }
+    });
+  });
+}
+
+/**
+ * Lecturer / Researcher profile (analytics → Lecturer sub-tab)
+ */
+let authorSearchTimer = null;
+function debAuthorSearch() { clearTimeout(authorSearchTimer); authorSearchTimer = setTimeout(searchLecturer, 300); }
+
+function searchLecturer() {
+  const input = $('lecturer-search-input'); if (!input) return;
+  const q = input.value.trim();
+  const sugg = $('author-suggestions');
+  if (q.length < 2) { if (sugg) sugg.innerHTML = ''; return; }
+  safeFetch(withInst('/api/analytics/authors-search?q=' + encodeURIComponent(q) + '&limit=8'), authors => {
+    if (!sugg) return;
+    if (!authors.length) { sugg.innerHTML = '<p class="text-xs p-2 text-muted">No researchers found</p>'; return; }
+    sugg.innerHTML = authors.map(a =>
+      `<button class="chip" onclick="loadLecturerProfile('${esc(a.name).replace(/'/g, "\\'")}')">${esc(a.name)} <span style="opacity:0.6">(${a.papers})</span></button>`
+    ).join('');
+  });
+}
+
+function loadLecturerProfile(name) {
+  const input = $('lecturer-search-input'); if (input) input.value = name;
+  const sugg = $('author-suggestions'); if (sugg) sugg.innerHTML = '';
+  const el = $('lecturer-profile-result'); if (!el) return;
+  el.innerHTML = '<div class="flex justify-center py-8"><div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div></div>';
+  safeFetch('/api/analytics/lecturer-profile?name=' + encodeURIComponent(name), p => {
+    if (p.error) { el.innerHTML = `<p class="text-sm text-muted py-4">${esc(p.error)}</p>`; return; }
+    el.innerHTML = `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div class="surface rounded-xl p-4 stat-card"><p class="section-label">Papers</p><p class="text-2xl font-bold" style="color:var(--accent)">${p.total_papers}</p></div>
+        <div class="surface rounded-xl p-4 stat-card"><p class="section-label">Open Access</p><p class="text-2xl font-bold" style="color:var(--success)">${p.open_access}</p></div>
+        <div class="surface rounded-xl p-4 stat-card"><p class="section-label">OA Rate</p><p class="text-2xl font-bold" style="color:var(--warning)">${p.oa_rate}%</p></div>
+        <div class="surface rounded-xl p-4 stat-card"><p class="section-label">Active Years</p><p class="text-2xl font-bold">${(p.active_years || []).length}</p></div>
+      </div>
+      ${(p.faculties || []).length ? `<p class="text-xs text-muted mb-1">Faculties: ${p.faculties.map(esc).join(', ')}</p>` : ''}
+      ${(p.top_collaborators || []).length ? `<p class="section-label mt-3">Top Collaborators</p>
+        <div class="flex flex-wrap gap-2 mb-3">${p.top_collaborators.map(c => `<span class="chip">${esc(c.name)} (${c.papers})</span>`).join('')}</div>` : ''}
+      <p class="section-label mt-3">Recent Papers</p>
+      <div class="space-y-1.5">${(p.papers || []).map(pp => `
+        <div class="row-hover p-2.5 rounded-lg cursor-pointer border-b" style="border-color:var(--border)" onclick="openPaperModal(${pp.id})">
+          <p class="text-sm font-medium">${esc(pp.title)}</p>
+          <span class="text-[10px] text-muted">${pp.year || ''}</span>
+          <span class="${pp.is_oa ? 'badge-oa' : 'badge-restricted'} text-[9px] ml-2">${pp.is_oa ? 'OA' : 'RES'}</span>
+        </div>`).join('') || '<p class="text-xs text-muted py-2">No papers.</p>'}</div>`;
+  }, () => { el.innerHTML = '<p class="text-sm text-muted py-4">Failed to load profile.</p>'; });
 }
 
 /**
@@ -1624,6 +2231,13 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchArchive();
   fetchRecentPapers();
   loadCrawlerInstitutions();
+  initMethodologyTooltips();
+
+  // ARK resolver deep-link: /?paper=<id> opens that paper's modal on load.
+  const paperParam = new URLSearchParams(window.location.search).get('paper');
+  if (paperParam && /^\d+$/.test(paperParam)) {
+    setTimeout(() => openPaperModal(parseInt(paperParam, 10)), 300);
+  }
   
   // Stats Auto-Refresh
   setInterval(() => {
@@ -1643,6 +2257,292 @@ document.addEventListener('keydown', e => {
   if (e.key === '3') switchTab('search');
   if (e.key === '4') switchTab('analytics');
   if (e.key === '5') switchTab('comparator');
-  if (e.key === 'Escape') { closePaperModal(); }
+  if (e.key === 'Escape') { closePaperModal(); closeMethodologyTooltip(); }
   if (e.key === 't' || e.key === 'T') toggleTheme();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 6: CREDIBILITY LAYER — Methodology Tooltips, ARK PIDs, Benchmarks
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _methodologyCache = null;
+
+/**
+ * Fetch the methodology dictionary once; subsequent calls use the cache.
+ * Returns a Promise resolving to the METHODOLOGY dict.
+ */
+function getMethodology() {
+  if (_methodologyCache) return Promise.resolve(_methodologyCache);
+  return fetch('/api/methodology', { cache: 'force-cache' })
+    .then(r => r.json())
+    .then(resp => { _methodologyCache = resp.data || {}; return _methodologyCache; })
+    .catch(() => ({}));
+}
+
+/**
+ * Render and attach the floating methodology tooltip DOM node (singleton).
+ * Called once on DOMContentLoaded.
+ */
+function initMethodologyTooltips() {
+  // Inject tooltip container
+  if (!$('method-tooltip')) {
+    const el = document.createElement('div');
+    el.id = 'method-tooltip';
+    el.className = 'method-tooltip hidden';
+    el.innerHTML = `
+      <div class="method-tooltip-inner">
+        <div class="flex justify-between items-start mb-2">
+          <p id="method-tooltip-title" class="text-xs font-bold" style="color:var(--accent)"></p>
+          <button onclick="closeMethodologyTooltip()" class="text-muted ml-2 hover:text-white" style="font-size:14px;line-height:1">×</button>
+        </div>
+        <p id="method-tooltip-formula" class="text-xs leading-relaxed mb-2" style="color:var(--text)"></p>
+        <div id="method-tooltip-bench" class="hidden text-xs mb-2 p-2 rounded" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2)"></div>
+        <div id="method-tooltip-source" class="text-[10px]" style="color:var(--text-muted)"></div>
+        <p id="method-tooltip-caveats" class="text-[10px] mt-1 italic" style="color:var(--text-muted)"></p>
+      </div>`;
+    document.body.appendChild(el);
+  }
+
+  // Inject CSS for tooltip
+  if (!$('method-tooltip-style')) {
+    const style = document.createElement('style');
+    style.id = 'method-tooltip-style';
+    style.textContent = `
+      .method-tooltip {
+        position: fixed; z-index: 9999; max-width: 360px;
+        background: var(--modal-bg, #1e293b);
+        border: 1px solid var(--border, rgba(255,255,255,0.08));
+        border-radius: 12px; padding: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        pointer-events: auto; transition: opacity 0.15s;
+      }
+      .method-tooltip.hidden { display: none !important; }
+      .info-icon {
+        cursor: pointer; font-size: 12px; opacity: 0.6;
+        transition: opacity 0.15s; color: var(--accent, #6366f1);
+        user-select: none;
+      }
+      .info-icon:hover { opacity: 1; }
+      .chart-narrative {
+        font-style: italic; min-height: 16px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Wire all existing .info-icon elements
+  document.querySelectorAll('.info-icon[data-method]').forEach(icon => {
+    icon.addEventListener('click', e => {
+      e.stopPropagation();
+      showMethodologyTooltip(icon.dataset.method, icon);
+    });
+  });
+
+  // Also wire dynamically added icons (event delegation)
+  document.body.addEventListener('click', e => {
+    const icon = e.target.closest('.info-icon[data-method]');
+    if (icon) {
+      e.stopPropagation();
+      showMethodologyTooltip(icon.dataset.method, icon);
+    }
+  });
+
+  // Close on backdrop click
+  document.body.addEventListener('click', e => {
+    const tt = $('method-tooltip');
+    if (tt && !tt.classList.contains('hidden') && !tt.contains(e.target) && !e.target.closest('.info-icon')) {
+      closeMethodologyTooltip();
+    }
+  });
+}
+
+function closeMethodologyTooltip() {
+  const tt = $('method-tooltip');
+  if (tt) tt.classList.add('hidden');
+}
+
+function showMethodologyTooltip(key, anchorEl) {
+  getMethodology().then(meth => {
+    const m = meth[key];
+    if (!m) return;
+    const tt = $('method-tooltip');
+    if (!tt) return;
+
+    $('method-tooltip-title').textContent = m.title || key;
+    $('method-tooltip-formula').textContent = m.formula || '';
+    $('method-tooltip-caveats').textContent = m.caveats ? '⚠ ' + m.caveats : '';
+
+    const srcEl = $('method-tooltip-source');
+    srcEl.innerHTML = m.source
+      ? `<span class="font-bold">Source:</span> ${esc(m.source)}`
+      : '';
+
+    const benchEl = $('method-tooltip-bench');
+    if (m.benchmark) {
+      const b = m.benchmark;
+      benchEl.innerHTML = `<span class="font-bold text-success">Benchmark:</span> ${esc(b.label)}: <span class="font-mono text-success">${b.value}</span>${b.url ? ` <a href="${esc(b.url)}" target="_blank" class="text-accent underline ml-1">source</a>` : ''}`;
+      benchEl.classList.remove('hidden');
+    } else {
+      benchEl.classList.add('hidden');
+    }
+
+    // Position near the anchor icon
+    const rect = anchorEl.getBoundingClientRect();
+    const viewW = window.innerWidth, viewH = window.innerHeight;
+    let top = rect.bottom + 6, left = rect.left;
+    tt.classList.remove('hidden');
+    const ttRect = tt.getBoundingClientRect();
+    if (left + ttRect.width > viewW - 10) left = viewW - ttRect.width - 10;
+    if (top + ttRect.height > viewH - 10) top = rect.top - ttRect.height - 6;
+    tt.style.top = Math.max(8, top) + 'px';
+    tt.style.left = Math.max(8, left) + 'px';
+  });
+}
+
+/**
+ * Phase 6 — Enhanced paper modal with ARK / DocID persistent identifiers.
+ * Override the metadataRow helper to optionally render ARK as a link.
+ */
+function renderArkBadge(ark) {
+  if (!ark) return '';
+  const url = ark.startsWith('ark:') ? '/' + ark : ark;
+  return `
+    <div class="mt-3 p-3 rounded-lg" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15)">
+      <p class="text-[10px] font-bold uppercase tracking-wider mb-1" style="color:var(--accent)">
+        ARK Persistent Identifier
+        <span class="info-icon" data-method="ark_identifier">&#9432;</span>
+      </p>
+      <a href="${esc(url)}" target="_blank" class="font-mono text-xs hover:underline" style="color:var(--accent)">${esc(ark)}</a>
+      <p class="text-[10px] mt-1" style="color:var(--text-muted)">Resolves via Africa PID Alliance · ARK Alliance (2025)</p>
+    </div>`;
+}
+
+// Patch openPaperModal to include ARK + Pan-African share
+const _origOpenPaperModal = openPaperModal;
+function openPaperModal(id) {
+  $('paper-modal').classList.add('open');
+  $('modal-body').innerHTML = '<div class="flex justify-center py-12"><div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div></div>';
+
+  Promise.all([
+    fetch('/api/papers/' + id).then(r => r.json()),
+    fetch('/api/citations/' + id).then(r => r.json()).catch(() => ({ citation_count: 0 }))
+  ]).then(([p, cit]) => {
+    $('modal-title').textContent = p.title;
+    const authors = (p.authors || []).map(a => esc(a.name)).join('; ');
+
+    const fileBtn = p.file?.has_local_pdf
+      ? `<a href="${p.file.download_url}" class="btn-primary text-sm">Download PDF</a>`
+      : (p.pdf_url ? `<a href="${p.pdf_url}" target="_blank" class="btn-primary text-sm">View PDF</a>` : '');
+
+    // Pan-African citation share badge
+    const paShare = cit.african_citation_share != null
+      ? `<span class="chip text-[10px] py-0.5 px-2" style="background:rgba(34,197,94,0.1);color:#22c55e">
+           🌍 ${cit.african_citation_share}% Pan-African citations
+           <span class="info-icon" data-method="pan_african_citation_share">&#9432;</span>
+         </span>`
+      : '';
+
+    $('modal-body').innerHTML = `
+      <div class="space-y-6">
+        <div class="flex gap-2 flex-wrap items-center">
+          ${fileBtn}
+          ${p.doi ? `<a href="https://doi.org/${p.doi}" target="_blank" class="btn-ghost text-xs">View DOI</a>` : ''}
+          ${paShare}
+        </div>
+
+        <div class="surface p-5 rounded-xl space-y-3">
+          <p class="section-label mb-2">Metadata</p>
+          ${metadataRow('Title', p.title)}
+          ${metadataRow('Authors', authors)}
+          ${metadataRow('Date', p.publication_date?.split('T')[0] || '—')}
+          ${metadataRow('DOI', p.doi || '—')}
+          ${metadataRow('Source', p.source_repository || '—')}
+          ${metadataRow('Citations', cit.citation_count)}
+          ${cit.docid ? metadataRow('DocID™', cit.docid) : ''}
+        </div>
+
+        ${(cit.ark || p.ark) ? renderArkBadge(cit.ark || p.ark) : ''}
+
+        ${p.abstract ? `
+          <div class="surface p-5 rounded-xl">
+            <p class="section-label mb-2">Abstract</p>
+            <p class="text-sm leading-relaxed text-slate-300">${esc(p.abstract)}</p>
+          </div>` : ''}
+      </div>`;
+  }).catch(err => {
+    $('modal-body').innerHTML = `<p class="text-sm text-center py-10">Failed to load: ${err.message}</p>`;
+  });
+}
+
+/**
+ * Phase 4 — Pan-African share stat card + CSV download in citation velocity panel.
+ * Patches loadCitationVelocity to also render a share badge below the chart.
+ */
+const _origLoadCitationVelocity = loadCitationVelocity;
+function loadCitationVelocity() {
+  safeFetch(withInst('/api/citations/velocity'), resp => {
+    const d = resp.data || {};
+    $('velocity-narrative').textContent = resp.narrative || '';
+    const series = d.by_year || [];
+    destroyChart('citation-velocity');
+
+    // ── Pan-African share card ────────────────────────────────────────────────
+    let shareEl = $('pan-african-share-card');
+    if (!shareEl) {
+      const parent = $('velocity-narrative')?.parentElement;
+      if (parent) {
+        parent.insertAdjacentHTML('beforeend', `
+          <div id="pan-african-share-card" class="hidden mt-3 flex items-center gap-3 p-3 rounded-lg" style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.15)">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-wider" style="color:#22c55e">
+                Pan-African Citation Share
+                <span class="info-icon" data-method="pan_african_citation_share">&#9432;</span>
+              </p>
+              <p id="pan-african-share-value" class="text-2xl font-bold" style="color:#22c55e">—</p>
+              <p id="pan-african-share-sub" class="text-[10px]" style="color:var(--text-muted)"></p>
+            </div>
+            <a id="citation-velocity-csv-btn" href="/api/citations/velocity/export.csv" class="btn-ghost text-xs ml-auto flex-shrink-0">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              CSV
+            </a>
+          </div>`);
+        shareEl = $('pan-african-share-card');
+      }
+    }
+
+    if (shareEl) {
+      const inst = getInstitutionParam();
+      const csvBtn = $('citation-velocity-csv-btn');
+      if (csvBtn) csvBtn.href = '/api/citations/velocity/export.csv' + inst;
+
+      if (d.pan_african_share_pct != null) {
+        shareEl.classList.remove('hidden');
+        const valEl = $('pan-african-share-value');
+        const subEl = $('pan-african-share-sub');
+        if (valEl) valEl.textContent = d.pan_african_share_pct + '%';
+        if (subEl) subEl.textContent = `Computed for ${d.pan_african_share_items || 0} most-cited works`;
+      } else {
+        shareEl.classList.add('hidden');
+      }
+    }
+
+    if (!series.length) return;
+    charts['citation-velocity'] = new Chart($('chart-citation-velocity'), {
+      type: 'line',
+      data: {
+        labels: series.map(r => r.year),
+        datasets: [{
+          label: 'Citations received',
+          data: series.map(r => r.citations),
+          borderColor: '#22c55e', backgroundColor: '#22c55e22',
+          fill: true, tension: 0.3, pointRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }, () => { /* velocity endpoint optional until citation backfill runs */ });
+}
+

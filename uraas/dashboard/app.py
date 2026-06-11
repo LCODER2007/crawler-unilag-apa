@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import logging
 import os
 import re
@@ -22,17 +23,15 @@ from uraas.database import (
     db_year,
     db_year_month,
 )
+from uraas.dashboard.responses import api_error, api_ok, csv_response
 from uraas.utils.analytics_cache import analytics_cache
-from uraas.utils.docid_generator import docid_generator
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.DASHBOARD_SECRET_KEY
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 logger = logging.getLogger(__name__)
 crawler_process = None
 crawler_lock = threading.Lock()
-docid_crawler_process = None
-docid_crawler_lock = threading.Lock()
 
 
 def crawler_monitor(process):
@@ -75,41 +74,79 @@ def crawler_monitor(process):
         socketio.emit("crawl_status", {"status": "stopped"})
 
 
-def docid_crawler_monitor(process):
-    global docid_crawler_process
-    try:
-        for line in iter(process.stdout.readline, b""):
-            with docid_crawler_lock:
-                if docid_crawler_process is None or docid_crawler_process != process:
-                    break
-            line_decoded = line.decode("utf-8", errors="replace").strip()
-            if not line_decoded:
-                continue
-            socketio.emit("docid_terminal_output", {"line": line_decoded})
-            if "[OK]" in line_decoded:
-                socketio.emit("docid_crawl_status", {"status": "running"})
-                try:
-                    title = line_decoded.split("] ", 1)[-1].strip()
-                    socketio.emit("docid_crawl_progress", {"title": title})
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    finally:
+@app.context_processor
+def inject_asset_version():
+    """Cache-bust static assets by their file mtime so browsers always load
+    the latest JS/CSS after a deploy or edit (no more stale cached app.js)."""
+
+    def asset_version(filename):
         try:
-            process.stdout.close()
-        except Exception:
-            pass
-        process.wait()
-        with docid_crawler_lock:
-            if docid_crawler_process == process:
-                docid_crawler_process = None
-        socketio.emit("docid_crawl_status", {"status": "stopped"})
+            path = os.path.join(app.static_folder, filename)
+            return str(int(os.path.getmtime(path)))
+        except OSError:
+            return "1"
+
+    return {"asset_version": asset_version}
 
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/ark:/<naan>/<path:name>")
+def resolve_ark(naan, name):
+    """Local ARK resolver (ARK spec: resolver base + '/' + ark).
+
+    Redirects to the dashboard with the paper modal auto-opened; the ARK
+    'inflection' suffix '?' / '?info' returns the metadata record as JSON."""
+    from flask import redirect
+
+    ark = f"ark:/{naan}/{name}"
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter_by(ark=ark).first()
+        if not item:
+            return jsonify({"error": "ARK not found", "ark": ark}), 404
+        # ARK inflection: '?info' / '?json' returns the metadata record. (A bare
+        # '?' is the spec's brief-metadata inflection, but Flask's full_path
+        # always appends '?', so it can't be told apart from a plain resolve —
+        # we require the explicit suffix.)
+        wants_info = "info" in request.args or "json" in request.args
+        if wants_info:
+            return jsonify(
+                {
+                    "ark": ark,
+                    "docid": item.docid or "",
+                    "doi": item.doi or "",
+                    "title": item.title or "",
+                    "institution": item.institution or "",
+                    "publication_date": (
+                        item.publication_date.isoformat()
+                        if item.publication_date
+                        else None
+                    ),
+                    "authors": [a.name for a in item.authors],
+                    "resolver": "URAAS / Africa PID Alliance",
+                }
+            )
+        return redirect(f"/?paper={item.id}")
+    except Exception as e:
+        logger.error("resolve_ark %s: %s", ark, e)
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        session.close()
+
+
+@app.route("/api/methodology")
+def get_methodology():
+    """Full per-metric methodology dictionary — feeds the ⓘ tooltips.
+
+    Every metric on the dashboard documents its formula, data source and
+    caveats here so each number can be audited (open-methodology principle)."""
+    from uraas.config.methodology import METHODOLOGY
+
+    return jsonify({"status": "success", "data": METHODOLOGY})
 
 
 @app.route("/api/stats")
@@ -164,6 +201,15 @@ def get_paper(item_id):
             {
                 "id": item.id,
                 "docid": item.docid or "",
+                "ark": item.ark or "",
+                "ark_url": f"/{item.ark}" if item.ark else "",
+                "cited_by_count": item.cited_by_count or 0,
+                "african_citation_share": item.african_citation_share,
+                "counts_by_year": (
+                    json.loads(item.counts_by_year) if item.counts_by_year else []
+                ),
+                "coauthor_countries": item.coauthor_countries or "",
+                "is_intra_african": bool(item.is_intra_african),
                 "title": item.title or "Untitled",
                 "abstract": item.abstract or "",
                 "doi": item.doi or "",
@@ -257,11 +303,19 @@ def export_single_bibtex(item_id):
         title = (item.title or "Untitled").replace("{", "").replace("}", "")
         doi_line = f"  doi = {{{item.doi}}},\n" if item.doi else ""
         url_line = f"  url = {{{item.url}}},\n" if item.url else ""
+        # Persistent identifiers — ARK is resolvable even without a DOI.
+        note_bits = []
+        if item.ark:
+            note_bits.append(f"ARK: {item.ark}")
+        if item.docid:
+            note_bits.append(f"DocID: {item.docid}")
+        note_line = f"  note = {{{'; '.join(note_bits)}}},\n" if note_bits else ""
         institution = (item.institution or "").strip() or "Unknown"
         bibtex = (
             f"@article{{{key},\n  title = {{{title}}},\n  author = {{{author_str}}},\n  year = {{{year}}},\n  institution = {{{institution}}},\n"
             + doi_line
             + url_line
+            + note_line
             + "}"
         )
         return Response(
@@ -432,26 +486,50 @@ def papers_by_year_faculty():
 
 @app.route("/api/analytics/faculty-oa-breakdown")
 def faculty_oa_breakdown():
+    """Phase 7 fix: group-by aggregate, no per-faculty item loads."""
+    institution = request.args.get("institution")
     session = SessionLocal()
     try:
-        rows = (
+        # Two aggregate queries instead of N item fetches
+        base_q = (
             session.query(
-                Community.name, Item.dc_rights, func.count(Item.id).label("count")
+                Community.name,
+                func.count(Item.id).label("total"),
             )
             .join(Item.collections)
             .join(Collection.community)
-            .group_by(Community.name, Item.dc_rights)
-            .all()
         )
-        result = {}
-        for faculty, rights, count in rows:
-            if faculty not in result:
-                result[faculty] = {"open": 0, "restricted": 0}
-            if rights and "openAccess" in rights:
-                result[faculty]["open"] += count
-            else:
-                result[faculty]["restricted"] += count
-        return jsonify([{"faculty": k, **v} for k, v in result.items()])
+        oa_q = (
+            session.query(
+                Community.name,
+                func.count(Item.id).label("oa"),
+            )
+            .join(Item.collections)
+            .join(Collection.community)
+            .filter(Item.dc_rights.like("%openAccess%"))
+        )
+        if institution:
+            inst_name = analytics._resolve_institution_name(institution)
+            if inst_name:
+                base_q = base_q.filter(Item.institution.ilike(f"%{inst_name}%"))
+                oa_q = oa_q.filter(Item.institution.ilike(f"%{inst_name}%"))
+
+        totals = {row.name: row.total for row in base_q.group_by(Community.name).all()}
+        oas = {row.name: row.oa for row in oa_q.group_by(Community.name).all()}
+
+        return jsonify(
+            [
+                {
+                    "faculty": name,
+                    "oa": oas.get(name, 0),
+                    "restricted": totals[name] - oas.get(name, 0),
+                }
+                for name in totals
+            ]
+        )
+    except Exception as e:
+        logger.error("faculty_oa_breakdown: %s", e)
+        return jsonify([])
     finally:
         session.close()
 
@@ -603,6 +681,7 @@ def list_institutions():
                 "name": inst.name,
                 "short_name": inst.short_name,
                 "ror": inst.ror,
+                "sub_region": inst.sub_region,
                 "staff_count": len(inst.staff_names),
             }
         )
@@ -695,6 +774,7 @@ def faculty_comparison():
                 .join(Item.collections)
                 .join(Collection.community)
                 .filter(Community.id == comm.id)
+                .options(selectinload(Item.authors))
                 .all()
             )
             if not items:
@@ -747,6 +827,7 @@ def department_comparison():
                 session.query(Item)
                 .join(Item.collections)
                 .filter(Collection.id == coll.id)
+                .options(selectinload(Item.authors))
                 .all()
             )
             if not items:
@@ -774,7 +855,17 @@ def lecturer_profile():
         author = session.query(Author).filter(Author.name.ilike(f"%{name}%")).first()
         if not author:
             return jsonify({"error": "Author not found"}), 404
-        items = author.items
+        # Eager-load the relationships walked below (collections→community, authors)
+        # so the profile renders in a handful of queries instead of one-per-paper.
+        items = (
+            session.query(Item)
+            .filter(Item.authors.any(Author.id == author.id))
+            .options(
+                selectinload(Item.authors),
+                selectinload(Item.collections).selectinload(Collection.community),
+            )
+            .all()
+        )
         oa = sum(1 for i in items if "openAccess" in (i.dc_rights or ""))
         years = sorted(
             set(i.publication_date.year for i in items if i.publication_date)
@@ -822,6 +913,10 @@ def lecturer_profile():
 
 @app.route("/api/analytics/language-research")
 def language_research():
+    """Phase 7 cleanup: Uses pre-compiled regex from uraas.config.language_research."""
+    from uraas.analytics.engine import STOP_WORDS
+    from uraas.config.language_research import LANG_TIER1, LANG_TIER2, score_item
+
     session = SessionLocal()
     try:
         institution = request.args.get("institution", "").strip()
@@ -829,104 +924,36 @@ def language_research():
         if institution:
             q = q.filter(Item.institution.ilike(f"%{institution}%"))
         items = q.all()
-        TIER1 = __import__("re").compile(
-            r"\b(yoruba|igbo|hausa|pidgin|efik|tiv|fulani|ibibio|ijaw|kanuri|sociolinguistics|lexicography|phonology|phonetics|morphosyntax|oral tradition|oral literature|oral poetry|oral narrative|proverbs|folklore|folktale|griot|african literature|nigerian literature|postcolonial literature|literary criticism|literary theory|narratology|language policy|multilingualism|bilingualism|code.switching|indigenous language|vernacular|dialect continuum|pragmatics|discourse analysis|stylistics|nollywood|yoruba drama|african theatre)\b",
-            __import__("re").IGNORECASE,
-        )
-        TIER2 = __import__("re").compile(
-            r"\b(morphology|syntax|semantics|translation|literary|language|linguistic|dialect|narrative|discourse|rhetoric|poetry|prose|fiction|novel|drama|theatre|culture|cultural identity|cultural heritage|african studies|humanities)\b",
-            __import__("re").IGNORECASE,
-        )
-        EXCLUDE = __import__("re").compile(
-            r"\b(machine learning|deep learning|neural network|artificial intelligence|clinical trial|randomized|patient|hospital|surgery|cancer|tumor|cardiovascular|hypertension|diabetes|preeclampsia|concrete|cement|compressive strength|tensile|alloy|composite|carbon emission|ecological footprint|gdp|economic growth|galaxy|astrophysic|ionosphere|plasma|quantum|semiconductor|mpox|covid|sars|influenza|malaria|hiv|antibiotic|cybersecurity|blockchain|iot|cloud computing|petroleum|crude oil|refinery|corrosion|mentoring|capacity building|faculty development)\b",
-            __import__("re").IGNORECASE,
-        )
-        STOP = {
-            "the",
-            "and",
-            "for",
-            "with",
-            "this",
-            "that",
-            "from",
-            "have",
-            "been",
-            "were",
-            "their",
-            "which",
-            "these",
-            "about",
-            "other",
-            "into",
-            "than",
-            "more",
-            "such",
-            "some",
-            "what",
-            "when",
-            "where",
-            "there",
-            "also",
-            "using",
-            "used",
-            "study",
-            "show",
-            "paper",
-            "research",
-            "analysis",
-            "findings",
-            "results",
-            "between",
-            "effect",
-            "impact",
-            "based",
-            "data",
-            "method",
-            "approach",
-            "model",
-            "system",
-            "review",
-            "case",
-            "report",
-        }
+
         matches = []
-        keyword_counts = {}
+        keyword_counts: dict = {}
         for item in items:
             try:
-                title = item.title or ""
-                abstract = item.abstract or ""
-                text = (title + " " + abstract).lower()
-                if EXCLUDE.search(text):
+                score, matched = score_item(item.title or "", item.abstract or "")
+                if not score:
                     continue
-                t1 = TIER1.findall(text)
-                t2 = TIER2.findall(text)
-                score = len(t1) * 2 + len(t2)
-                if score < 2:
-                    continue
-                if not t1 and len(t2) < 3:
-                    continue
-                words = __import__("re").findall(r"\b[a-z]{5,}\b", text)
-                for word in words:
-                    if word not in STOP:
+                text = (f"{item.title or ''} {item.abstract or ''}").lower()
+                import re as _re
+                for word in _re.findall(r"\b[a-z]{5,}\b", text):
+                    if word not in STOP_WORDS:
                         keyword_counts[word] = keyword_counts.get(word, 0) + 1
                 matches.append(
                     {
                         "id": item.id,
                         "title": item.title,
                         "year": (
-                            item.publication_date.year
-                            if item.publication_date
-                            else None
+                            item.publication_date.year if item.publication_date else None
                         ),
                         "authors": [a.name for a in item.authors[:4]],
                         "is_oa": "openAccess" in (item.dc_rights or ""),
                         "score": score,
-                        "matched_terms": list(set(t1 + t2))[:6],
+                        "matched_terms": matched[:6],
                     }
                 )
             except Exception as e:
                 logger.error("language_research item %s: %s", item.id, e)
                 continue
+
         matches.sort(key=lambda x: (-x["score"], -(x.get("year") or 0)))
         top_keywords = sorted(keyword_counts.items(), key=lambda x: -x[1])[:20]
         return jsonify(
@@ -951,6 +978,8 @@ def language_research():
         )
     finally:
         session.close()
+
+
 
 
 #  Multi-Institution Comparator (APA Core Feature)
@@ -1032,15 +1061,12 @@ def generate_senate_report():
                 [
                     "Institution",
                     "ROR",
-                    "Total Papers",
-                    "Total Authors",
+                    "SC Papers",
+                    "SC Authors",
                     "OA Rate %",
-                    "TK Rate %",
-                    "Patent Rate %",
-                    "African Lang Rate %",
-                    "Growth Rate %",
+                    "Indigenous Knowledge",
+                    "African Literature",
                     "Papers/Author",
-                    "DocID Coverage %",
                 ]
             )
             for inst in report["detailed_comparison"]["institutions"]:
@@ -1052,12 +1078,9 @@ def generate_senate_report():
                         m.get("total_papers", 0),
                         m.get("total_authors", 0),
                         m.get("oa_rate", 0),
-                        m.get("tk_rate", 0),
-                        m.get("patent_rate", 0),
-                        m.get("african_lang_rate", 0),
-                        m.get("growth_rate", 0),
+                        m.get("indigenous_knowledge", 0),
+                        m.get("african_literature", 0),
                         m.get("papers_per_author", 0),
-                        m.get("docid_coverage", 0),
                     ]
                 )
             output.seek(0)
@@ -1103,14 +1126,67 @@ def generate_senate_report():
 
 @app.route("/api/citations/<int:item_id>")
 def get_citations(item_id):
-    """Get citation data for a paper."""
+    """Get citation data for a paper — enriched with ARK + Pan-African share (Phase 5)."""
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter_by(id=item_id).first()
+        # Base citation count from DB (fast, no API call)
+        base = {
+            "item_id": item_id,
+            "citation_count": item.cited_by_count or 0 if item else 0,
+            "ark": item.ark or "" if item else "",
+            "docid": item.docid or "" if item else "",
+            "african_citation_share": item.african_citation_share if item else None,
+            "openalex_id": item.openalex_id or "" if item else "",
+        }
+    except Exception:
+        base = {"item_id": item_id, "citation_count": 0}
+    finally:
+        session.close()
+
+    # Supplement with live CitationMetrics record if available
     try:
         from uraas.services.citation_tracker import get_paper_citations
-
-        return jsonify(get_paper_citations(item_id))
+        live = get_paper_citations(item_id)
+        base.update(live)
     except Exception as e:
-        logger.error(f"get_citations {item_id}: {e}")
-        return jsonify({"error": str(e)}), 500
+        logger.debug(f"get_citations live lookup {item_id}: {e}")
+    return jsonify(base)
+
+
+@app.route("/api/citations/velocity/export.csv")
+def citations_velocity_csv():
+    """Phase 4 — Streaming CSV export of the citation velocity time-series.
+
+    Columns: year, citations_received, pan_african_share_pct, items_covered
+    Query param: ?institution=<short_name>
+    """
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        data = analytics.get_citation_velocity(institution)
+        series = data.get("by_year", [])
+        share = data.get("pan_african_share_pct")
+        covered = data.get("pan_african_share_items", 0)
+
+        def gen():
+            yield [
+                "Year",
+                "Citations Received",
+                "Pan-African Share %",
+                "Items Covered (pan-African)",
+            ]
+            for row in series:
+                yield [
+                    row["year"],
+                    row["citations"],
+                    share if share is not None else "",
+                    covered,
+                ]
+
+        return csv_response(gen(), "citation_velocity.csv")
+    except Exception as e:
+        logger.error(f"citations_velocity_csv: {e}")
+        return api_error(str(e))
 
 
 @app.route("/api/citations/update/<int:item_id>", methods=["POST"])
@@ -1233,20 +1309,16 @@ def linguistic_diversity_index():
     return jsonify(analytics.get_linguistic_diversity_index())
 
 
-@app.route("/api/analytics/patent-velocity")
-def patent_velocity():
-    return jsonify(analytics.get_patent_velocity())
-
-
-@app.route("/api/analytics/docid-coverage")
-def docid_coverage():
-    return jsonify(analytics.get_docid_coverage())
-
-
 @app.route("/api/analytics/special-collections")
 def special_collections():
     institution = request.args.get("institution", None)
     return jsonify(analytics.get_special_collections_metrics(institution=institution))
+
+
+@app.route("/api/analytics/special-collections/overview")
+def special_collections_overview():
+    institution = request.args.get("institution", None)
+    return jsonify(analytics.get_special_collections_overview(institution=institution))
 
 
 @app.route("/api/analytics/special-collections/export.csv")
@@ -1271,77 +1343,454 @@ def export_special_collections_csv():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/analytics/au-charter-alignment")
-def au_charter_alignment():
-    """
-    Score the repository against all 9 AU Charter for African Cultural Renaissance targets.
-    Returns per-target count, compliance rate, top matched papers, and metadata.
-    Query params: ?institution=unilag (optional)
-    """
+# ── Framework Alignment endpoints (AU charters / Agenda 2063 / blocs) ────────
+# Scores are precomputed at ingest / by scripts/backfill_alignment.py and read
+# from alignment_aggregates — these endpoints never score at request time.
+
+
+def _resolve_inst_name():
+    institution = request.args.get("institution", "").strip().lower()
+    return analytics._resolve_institution_name(institution) if institution else None
+
+
+def _alignment_top_papers(session, top_item_ids, framework, pillar):
+    """Evidence chips: resolve top item ids to titles + matched keywords."""
+    from uraas.services.alignment_engine import get_alignment
+
+    ids = [int(i) for i in (top_item_ids or "").split(",") if i]
+    papers = []
+    for item in session.query(Item).filter(Item.id.in_(ids)).all():
+        pdata = (
+            get_alignment(item).get(framework, {}).get("pillars", {}).get(pillar, {})
+        )
+        papers.append(
+            {
+                "id": item.id,
+                "title": item.title or "Untitled",
+                "score": pdata.get("score", 0),
+                "matched_keywords": pdata.get("matched_keywords", [])[:4],
+            }
+        )
+    papers.sort(key=lambda p: -p["score"])
+    return papers
+
+
+@app.route("/api/alignment/frameworks")
+def alignment_frameworks():
+    """All frameworks + pillar metadata for the selector UI."""
+    from uraas.config.alignment_frameworks import FRAMEWORK_GROUPS, FRAMEWORKS
+    from uraas.services.alignment_engine import scoring_mode
+
+    frameworks = [
+        {
+            "key": fkey,
+            "name": f["name"],
+            "type": f["type"],
+            "year": f.get("year"),
+            "color": f.get("color", "#3b82f6"),
+            "pillars": [
+                {"key": pk, "name": p["name"], "description": p["description"]}
+                for pk, p in f["pillars"].items()
+            ],
+        }
+        for fkey, f in FRAMEWORKS.items()
+    ]
+    return api_ok(
+        {"frameworks": frameworks, "groups": FRAMEWORK_GROUPS, "mode": scoring_mode()}
+    )
+
+
+@app.route("/api/alignment/profile")
+def alignment_profile():
+    """Radar-chart profile for one framework: per-pillar avg score + evidence."""
+    from uraas.config.alignment_frameworks import FRAMEWORKS, GAP_THRESHOLD
+    from uraas.database import AlignmentAggregate
+    from uraas.services.narratives import narrate
+
+    framework = request.args.get("framework", "agenda2063")
+    if framework not in FRAMEWORKS:
+        return api_error(f"Unknown framework: {framework}", 400)
+    inst_name = _resolve_inst_name()
+
+    cache_key = f"align_profile_{framework}_{inst_name or 'all'}"
+    cached = analytics_cache.get(cache_key)
+    if cached:
+        return jsonify(cached)
+
     session = SessionLocal()
     try:
-        from uraas.utils.ai_classifier import AU_CHARTER_TARGETS, classify_au_targets
-
-        institution = request.args.get("institution", "").strip().lower()
-        from uraas.analytics.engine import analytics as _analytics
-
-        inst_name = (
-            _analytics._resolve_institution_name(institution) if institution else None
-        )
-
-        query = session.query(Item)
-        if inst_name:
-            query = query.filter(Item.institution.ilike(f"%{inst_name}%"))
-        items = query.all()
-        total = len(items)
-
-        # Aggregate per-target scores
-        target_results = {
-            num: {"count": 0, "top_papers": []} for num in AU_CHARTER_TARGETS
+        fdef = FRAMEWORKS[framework]
+        rows = {
+            r.pillar: r
+            for r in session.query(AlignmentAggregate)
+            .filter_by(institution=inst_name or "", framework=framework)
+            .all()
         }
-
-        for item in items:
-            results = classify_au_targets(
-                item.title or "", item.abstract or "", item.dc_subject or ""
-            )
-            for r in results:
-                n = r["target_number"]
-                target_results[n]["count"] += 1
-                if len(target_results[n]["top_papers"]) < 3:
-                    target_results[n]["top_papers"].append(
-                        {
-                            "id": item.id,
-                            "title": item.title or "Untitled",
-                            "matched_keywords": r["matched_keywords"][:4],
-                        }
-                    )
-
-        output = []
-        for num, defn in AU_CHARTER_TARGETS.items():
-            count = target_results[num]["count"]
-            output.append(
+        pillars = []
+        for pkey, pdef in fdef["pillars"].items():
+            r = rows.get(pkey)
+            avg = r.avg_score if r else 0.0
+            pillars.append(
                 {
-                    "target_number": num,
-                    "target_name": defn["name"],
-                    "count": count,
-                    "compliance_rate": round(count / total * 100, 1) if total else 0,
-                    "top_papers": target_results[num]["top_papers"],
-                    "total_papers": total,
+                    "key": pkey,
+                    "name": pdef["name"],
+                    "avg_score": avg,
+                    "paper_count": r.paper_count if r else 0,
+                    "is_gap": avg < GAP_THRESHOLD,
+                    "top_papers": (
+                        _alignment_top_papers(session, r.top_item_ids, framework, pkey)
+                        if r
+                        else []
+                    ),
                 }
             )
 
-        return jsonify(
-            {
-                "targets": output,
-                "total_papers_analyzed": total,
-                "institution_filter": inst_name or "All Institutions",
-            }
+        scores = [p["avg_score"] for p in pillars]
+        top = max(pillars, key=lambda p: p["avg_score"]) if pillars else None
+        data = {
+            "framework": framework,
+            "framework_name": fdef["name"],
+            "color": fdef.get("color", "#3b82f6"),
+            "institution": inst_name or "All Institutions",
+            "pillars": pillars,
+            "overall_score": round(sum(scores) / len(scores), 1) if scores else 0,
+            "gap_threshold": GAP_THRESHOLD,
+        }
+        narrative = (
+            narrate(
+                "alignment_profile",
+                institution=inst_name or "The repository",
+                top_pillar=top["name"],
+                top_score=top["avg_score"],
+                top_count=top["paper_count"],
+                gap_count=sum(1 for p in pillars if p["is_gap"]),
+                pillar_count=len(pillars),
+                threshold=GAP_THRESHOLD,
+            )
+            if top
+            else ""
         )
+        resp = api_ok(data, narrative=narrative, methodology_key="alignment_score")
+        analytics_cache.set(cache_key, resp.get_json(), ttl=1800)
+        return resp
     except Exception as e:
-        logger.error(f"au_charter_alignment: {e}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"alignment_profile: {e}")
+        return api_error(str(e))
     finally:
         session.close()
+
+
+@app.route("/api/alignment/matrix")
+def alignment_matrix():
+    """Heatmap cells: every (framework, pillar) avg score for one institution."""
+    from uraas.config.alignment_frameworks import FRAMEWORKS
+    from uraas.database import AlignmentAggregate
+
+    inst_name = _resolve_inst_name()
+    cache_key = f"align_matrix_{inst_name or 'all'}"
+    cached = analytics_cache.get(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    session = SessionLocal()
+    try:
+        rows = (
+            session.query(AlignmentAggregate)
+            .filter_by(institution=inst_name or "")
+            .all()
+        )
+        scored = {(r.framework, r.pillar): r for r in rows}
+        cells = []
+        for fkey, f in FRAMEWORKS.items():
+            for pkey, pdef in f["pillars"].items():
+                r = scored.get((fkey, pkey))
+                cells.append(
+                    {
+                        "framework": fkey,
+                        "framework_name": f["name"],
+                        "pillar": pkey,
+                        "pillar_name": pdef["name"],
+                        "avg_score": r.avg_score if r else 0.0,
+                        "paper_count": r.paper_count if r else 0,
+                    }
+                )
+        data = {
+            "institution": inst_name or "All Institutions",
+            "frameworks": [
+                {"key": k, "name": f["name"], "color": f.get("color")}
+                for k, f in FRAMEWORKS.items()
+            ],
+            "cells": cells,
+        }
+        resp = api_ok(data, methodology_key="alignment_score")
+        analytics_cache.set(cache_key, resp.get_json(), ttl=1800)
+        return resp
+    except Exception as e:
+        logger.error(f"alignment_matrix: {e}")
+        return api_error(str(e))
+    finally:
+        session.close()
+
+
+@app.route("/api/alignment/gaps")
+def alignment_gaps():
+    """Research Gap Radar: pillars below threshold, ascending by score."""
+    from uraas.config.alignment_frameworks import FRAMEWORKS, GAP_THRESHOLD
+    from uraas.database import AlignmentAggregate
+    from uraas.services.narratives import narrate
+
+    inst_name = _resolve_inst_name()
+    try:
+        threshold = float(request.args.get("threshold", GAP_THRESHOLD))
+    except ValueError:
+        threshold = GAP_THRESHOLD
+
+    session = SessionLocal()
+    try:
+        rows = {
+            (r.framework, r.pillar): r
+            for r in session.query(AlignmentAggregate)
+            .filter_by(institution=inst_name or "")
+            .all()
+        }
+        gaps = []
+        for fkey, f in FRAMEWORKS.items():
+            for pkey, pdef in f["pillars"].items():
+                r = rows.get((fkey, pkey))
+                avg = r.avg_score if r else 0.0
+                if avg < threshold:
+                    gaps.append(
+                        {
+                            "framework": fkey,
+                            "framework_name": f["name"],
+                            "pillar": pkey,
+                            "pillar_name": pdef["name"],
+                            "avg_score": avg,
+                            "paper_count": r.paper_count if r else 0,
+                        }
+                    )
+        gaps.sort(key=lambda g: g["avg_score"])
+        worst = gaps[0] if gaps else None
+        narrative = (
+            narrate(
+                "alignment_gaps",
+                gap_count=len(gaps),
+                framework_count=len({g["framework"] for g in gaps}),
+                worst_pillar=worst["pillar_name"],
+                worst_framework=worst["framework_name"],
+                worst_score=worst["avg_score"],
+            )
+            if worst
+            else ""
+        )
+        return api_ok(
+            {
+                "gaps": gaps,
+                "threshold": threshold,
+                "institution": inst_name or "All Institutions",
+            },
+            narrative=narrative,
+            methodology_key="alignment_gap",
+        )
+    except Exception as e:
+        logger.error(f"alignment_gaps: {e}")
+        return api_error(str(e))
+    finally:
+        session.close()
+
+
+@app.route("/api/alignment/export.csv")
+def alignment_export_csv():
+    """CSV of the full alignment matrix for the selected institution."""
+    from uraas.config.alignment_frameworks import FRAMEWORKS
+    from uraas.database import AlignmentAggregate
+
+    inst_name = _resolve_inst_name()
+    session = SessionLocal()
+    try:
+        rows = {
+            (r.framework, r.pillar): r
+            for r in session.query(AlignmentAggregate)
+            .filter_by(institution=inst_name or "")
+            .all()
+        }
+
+        def generate():
+            yield ["Framework", "Pillar", "Avg Score (0-100)", "Aligned Papers"]
+            for fkey, f in FRAMEWORKS.items():
+                for pkey, pdef in f["pillars"].items():
+                    r = rows.get((fkey, pkey))
+                    yield [
+                        f["name"],
+                        pdef["name"],
+                        r.avg_score if r else 0.0,
+                        r.paper_count if r else 0,
+                    ]
+
+        return csv_response(generate(), "alignment_matrix.csv")
+    except Exception as e:
+        logger.error(f"alignment_export_csv: {e}")
+        return api_error(str(e))
+    finally:
+        session.close()
+
+
+# ── Intra-African collaboration endpoints ─────────────────────────────────────
+
+
+@app.route("/api/collaboration/overview")
+def collaboration_overview():
+    """Intra-African Collaboration Index + benchmark context."""
+    from uraas.services.narratives import narrate
+
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        data = analytics.get_collaboration_overview(institution)
+        partners = data.get("top_partner_countries", [])
+        narrative = narrate(
+            "intra_african" if partners else "intra_african_no_partner",
+            pct=data.get("intra_african_pct", 0),
+            ratio=data.get("ratio_vs_baseline", 0),
+            baseline=data.get("baseline_pct", 8.4),
+            top_partner=partners[0]["name"] if partners else "",
+        )
+        return api_ok(
+            data,
+            narrative=narrative,
+            methodology_key="intra_african_collaboration",
+        )
+    except Exception as e:
+        logger.error(f"collaboration_overview: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/collaboration/matrix")
+def collaboration_matrix():
+    """African country-pair co-publication matrix."""
+    from uraas.services.narratives import narrate
+
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        data = analytics.get_country_pair_matrix(institution)
+        top = data["pairs"][0] if data["pairs"] else None
+        narrative = (
+            narrate(
+                "country_pairs",
+                pair_count=len(data["pairs"]),
+                country_a=top["source_name"],
+                country_b=top["target_name"],
+                count=top["count"],
+            )
+            if top
+            else ""
+        )
+        return api_ok(data, narrative=narrative, methodology_key="country_pair_matrix")
+    except Exception as e:
+        logger.error(f"collaboration_matrix: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/collaboration/countries")
+def collaboration_countries():
+    """Per-country paper counts for the Africa choropleth."""
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        return api_ok(
+            {"countries": analytics.get_country_aggregates(institution)},
+            methodology_key="intra_african_collaboration",
+        )
+    except Exception as e:
+        logger.error(f"collaboration_countries: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/collaboration/arcs")
+def collaboration_arcs():
+    """GeoJSON great-circle arcs for the collaboration map (bare GeoJSON)."""
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        return jsonify(analytics.get_collaboration_arcs(institution))
+    except Exception as e:
+        logger.error(f"collaboration_arcs: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/collaboration/network")
+def collaboration_network():
+    """Author collaboration network with Louvain communities + centrality."""
+    try:
+        author = request.args.get("author", "").strip() or None
+        limit = min(int(request.args.get("limit", 30)), 100)
+        return api_ok(analytics.get_author_network(author, limit))
+    except Exception as e:
+        logger.error(f"collaboration_network: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/citations/velocity")
+def citations_velocity():
+    """Repository citation velocity + Pan-African citation share."""
+    from uraas.services.narratives import narrate
+
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        data = analytics.get_citation_velocity(institution)
+        series = data.get("by_year", [])
+        recent = series[-1]["citations"] if series else 0
+        parts = []
+        if series:
+            parts.append(
+                narrate(
+                    "citation_velocity",
+                    recent_rate=recent,
+                    avg_first2y=data.get("avg_first2y", 0),
+                )
+            )
+        if data.get("pan_african_share_pct") is not None:
+            parts.append(
+                narrate(
+                    "pan_african_share",
+                    share=data["pan_african_share_pct"],
+                    covered=data.get("pan_african_share_items", 0),
+                )
+            )
+        return api_ok(
+            data,
+            narrative=" ".join(p for p in parts if p),
+            methodology_key="citation_velocity",
+        )
+    except Exception as e:
+        logger.error(f"citations_velocity: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/collaboration/export.csv")
+def collaboration_export_csv():
+    """CSV export — ?view=matrix (default) or ?view=countries."""
+    try:
+        institution = request.args.get("institution", "").strip().lower() or None
+        view = request.args.get("view", "matrix")
+        if view == "countries":
+            rows_data = analytics.get_country_aggregates(institution)
+
+            def gen_countries():
+                yield ["Country", "ISO2", "Papers", "Intra-African Papers"]
+                for r in rows_data:
+                    yield [r["name"], r["code"], r["papers"], r["intra_african"]]
+
+            return csv_response(gen_countries(), "collaboration_countries.csv")
+
+        matrix = analytics.get_country_pair_matrix(institution)
+
+        def gen_matrix():
+            yield ["Country A", "Country B", "Co-publications"]
+            for p in matrix["pairs"]:
+                yield [p["source_name"], p["target_name"], p["count"]]
+
+        return csv_response(gen_matrix(), "collaboration_matrix.csv")
+    except Exception as e:
+        logger.error(f"collaboration_export_csv: {e}")
+        return api_error(str(e))
 
 
 @app.route("/api/analytics/staff-directory")
@@ -1403,73 +1852,60 @@ def staff_directory():
     return jsonify(result)
 
 
-#  DocID stats
-
-
-@app.route("/api/docid/stats")
-def docid_stats():
-    session = SessionLocal()
-    try:
-        total = session.query(Item).count()
-        with_docid = session.query(Item).filter(Item.docid.isnot(None)).count()
-        return jsonify(
-            {
-                "total_docid_papers": with_docid,
-                "docid_coverage": round(with_docid / total * 100, 1) if total else 0,
-            }
-        )
-    finally:
-        session.close()
-
-
 #  Export
 
 
 @app.route("/api/export/papers.csv")
 def export_csv():
-    session = SessionLocal()
-    try:
-        items = session.query(Item).order_by(desc(Item.created_at)).all()
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
+    """Streaming CSV of every paper (yield_per avoids loading all rows)."""
+    from sqlalchemy.orm import selectinload
+
+    def generate():
+        session = SessionLocal()
+        try:
+            yield [
                 "ID",
-                "DocID",
                 "Title",
                 "Authors",
                 "DOI",
+                "ARK",
+                "DocID",
                 "Year",
                 "Faculty",
                 "Open Access",
                 "Source",
             ]
-        )
-        for i in items:
-            authors = "; ".join(a.name for a in i.authors)
-            faculty = i.collections[0].community.name if i.collections else ""
-            year = i.publication_date.year if i.publication_date else ""
-            writer.writerow(
-                [
+            # selectinload (not joinedload) is required with yield_per — joined
+            # eager loads against collections need row-uniquing, which yield_per
+            # forbids.
+            q = (
+                session.query(Item)
+                .options(
+                    selectinload(Item.authors),
+                    selectinload(Item.collections).selectinload(Collection.community),
+                )
+                .order_by(desc(Item.created_at))
+            )
+            for i in q.yield_per(200):
+                authors = "; ".join(a.name for a in i.authors)
+                faculty = i.collections[0].community.name if i.collections else ""
+                year = i.publication_date.year if i.publication_date else ""
+                yield [
                     i.id,
-                    i.docid or "",
                     i.title or "",
                     authors,
                     i.doi or "",
+                    i.ark or "",
+                    i.docid or "",
                     year,
                     faculty,
                     "Yes" if "openAccess" in (i.dc_rights or "") else "No",
                     i.source_repository or "",
                 ]
-            )
-        output.seek(0)
-        return Response(
-            output.getvalue(),
-            mimetype="text/csv",
-            headers={"Content-Disposition": "attachment; filename=uraas_papers.csv"},
-        )
-    finally:
-        session.close()
+        finally:
+            session.close()
+
+    return csv_response(generate(), "uraas_papers.csv")
 
 
 @app.route("/api/export/papers.bibtex")
@@ -1593,125 +2029,67 @@ def crawler_status():
     return jsonify({"status": "running" if running else "idle"})
 
 
-@app.route("/api/docid-crawler/start", methods=["POST"])
-def start_docid_crawler():
-    global docid_crawler_process
-    with docid_crawler_lock:
-        if docid_crawler_process and docid_crawler_process.poll() is None:
-            return (
-                jsonify(
-                    {"status": "error", "message": "DocID crawler already running"}
-                ),
-                400,
-            )
-        data = request.get_json() or {}
-        target = min(max(int(data.get("target", 50)), 1), 200)
-        try:
-            project_root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            # Note: We are currently using the multi-institution crawler as the base for all crawls
-            # If crawl_unilag_repository.py is missing, we use crawl_multi_institution.py --institutions unilag
-            script_path = os.path.join(
-                project_root, "scripts", "crawl_multi_institution.py"
-            )
-
-            process = subprocess.Popen(
-                [
-                    __import__("sys").executable,
-                    script_path,
-                    "--target",
-                    str(target),
-                    "--institutions",
-                    "unilag",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=1,
-            )
-            docid_crawler_process = process
-            thread = threading.Thread(
-                target=docid_crawler_monitor, args=(process,), daemon=True
-            )
-            thread.start()
-            return jsonify(
-                {
-                    "status": "success",
-                    "message": f"DocID crawler started  target {target} papers",
-                }
-            )
-        except FileNotFoundError:
-            return (
-                jsonify(
-                    {"status": "error", "message": "DocID crawler script not found"}
-                ),
-                500,
-            )
-        except Exception as e:
-            logger.error("start_docid_crawler: %s", e)
-            return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route("/api/docid-crawler/stop", methods=["POST"])
-def stop_docid_crawler():
-    global docid_crawler_process
-    with docid_crawler_lock:
-        if docid_crawler_process and docid_crawler_process.poll() is None:
-            docid_crawler_process.terminate()
-            docid_crawler_process = None
-            return jsonify({"status": "success", "message": "DocID crawler stopped"})
-        return jsonify({"status": "warning", "message": "No DocID crawler running"})
-
-
-@app.route("/api/docid-crawler/status")
-def docid_crawler_status():
-    with docid_crawler_lock:
-        running = (
-            docid_crawler_process is not None and docid_crawler_process.poll() is None
-        )
-    return jsonify({"status": "running" if running else "idle"})
-
-
 #  Health Check Endpoint for Render
 
 
 @app.route("/health")
 def health_check():
+    """Render readiness probe (Phase 8 enhanced).
+
+    Checks: DB connectivity + latency, disk space, analytics cache, methodology.
+    Returns 200 if all checks pass, 503 if any critical check fails.
     """
-    Health check endpoint for Render monitoring.
-    Returns 200 if operational, 503 if critical services are down.
-    """
+    import time
     from datetime import datetime
 
     from sqlalchemy import text
+    from uraas.config.methodology import METHODOLOGY
 
+    t_start = time.monotonic()
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
+        "version": os.getenv("RENDER_GIT_COMMIT", "dev")[:8],
         "checks": {},
     }
 
-    # Check database connectivity
+    # DB check (with latency)
+    t0 = time.monotonic()
     try:
         session = SessionLocal()
         session.execute(text("SELECT 1"))
         session.close()
-        health_status["checks"]["database"] = "ok"
+        health_status["checks"]["database"] = {
+            "status": "ok",
+            "latency_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
     except Exception as e:
-        health_status["checks"]["database"] = f"error: {str(e)}"
+        health_status["checks"]["database"] = {"status": f"error: {str(e)}"}
         health_status["status"] = "unhealthy"
         logger.error(f"Database health check failed: {str(e)}")
 
-    # Check disk space on persistent volume
+    # Analytics cache probe
+    try:
+        analytics_cache.get("__health__")
+        health_status["checks"]["cache"] = {"status": "ok"}
+    except Exception as e:
+        health_status["checks"]["cache"] = {"status": f"error: {str(e)}"}
+
+    # Methodology sanity
+    health_status["checks"]["methodology"] = {
+        "status": "ok",
+        "metric_count": len(METHODOLOGY),
+    }
+
+    # Disk space check on persistent volume
     try:
         storage_path = config.STORAGE_PATH
         if os.path.exists(storage_path):
             import shutil
-
             stat = shutil.disk_usage(storage_path)
             free_gb = stat.free / (1024**3)
             health_status["checks"]["disk_space_gb"] = round(free_gb, 2)
-            if free_gb < 1:  # Less than 1GB free
+            if free_gb < 1:
                 health_status["status"] = "unhealthy"
                 health_status["checks"]["disk_space"] = "critical"
         else:
@@ -1719,7 +2097,7 @@ def health_check():
     except Exception as e:
         health_status["checks"]["disk_space"] = f"error: {str(e)}"
 
-    # Return appropriate status code
+    health_status["response_ms"] = round((time.monotonic() - t_start) * 1000, 1)
     status_code = 200 if health_status["status"] == "healthy" else 503
     return jsonify(health_status), status_code
 
@@ -1880,6 +2258,28 @@ def internal_error(error):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Internal server error"}), 500
     return jsonify({"error": "Internal server error"}), 500
+
+
+# Phase 8: /api/version endpoint
+
+
+@app.route("/api/version")
+def api_version():
+    """Version manifest — commit hash + phase badges for the dashboard UI."""
+    return jsonify(
+        {
+            "version": os.getenv("RENDER_GIT_COMMIT", "dev")[:8],
+            "env": "production" if os.getenv("RENDER") else "development",
+            "phases_completed": [
+                "P4_citation_velocity",
+                "P5_ark_pids",
+                "P6_credibility",
+                "P7_cleanup",
+                "P8_render_prep",
+            ],
+        }
+    )
+
 
 
 #  Run

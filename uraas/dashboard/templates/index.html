@@ -9,8 +9,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_version('css/style.css') }}">
 </head>
 <body>
 
@@ -109,10 +111,6 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       Analytics
     </button>
-    <button class="tab-btn" id="tab-btn-comparator" onclick="switchTab('comparator',this)">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-      Comparator
-    </button>
     <span class="ml-2 text-xs self-center" style="color:var(--text-muted)">Press 1–5 or / to navigate</span>
   </div>
 
@@ -124,23 +122,17 @@
       <div class="surface rounded-2xl p-6">
         <p class="section-label">Mining Control</p>
         <div class="mb-4">
-          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Select Institution</label>
-          <select id="crawler-institution" class="w-full mb-3" style="font-size:13px">
-            <optgroup label="🇳🇬 Nigeria">
-              <option value="unilag">University of Lagos (UNILAG)</option>
-              <option value="covenant">Covenant University</option>
-              <option value="ui">University of Ibadan (UI)</option>
-            </optgroup>
-            <optgroup label="🌍 Africa">
-              <option value="uct">University of Cape Town (UCT)</option>
-              <option value="stellenbosch">Stellenbosch University</option>
-              <option value="nairobi">University of Nairobi</option>
-              <option value="makerere">Makerere University</option>
-              <option value="ghana">University of Ghana</option>
-              <option value="addisababa">Addis Ababa University</option>
-              <option value="knust">KNUST Ghana</option>
-            </optgroup>
+          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Region</label>
+          <select id="crawler-region" class="w-full mb-3" style="font-size:13px" onchange="onCrawlerRegionChange()">
+            <option value="">All Regions</option>
+            <option value="North Africa">North Africa</option>
+            <option value="West Africa">West Africa</option>
+            <option value="East Africa">East Africa</option>
+            <option value="Southern Africa">Southern Africa</option>
+            <option value="Central Africa">Central Africa</option>
           </select>
+          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Select Institution</label>
+          <select id="crawler-institution" class="w-full mb-3" style="font-size:13px"></select>
           <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">TargetPapers (1–250)</label>
           <input type="number" id="target-count" min="1" max="250" value="20"/>
           
@@ -167,68 +159,6 @@
         </div>
         <div id="terminal-log" class="rounded-xl p-3 overflow-y-auto text-xs mono space-y-0.5" style="background:var(--terminal-bg);color:var(--terminal-text);height:11rem">
           <div style="color:#334155">// Crawler idle. Press Start Mining to begin...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- DocID Section -->
-    <div class="surface rounded-2xl p-6 mt-5">
-      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div>
-          <p class="section-label mb-1"> DocID™ Repository Crawler</p>
-          <p class="text-xs" style="color:var(--text-muted)">Crawl UNILAG's institutional repository · Generate Africa PID Alliance DocID™ identifiers</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <span id="docid-badge" class="text-xs px-3 py-1 rounded-full font-semibold border" style="background:var(--badge-idle-bg);color:var(--badge-idle-text);border-color:var(--input-border)">●Idle</span>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="docid-toggle" onchange="toggleDocIDCrawler()" class="w-4 h-4" style="accent-color:var(--accent)"/>
-            <span class="text-xs font-semibold" style="color:var(--text)">Enable DocID™</span>
-          </label>
-        </div>
-      </div>
-      <div id="docid-crawler-panel" class="hidden">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label class="block text-xs mb-1.5" style="color:var(--text-dim)">TargetPapers (1–200)</label>
-            <input type="number" id="docid-target-count" min="1" max="200" value="50"/>
-            <p class="text-xs mt-1.5" style="color:var(--text-muted)">Source: ir.unilag.edu.ng</p>
-          </div>
-          <div class="rounded-xl p-4 flex items-center justify-around" style="background:var(--input-bg)">
-            <div class="text-center">
-              <p class="text-xs" style="color:var(--text-muted)">DocIDPapers</p>
-              <p id="docid-count" class="text-2xl font-bold " style="color:var(--accent)">—</p>
-            </div>
-            <div class="text-center">
-              <p class="text-xs" style="color:var(--text-muted)">Coverage</p>
-              <p id="docid-coverage" class="text-2xl font-bold " style="color:#10b981">—</p>
-            </div>
-          </div>
-          <div class="rounded-xl p-4" style="background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2)">
-            <p class="text-xs font-bold mb-1" style="color:var(--accent)">Africa PID Alliance DocID™</p>
-            <p class="text-xs" style="color:var(--text-muted)">Format: <span class="mono">20.500.14351/[hash]</span></p>
-            <p class="text-xs mt-1" style="color:var(--text-muted)">Ensures long-term discoverability for African research outputs and indigenous knowledge.</p>
-          </div>
-        </div>
-        <div class="flex gap-2 flex-wrap mb-4">
-          <button id="btn-docid-start" onclick="startDocIDCrawler()" class="btn-primary">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Start DocID™ Crawler
-          </button>
-          <button id="btn-docid-stop" onclick="stopDocIDCrawler()" class="btn-danger hidden">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
-            Stop
-          </button>
-          <button onclick="refreshDocIDStats()" class="btn-ghost text-xs">Refresh Stats</button>
-        </div>
-        <div class="progress-bar" id="docid-crawler-progress"><div class="progress-bar-inner"></div></div>
-        <div class="mt-4">
-          <div class="flex items-center justify-between mb-2">
-            <p class="section-label mb-0">DocID™Live Feed</p>
-            <button onclick="clearTerm('docid-terminal-log')" class="btn-ghost text-xs">Clear</button>
-          </div>
-          <div id="docid-terminal-log" class="rounded-xl p-3 overflow-y-auto text-xs mono space-y-0.5" style="background:var(--terminal-bg);color:var(--terminal-text);height:10rem">
-            <div style="color:#334155">// DocID™ crawler idle...</div>
-          </div>
         </div>
       </div>
     </div>
@@ -384,13 +314,10 @@
     <div class="flex items-center justify-between gap-4 mb-5 pb-1" style="border-bottom:1px solid var(--border)">
       <div class="flex gap-1 overflow-x-auto flex-1">
         <button class="tab-btn text-xs" id="atab-btn-overview" onclick="switchAtab('overview',this)">Special Collections Overview</button>
-        <button class="tab-btn text-xs" id="atab-btn-au" onclick="switchAtab('au',this)">AU Charter</button>
-        <button class="tab-btn text-xs" id="atab-btn-network" onclick="switchAtab('network',this)">Network</button>
-        <button class="tab-btn text-xs" id="atab-btn-compare" onclick="switchAtab('compare',this)">Compare</button>
-        <button class="tab-btn text-xs" id="atab-btn-lecturer" onclick="switchAtab('lecturer',this)">Lecturer</button>
+        <button class="tab-btn text-xs" id="atab-btn-au" onclick="switchAtab('au',this)">Charter Alignment</button>
+        <button class="tab-btn text-xs" id="atab-btn-collab" onclick="switchAtab('collab',this)">Collaboration</button>
         <button class="tab-btn text-xs" id="atab-btn-language" onclick="switchAtab('language',this)">Language</button>
         <button class="tab-btn text-xs" id="atab-btn-special" onclick="switchAtab('special',this)">Special Collections</button>
-        <button class="tab-btn text-xs" id="atab-btn-staff" onclick="switchAtab('staff',this)">Staff Directory</button>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
         <label for="global-institution-select" class="text-xs" style="color:var(--text-muted)">Filter:</label>
@@ -512,83 +439,88 @@
 
 
 
-    <!--  AU CHARTER TARGETS  -->
+    <!--  CHARTER ALIGNMENT & GAP ANALYSIS  -->
     <div id="atab-au" class="atab-content hidden">
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 class="text-xl font-bold mb-1" style="color:var(--text)">African Union Charter for African Cultural Renaissance — 9 Targets</h2>
-          <p class="text-sm" style="color:var(--text-muted)">Repository alignment scored against all 9 AU Charter targets. Each target is matched using AI keyword classification over paper titles, abstracts and subject tags.</p>
+          <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Charter Alignment &amp; Gap Analysis <span id="align-mode-badge" class="text-xs font-normal align-middle"></span></h2>
+          <p class="text-sm" style="color:var(--text-muted)">Research output mapped to AU charters, Agenda 2063 aspirations and regional frameworks. Hybrid semantic + keyword scoring; matched keywords shown as auditable evidence.</p>
         </div>
-        <a href="/api/analytics/au-charter-alignment" target="_blank" class="btn-ghost text-xs flex-shrink-0">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          JSON Export
-        </a>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <select id="align-framework-select" onchange="loadAlignmentTab()" style="font-size:12px;padding:4px 28px 4px 10px;width:280px;height:28px"></select>
+          <a href="/api/alignment/export.csv" id="align-csv-link" class="btn-ghost text-xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            CSV
+          </a>
+        </div>
       </div>
-      <div id="au-loading" class="flex items-center gap-3 py-10 justify-center">
+      <div id="align-loading" class="flex items-center gap-3 py-10 justify-center">
         <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
-        <p class="text-sm" style="color:var(--text-muted)">Scoring AU Charter alignment...</p>
+        <p class="text-sm" style="color:var(--text-muted)">Loading alignment profile...</p>
       </div>
-      <div id="au-content" class="hidden">
-        <div class="grid grid-cols-1 gap-3 mb-4" id="au-summary-cards"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3" id="au-targets-grid"></div>
-      </div>
-    </div>
-
-    <!--  NETWORK  -->
-    <div id="atab-network" class="atab-content hidden">
-      <div class="surface rounded-2xl p-5">
-        <p class="section-label">Research CollaborationNetwork</p>
-        <p class="text-xs mb-3" style="color:var(--text-muted)">Search a UNILAG researcher to visualize their collaboration graph. Click nodes to explore collaborator networks.</p>
-        <div class="relative mb-3">
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
-          <input type="text" id="network-search-input" placeholder="Enter researcher name..." oninput="debNetSearch()" style="padding-left:36px"/>
-        </div>
-        <div id="network-suggestions" class="flex flex-wrap gap-2 mb-4"></div>
-        <div id="network-result" class="hidden">
-          <div class="flex justify-between items-center mb-3">
-            <p class="text-sm font-semibold" id="network-researcher-name" style="color:var(--text)"></p>
-            <button onclick="downloadNetData()" class="btn-ghost text-xs">Download CSV</button>
+      <div id="align-content" class="hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Alignment Profile <span class="info-icon" data-method="alignment_score">&#9432;</span></p>
+            <div style="position:relative;height:340px"><canvas id="chart-align-radar"></canvas></div>
+            <p id="align-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
           </div>
-          <div id="network-graph-container" style="height:420px;position:relative;border-radius:14px;overflow:hidden;background:var(--terminal-bg);border:1px solid var(--border)">
-            <svg id="network-svg"></svg>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Research Gap Radar <span class="info-icon" data-method="alignment_gap">&#9432;</span></p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">Framework pillars where measured output falls below the gap threshold — candidates for future funding and research directives.</p>
+            <div id="align-gaps" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
+            <p id="gaps-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
           </div>
-          <div id="network-table" class="mt-4"></div>
+        </div>
+        <div class="surface rounded-2xl p-5 mb-5">
+          <p class="section-label">Pillar Detail &amp; Evidence</p>
+          <div id="align-pillars" class="grid grid-cols-1 lg:grid-cols-3 gap-3"></div>
+        </div>
+        <div class="surface rounded-2xl p-5">
+          <p class="section-label">Full Alignment Matrix — All Frameworks</p>
+          <div id="align-matrix" class="overflow-x-auto"></div>
         </div>
       </div>
     </div>
 
-    <!--  COMPARE  -->
-    <div id="atab-compare" class="atab-content hidden">
-      <div class="surface rounded-2xl p-5 mb-5">
-        <p class="section-label">Faculty Comparison</p>
-        <div class="flex gap-3 flex-wrap mb-4">
-          <select id="cmp-faculty-a" style="width:auto"><option value="">Faculty A</option></select>
-          <select id="cmp-faculty-b" style="width:auto"><option value="">Faculty B</option></select>
-          <select id="cmp-faculty-c" style="width:auto"><option value="">Faculty C (optional)</option></select>
-          <button class="btn-primary" style="font-size:12px;padding:7px 16px" onclick="runFacComparison()">Compare</button>
-        </div>
-        <div id="faculty-comparison-result"></div>
+    <!--  COLLABORATION (Intra-African networks & map)  -->
+    <div id="atab-collab" class="atab-content hidden">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Intra-African Collaboration</h2>
+        <p class="text-sm" style="color:var(--text-muted)">Continental co-authorship networks — measuring South-South knowledge ecosystems rather than North-export prestige.</p>
       </div>
-      <div class="surface rounded-2xl p-5">
-        <p class="section-label">Department Breakdown</p>
-        <div class="flex gap-3 mb-4">
-          <select id="dept-cmp-faculty" style="width:auto"><option value="">Select Faculty</option></select>
-          <button class="btn-primary" style="font-size:12px;padding:7px 16px" onclick="runDeptComparison()">Show Departments</button>
-        </div>
-        <canvas id="chart-dept-compare" height="250"></canvas>
+      <div id="collab-loading" class="flex items-center gap-3 py-10 justify-center">
+        <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
+        <p class="text-sm" style="color:var(--text-muted)">Loading collaboration data...</p>
       </div>
-    </div>
-
-    <!--  LECTURER  -->
-    <div id="atab-lecturer" class="atab-content hidden">
-      <div class="surface rounded-2xl p-5">
-        <p class="section-label">Lecturer / Researcher Profile</p>
-        <div class="relative mb-3">
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
-          <input type="text" id="lecturer-search-input" placeholder="Type lecturer name..." oninput="debAuthorSearch()" style="padding-left:36px"/>
+      <div id="collab-content" class="hidden">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="collab-cards"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5 lg:col-span-2">
+            <p class="section-label">Collaboration Map <span class="info-icon" data-method="intra_african_collaboration">&#9432;</span></p>
+            <div id="collab-map" style="height:420px;border-radius:12px;overflow:hidden"></div>
+            <p id="collab-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <div class="flex justify-between items-center mb-3">
+              <p class="section-label mb-0">Country Pairs <span class="info-icon" data-method="country_pair_matrix">&#9432;</span></p>
+              <a href="/api/collaboration/export.csv?view=matrix" class="btn-ghost text-xs">CSV</a>
+            </div>
+            <div id="collab-pairs" class="space-y-1.5 overflow-y-auto" style="max-height:400px"></div>
+          </div>
         </div>
-        <div id="author-suggestions" class="flex flex-wrap gap-2 mb-4"></div>
-        <div id="lecturer-profile-result"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Citation Velocity <span class="info-icon" data-method="citation_velocity">&#9432;</span></p>
+            <div style="position:relative;height:240px"><canvas id="chart-citation-velocity"></canvas></div>
+            <p id="velocity-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Author Collaboration Network</p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Communities detected with Louvain clustering; node size = centrality.</p>
+            <div id="collab-network" style="height:240px"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -597,7 +529,9 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div class="surface rounded-2xl p-5">
           <p class="section-label">Language &amp; CultureKeywords</p>
-          <canvas id="chart-language-kw" height="260"></canvas>
+          <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="chart-language-kw"></canvas>
+          </div>
         </div>
         <div class="surface rounded-2xl p-5">
           <p class="section-label">Language ResearchPapers</p>
@@ -624,226 +558,63 @@
         <p class="text-sm" style="color:var(--text-muted)">Analyzing special collections...</p>
       </div>
       <div id="special-content" class="hidden">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6" id="special-stats"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5" id="special-categories"></div>
+        <!-- KPI strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="sc-kpis"></div>
+
+        <!-- Thematic composition + co-occurrence -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Thematic Composition <span class="info-icon" data-method="sc_thematic_composition">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">How the collection distributes across the eight special-collection themes. Items can carry several themes.</p>
+            <div style="position:relative;height:280px"><canvas id="sc-themes-chart"></canvas></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Theme Co-occurrence <span class="info-icon" data-method="sc_cooccurrence">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Interdisciplinary overlap between themes — a chord view commercial tools omit.</p>
+            <div id="sc-chord" style="height:280px"></div>
+          </div>
+        </div>
+
+        <!-- Knowledge sovereignty + SDG alignment -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <div class="flex justify-between items-center mb-1">
+              <p class="section-label mb-0">Knowledge Sovereignty <span class="info-icon" data-method="sc_knowledge_sovereignty">&#9432;</span></p>
+              <span id="sc-intra-african" class="badge-oa"></span>
+            </div>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">African countries custodian to this scholarship — centring African authorship over North-export prestige.</p>
+            <div id="sc-countries" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">SDG &amp; Development Alignment <span class="info-icon" data-method="sc_sdg_alignment">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Which UN Sustainable Development Goals this cultural scholarship advances.</p>
+            <div style="position:relative;height:280px"><canvas id="sc-sdg-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Custodians + cultural lexicon -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Institutional Custodians</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">Institutions holding the most special-collection works.</p>
+            <div id="sc-custodians" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Cultural Lexicon</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">The vocabulary of the collection — most frequent extracted terms.</p>
+            <div id="sc-lexicon" class="flex flex-wrap gap-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+        </div>
+
+        <!-- Most influential works -->
+        <div class="surface rounded-2xl p-5">
+          <p class="section-label">Most Influential Works <span class="info-icon" data-method="sc_influential_works">&#9432;</span></p>
+          <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach — one signal among several, not the sole measure of value.</p>
+          <div id="sc-influential" class="space-y-1.5"></div>
+        </div>
       </div>
     </div>
-
-    <!--  STAFF DIRECTORY  -->
-    <div id="atab-staff" class="atab-content hidden">
-      <div class="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Staff Directory</h2>
-          <p class="text-sm" style="color:var(--text-muted)">Real staff members with departments and ORCID identifiers, harvested from OpenAlex and ORCID APIs.</p>
-        </div>
-        <select id="staff-inst-filter" onchange="loadStaffDirectory()" style="width:auto;font-size:12px;padding:5px 10px">
-          <option value="">All Institutions</option>
-          <optgroup label="North Africa">
-            <option value="cairo">Cairo University</option>
-            <option value="ainshams">Ain Shams University</option>
-            <option value="alexandria">Alexandria University</option>
-            <option value="tunis">Univ. Tunis El Manar</option>
-            <option value="mohammed5">Univ. Mohammed V Rabat</option>
-          </optgroup>
-          <optgroup label="West Africa">
-            <option value="unilag">UNILAG</option>
-            <option value="ui">Univ. Ibadan</option>
-            <option value="covenant">Covenant</option>
-            <option value="ghana">Univ. Ghana</option>
-            <option value="knust">KNUST</option>
-          </optgroup>
-          <optgroup label="East Africa">
-            <option value="nairobi">Nairobi</option>
-            <option value="makerere">Makerere</option>
-            <option value="addisababa">Addis Ababa</option>
-            <option value="dar">Dar es Salaam</option>
-            <option value="rwanda">Univ. Rwanda</option>
-          </optgroup>
-          <optgroup label="Southern Africa">
-            <option value="uct">UCT</option>
-            <option value="stellenbosch">Stellenbosch</option>
-            <option value="wits">Wits</option>
-            <option value="pretoria">Pretoria</option>
-            <option value="zimbabwe">Zimbabwe</option>
-          </optgroup>
-          <optgroup label="Central Africa">
-            <option value="yaounde">Yaoundé I</option>
-            <option value="kinshasa">Kinshasa</option>
-            <option value="agostinho">Agostinho Neto</option>
-            <option value="marien">Marien Ngouabi</option>
-            <option value="masuku">Sciences Masuku</option>
-          </optgroup>
-        </select>
-      </div>
-      <div id="staff-loading" class="flex items-center gap-3 py-10 justify-center">
-        <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
-        <p class="text-sm" style="color:var(--text-muted)">Loading staff directory...</p>
-      </div>
-      <div id="staff-content" class="hidden">
-        <div id="staff-institutions-list" class="space-y-6"></div>
-      </div>
-    </div>
-
-  </div><!-- end analytics tab -->
-
-  <!--  -->
-  <!-- TAB: COMPARATOR (Multi-Institution Comparison Engine) -->
-  <!--  -->
-  <div id="tab-comparator" class="tab-content hidden">
-    
-    <!-- Institution Selection -->
-    <div class="surface rounded-2xl p-6 mb-5">
-      <p class="section-label">Multi-Institution Comparator</p>
-      <p class="text-xs mb-4" style="color:var(--text-muted)">Compare up to 15 African institutions across strategic metrics. Browse all 52 African countries using the sub-region drill-down, or enter a ROR ID / name directly.</p>
-      
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4 border-b border-white/5 pb-4">
-        <div>
-          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Add Institution directly (ROR ID or Name)</label>
-          <div class="flex gap-2">
-            <input type="text" id="comp-institution-input" placeholder="e.g., https://ror.org/05rk03822 or University of Lagos" class="flex-1"/>
-            <button onclick="addInstitutionToComparison()" class="btn-primary">Add</button>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs mb-2 font-medium" style="color:var(--text-dim)">Browse All 52 African Countries by Sub-region</label>
-          <div class="grid grid-cols-3 gap-2">
-            <select id="comp-subregion-select" onchange="onSubregionChange()" style="font-size:12px">
-              <option value="">Sub-region...</option>
-              <option value="North Africa">North Africa</option>
-              <option value="West Africa">West Africa</option>
-              <option value="East Africa">East Africa</option>
-              <option value="Southern Africa">Southern Africa</option>
-              <option value="Central Africa">Central Africa</option>
-            </select>
-            <select id="comp-country-select" onchange="onCountryChange()" style="font-size:12px" disabled>
-              <option value="">Country...</option>
-            </select>
-            <select id="comp-university-select" onchange="onUniversityChange(this.value)" style="font-size:12px" disabled>
-              <option value="">University...</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Selected Institutions -->
-      <div id="comp-selected-institutions" class="flex gap-2 flex-wrap mb-4"></div>
-      
-      <div class="flex gap-2">
-        <button onclick="runComparison()" class="btn-primary" id="comp-run-btn">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-          Run Comparison
-        </button>
-        <button onclick="generateSenateReport()" class="btn-ghost">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          Generate Senate Report
-        </button>
-        <button onclick="clearComparison()" class="btn-ghost text-xs">Clear All</button>
-      </div>
-    </div>
-    
-    <!-- Comparison Results -->
-    <div id="comp-results" class="hidden">
-      
-      <!-- Executive Summary Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <div class="surface rounded-xl p-4">
-          <p class="section-label">Total Papers</p>
-          <p class="text-3xl font-bold" style="color:var(--accent)" id="comp-total-papers">-</p>
-        </div>
-        <div class="surface rounded-xl p-4">
-          <p class="section-label">Total Authors</p>
-          <p class="text-3xl font-bold" style="color:var(--text)" id="comp-total-authors">-</p>
-        </div>
-        <div class="surface rounded-xl p-4">
-          <p class="section-label">Avg OA Rate</p>
-          <p class="text-3xl font-bold" style="color:var(--success)" id="comp-avg-oa">-</p>
-        </div>
-        <div class="surface rounded-xl p-4">
-          <p class="section-label">Collaborations</p>
-          <p class="text-3xl font-bold" style="color:var(--warning)" id="comp-collaborations">-</p>
-        </div>
-      </div>
-      
-      <!-- Comparison Table -->
-      <div class="surface rounded-2xl p-6 mb-5">
-        <p class="section-label">Detailed Comparison Matrix</p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm" id="comp-table">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border)">
-                <th class="text-left py-3 px-2" style="color:var(--text-muted)">Institution</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">Papers</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">Authors</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">OA Rate</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">TK Rate</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">Patents</th>
-                <th class="text-right py-3 px-2" style="color:var(--text-muted)">Growth</th>
-              </tr>
-            </thead>
-            <tbody id="comp-table-body"></tbody>
-          </table>
-        </div>
-      </div>
-      
-      <!-- Rankings -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <div class="surface rounded-2xl p-6">
-          <p class="section-label">Research Volume Leader</p>
-          <div id="comp-rank-volume" class="space-y-2"></div>
-        </div>
-        <div class="surface rounded-2xl p-6">
-          <p class="section-label">Open Access Champion</p>
-          <div id="comp-rank-oa" class="space-y-2"></div>
-        </div>
-        <div class="surface rounded-2xl p-6">
-          <p class="section-label">Indigenous Knowledge Leader</p>
-          <div id="comp-rank-tk" class="space-y-2"></div>
-        </div>
-        <div class="surface rounded-2xl p-6">
-          <p class="section-label">Innovation Commercialization</p>
-          <div id="comp-rank-patent" class="space-y-2"></div>
-        </div>
-      </div>
-      
-      <!-- Strategic Insights -->
-      <div class="surface rounded-2xl p-6 mb-5">
-        <p class="section-label">Strategic Insights & Recommendations</p>
-        <div id="comp-insights" class="space-y-3"></div>
-      </div>
-      
-      <!-- Collaboration Mesh Visualization -->
-      <div class="surface rounded-2xl p-6 mb-5">
-        <p class="section-label">African Collaboration Network Map</p>
-        <p class="text-xs mb-4" style="color:var(--text-muted)">Interactive geographic network of selected universities projected over the African Continent. Nodes represent universities (colored by sub-region), and edges represent collaboration strength.</p>
-        <div id="comp-collaboration-viz" style="height:520px;position:relative;background:var(--input-bg);border-radius:12px;overflow:hidden">
-          <svg id="comp-map-svg" width="100%" height="100%"></svg>
-          <div id="comp-map-tooltip" class="absolute hidden surface border rounded-lg p-3 text-xs pointer-events-none" style="z-index:20;background:rgba(15,23,42,0.95);border-color:var(--border);color:var(--text)"></div>
-        </div>
-      </div>
-
-      <!-- Decolonial Report Generator -->
-      <div class="surface rounded-2xl p-6">
-        <p class="section-label">Decolonial &amp; Linguistic Report Generator</p>
-        <p class="text-xs mb-4" style="color:var(--text-muted)">Generate a detailed, evidence-based academic report assessing the University of Lagos (UNILAG) research contributions to African languages and decolonial science in West Africa compared to regional peers.</p>
-        <button onclick="generateDecolonialReport()" class="btn-primary mb-4" id="report-gen-btn">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-          Generate UNILAG Decolonial Report
-        </button>
-        
-        <div id="report-output-container" class="hidden surface p-6 rounded-xl border border-white/5 space-y-6" style="background:var(--terminal-bg)">
-          <div class="flex justify-between items-center border-b border-white/10 pb-3">
-            <h3 class="text-lg font-bold text-slate-100" id="report-title"></h3>
-            <button onclick="copyReportToClipboard()" class="btn-ghost text-xs">Copy Report</button>
-          </div>
-          
-          <div class="space-y-4 text-sm leading-relaxed text-slate-300" id="report-body">
-            <!-- Populated dynamically -->
-          </div>
-        </div>
-      </div>
-    </div><!-- end comp-results -->
-  </div><!-- end tab-comparator -->
 </div><!-- end main container -->
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version('js/app.js') }}"></script>
 </body>
 </html>
