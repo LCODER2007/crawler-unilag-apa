@@ -142,7 +142,7 @@ function withInst(url) {
 function applyGlobalInstitutionFilter() {
   invalidateCaches();
   const inst = getInstitutionParam();
-  const specCsv = $('special-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
+  const specCsv = $('sco-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
   
   if (currentAtab === 'overview') loadAnalyticsOverview();
 
@@ -158,17 +158,113 @@ function invalidateCaches() {
 }
 
 function loadAnalyticsOverview() {
-  loadFacultiesDropdown();
-  loadImpactCards();
-  reloadYearChart();
-  reloadFacultyChart();
-  reloadOAChart();
-  reloadAuthorsChart();
-  loadFacultyOAChart();
-  loadGrowthChart();
-  loadTimelineChart();
-  fetchOverview();
-  fetchRecentPapers();
+  // "Special Collections Overview" tab — SC-focused analytics redesign.
+  $('sco-loading').classList.remove('hidden');
+  $('sco-content').classList.add('hidden');
+  safeFetch(withInst('/api/analytics/special-collections/overview'), data => {
+    $('sco-loading').classList.add('hidden');
+    $('sco-content').classList.remove('hidden');
+
+    const k = data.kpis || {};
+    // ── KPI strip ──────────────────────────────────────────────────────
+    $('sco-kpis').innerHTML = `
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Special Items</p>
+        <p class="text-3xl font-bold" style="color:var(--accent)">${k.total_items || 0}</p>
+        <p class="text-xs mt-1 text-muted">${k.pct_of_repo || 0}% of repository</p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Themes Represented</p>
+        <p class="text-3xl font-bold" style="color:var(--success)">${k.themes_represented || 0}<span class="text-base text-muted">/8</span></p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Total Citations</p>
+        <p class="text-3xl font-bold" style="color:#8b5cf6">${(k.total_citations || 0).toLocaleString()}</p>
+      </div>
+      <div class="surface rounded-xl p-4 stat-card">
+        <p class="section-label">Intra-African Share</p>
+        <p class="text-3xl font-bold" style="color:var(--warning)">${k.intra_african_pct || 0}%</p>
+      </div>`;
+
+    // ── Thematic composition (doughnut) ────────────────────────────────
+    const themes = (data.themes || []).filter(t => t.count > 0);
+    destroyChart('sco-themes');
+    if (themes.length) {
+      charts['sco-themes'] = new Chart($('sco-themes-chart'), {
+        type: 'doughnut',
+        data: {
+          labels: themes.map(t => t.category),
+          datasets: [{
+            data: themes.map(t => t.count),
+            backgroundColor: themes.map((_, i) => COLORS[i % COLORS.length]),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '58%',
+          plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
+        },
+      });
+    }
+
+    // ── Theme co-occurrence (D3 chord) ─────────────────────────────────
+    renderScChord(data.co_occurrence || { labels: [], matrix: [] });
+
+    // ── Knowledge sovereignty ──────────────────────────────────────────
+    $('sco-intra-african').textContent = `${k.intra_african_pct || 0}% intra-African`;
+    $('sco-countries').innerHTML = scHbar(data.countries, 'name', 'papers', '#22c55e');
+
+    // ── SDG alignment (horizontal bar) ─────────────────────────────────
+    const sdgs = data.sdgs || [];
+    destroyChart('sco-sdg');
+    if (sdgs.length) {
+      charts['sco-sdg'] = new Chart($('sco-sdg-chart'), {
+        type: 'bar',
+        data: {
+          labels: sdgs.map(s => 'SDG ' + s.sdg),
+          datasets: [{
+            label: 'Works', data: sdgs.map(s => s.count),
+            backgroundColor: '#0ea5e9', borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
+    }
+
+    // ── Custodians ──────────────────────────────────────────────────────
+    $('sco-custodians').innerHTML = scHbar(data.custodians, 'institution', 'count', '#f59e0b');
+
+    // ── Cultural lexicon ────────────────────────────────────────────────
+    const kws = data.keywords || [];
+    if (kws.length) {
+      const maxKw = Math.max(1, ...kws.map(w => w.count));
+      $('sco-lexicon').innerHTML = kws.map(w => {
+        const size = 10 + Math.round((w.count / maxKw) * 8);
+        const op = 0.45 + (w.count / maxKw) * 0.55;
+        return `<span class="chip" style="font-size:${size}px;background:var(--accent-10);color:var(--accent);opacity:${op.toFixed(2)}">${esc(w.word)} <span style="opacity:0.6">${w.count}</span></span>`;
+      }).join('');
+    } else {
+      $('sco-lexicon').innerHTML = SC_EMPTY;
+    }
+
+    // ── Most influential works ──────────────────────────────────────────
+    const inf = data.influential || [];
+    $('sco-influential').innerHTML = inf.length ? inf.map((p, i) => `
+      <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
+        <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium truncate">${esc(p.title)}</p>
+          <div class="flex gap-1 mt-1 flex-wrap">
+            ${(p.categories || []).slice(0, 3).map(c => `<span class="chip text-[9px] py-0.5 px-1.5">${esc(c)}</span>`).join('')}
+          </div>
+        </div>
+        <span class="chip text-[10px] py-0.5 px-2 flex-shrink-0" style="background:#8b5cf618;color:#8b5cf6">${p.citations} cites</span>
+      </div>`).join('') : SC_EMPTY;
+  });
 }
 
 function loadFacultiesDropdown() {
@@ -1467,109 +1563,49 @@ function scHbar(items, labelKey, valueKey, color, onClick) {
 function loadSpecialTab() {
   $('special-loading').classList.remove('hidden');
   $('special-content').classList.add('hidden');
-  safeFetch(withInst('/api/analytics/special-collections/overview'), data => {
+  safeFetch(withInst('/api/analytics/special-collections'), data => {
     $('special-loading').classList.add('hidden');
     $('special-content').classList.remove('hidden');
 
-    const k = data.kpis || {};
-    // ── KPI strip ──────────────────────────────────────────────────────
-    $('sc-kpis').innerHTML = `
-      <div class="surface rounded-xl p-4 stat-card">
-        <p class="section-label">Special Items</p>
-        <p class="text-3xl font-bold" style="color:var(--accent)">${k.total_items || 0}</p>
-        <p class="text-xs mt-1 text-muted">${k.pct_of_repo || 0}% of repository</p>
+    // Stats
+    const statsEl = $('special-stats');
+    statsEl.innerHTML = `
+      <div class="surface rounded-xl p-5 stat-card">
+        <p class="section-label">Total Special Items</p>
+        <p class="text-3xl font-bold" style="color:var(--accent)">${data.total_special_items}</p>
+        <p class="text-xs mt-1 text-muted">${Math.round(data.total_special_items / data.total_repository_items * 100) || 0}% of repository</p>
       </div>
-      <div class="surface rounded-xl p-4 stat-card">
-        <p class="section-label">Themes Represented</p>
-        <p class="text-3xl font-bold" style="color:var(--success)">${k.themes_represented || 0}<span class="text-base text-muted">/8</span></p>
+      <div class="surface rounded-xl p-5 stat-card">
+        <p class="section-label">Categories Tracked</p>
+        <p class="text-3xl font-bold" style="color:var(--success)">${data.summary.length}</p>
       </div>
-      <div class="surface rounded-xl p-4 stat-card">
-        <p class="section-label">Total Citations</p>
-        <p class="text-3xl font-bold" style="color:#8b5cf6">${(k.total_citations || 0).toLocaleString()}</p>
+      <div class="surface rounded-xl p-5 stat-card">
+        <p class="section-label">Classification Status</p>
+        <p class="text-3xl font-bold" style="color:var(--warning)">OPTIMIZED</p>
       </div>
-      <div class="surface rounded-xl p-4 stat-card">
-        <p class="section-label">Intra-African Share</p>
-        <p class="text-3xl font-bold" style="color:var(--warning)">${k.intra_african_pct || 0}%</p>
-      </div>`;
+    `;
 
-    // ── Thematic composition (doughnut) ────────────────────────────────
-    const themes = (data.themes || []).filter(t => t.count > 0);
-    destroyChart('sc-themes');
-    if (themes.length) {
-      charts['sc-themes'] = new Chart($('sc-themes-chart'), {
-        type: 'doughnut',
-        data: {
-          labels: themes.map(t => t.category),
-          datasets: [{
-            data: themes.map(t => t.count),
-            backgroundColor: themes.map((_, i) => COLORS[i % COLORS.length]),
-            borderWidth: 0,
-          }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false, cutout: '58%',
-          plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } },
-        },
-      });
-    }
-
-    // ── Theme co-occurrence (D3 chord) ─────────────────────────────────
-    renderScChord(data.co_occurrence || { labels: [], matrix: [] });
-
-    // ── Knowledge sovereignty ──────────────────────────────────────────
-    $('sc-intra-african').textContent = `${k.intra_african_pct || 0}% intra-African`;
-    $('sc-countries').innerHTML = scHbar(data.countries, 'name', 'papers', '#22c55e');
-
-    // ── SDG alignment (horizontal bar) ─────────────────────────────────
-    const sdgs = data.sdgs || [];
-    destroyChart('sc-sdg');
-    if (sdgs.length) {
-      charts['sc-sdg'] = new Chart($('sc-sdg-chart'), {
-        type: 'bar',
-        data: {
-          labels: sdgs.map(s => 'SDG ' + s.sdg),
-          datasets: [{
-            label: 'Works', data: sdgs.map(s => s.count),
-            backgroundColor: '#0ea5e9', borderRadius: 4,
-          }],
-        },
-        options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
-        },
-      });
-    }
-
-    // ── Custodians ──────────────────────────────────────────────────────
-    $('sc-custodians').innerHTML = scHbar(data.custodians, 'institution', 'count', '#f59e0b');
-
-    // ── Cultural lexicon ────────────────────────────────────────────────
-    const kws = data.keywords || [];
-    if (kws.length) {
-      const maxKw = Math.max(1, ...kws.map(w => w.count));
-      $('sc-lexicon').innerHTML = kws.map(w => {
-        const size = 10 + Math.round((w.count / maxKw) * 8);
-        const op = 0.45 + (w.count / maxKw) * 0.55;
-        return `<span class="chip" style="font-size:${size}px;background:var(--accent-10);color:var(--accent);opacity:${op.toFixed(2)}">${esc(w.word)} <span style="opacity:0.6">${w.count}</span></span>`;
-      }).join('');
-    } else {
-      $('sc-lexicon').innerHTML = SC_EMPTY;
-    }
-
-    // ── Most influential works ──────────────────────────────────────────
-    const inf = data.influential || [];
-    $('sc-influential').innerHTML = inf.length ? inf.map((p, i) => `
-      <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
-        <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium truncate">${esc(p.title)}</p>
-          <div class="flex gap-1 mt-1 flex-wrap">
-            ${(p.categories || []).slice(0, 3).map(c => `<span class="chip text-[9px] py-0.5 px-1.5">${esc(c)}</span>`).join('')}
-          </div>
+    // Categories
+    const catEl = $('special-categories');
+    catEl.innerHTML = data.summary.map(cat => `
+      <div class="surface rounded-xl p-5">
+        <div class="flex justify-between items-center mb-4">
+          <p class="section-label mb-0">${esc(cat.category)}</p>
+          <span class="badge-oa">${cat.count} items</span>
         </div>
-        <span class="chip text-[10px] py-0.5 px-2 flex-shrink-0" style="background:#8b5cf618;color:#8b5cf6">${p.citations} cites</span>
-      </div>`).join('') : SC_EMPTY;
+        <div class="space-y-2" style="max-height:300px; overflow-y:auto">
+          ${cat.top_papers.map(p => `
+            <div class="row-hover p-2.5 rounded-lg cursor-pointer border-b" style="border-color:var(--border)" onclick="openPaperModal(${p.id})">
+              <p class="text-sm font-medium">${esc(p.title)}</p>
+              <div class="flex gap-1 mt-1 flex-wrap">
+                ${p.matches.slice(0, 3).map(m => `<span class="chip text-[10px] py-0.5 px-1.5">${esc(m)}</span>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+          ${cat.count === 0 ? '<p class="text-xs text-center py-4 text-muted">No items found.</p>' : ''}
+        </div>
+      </div>
+    `).join('');
   });
 }
 
@@ -1578,7 +1614,7 @@ function loadSpecialTab() {
  * Mirrors the D3 SVG approach used by loadCollabNetwork.
  */
 function renderScChord(data) {
-  const el = $('sc-chord');
+  const el = $('sco-chord');
   if (!el) return;
   el.innerHTML = '';
   const labels = data.labels || [], matrix = data.matrix || [];

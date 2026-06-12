@@ -364,75 +364,74 @@
 
     <!--  OVERVIEW  -->
     <div id="atab-overview" class="atab-content">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="impact-cards"></div>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <div class="surface rounded-2xl p-5 chart-wrapper" style="position:relative">
-          <div class="flex justify-between items-center mb-4">
-            <p class="section-label mb-0">Publications by Year</p>
-            <div class="flex items-center gap-2">
-              <select id="year-chart-mode" onchange="reloadYearChart()" style="width:auto;font-size:11px;padding:4px 10px">
-                <option value="total">Total</option>
-                <option value="stacked">By Faculty</option>
-              </select>
-              <button class="chart-fullscreen-btn" onclick="openFS('year','Publications by Year')" title="Fullscreen">
-                <svg class="w-3 h-3" style="color:var(--text-dim)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-              </button>
-            </div>
-          </div>
-          <canvas id="chart-year" height="200"></canvas>
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Special Collections Overview: African Literature &amp; Indigenous Knowledge</h2>
+          <p class="text-sm" style="color:var(--text-muted)">Analytics reframed for cultural-heritage scholarship — thematic, custodianship &amp; development lenses beyond citation prestige.</p>
         </div>
-        <div class="surface rounded-2xl p-5 chart-wrapper" style="position:relative">
-          <div class="flex justify-between items-center mb-4">
-            <p class="section-label mb-0">Papers by Faculty</p>
-            <div class="flex items-center gap-2">
-              <select id="faculty-chart-type" onchange="reloadFacultyChart()" style="width:auto;font-size:11px;padding:4px 10px">
-                <option value="bar">Bar</option>
-                <option value="doughnut">Doughnut</option>
-              </select>
-              <button class="chart-fullscreen-btn" onclick="openFS('faculty','Papers by Faculty')" title="Fullscreen">
-                <svg class="w-3 h-3" style="color:var(--text-dim)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-              </button>
-            </div>
-          </div>
-          <canvas id="chart-faculty" height="200"></canvas>
-        </div>
+        <a href="/api/analytics/special-collections/export.csv" id="sco-csv-btn" class="btn-ghost text-xs flex-shrink-0">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Download CSV
+        </a>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
-        <div class="surface rounded-2xl p-5">
-          <div class="flex justify-between items-center mb-4">
-            <p class="section-label mb-0">Access Type</p>
-            <select id="oa-chart-type" onchange="reloadOAChart()" style="width:auto;font-size:11px;padding:4px 10px">
-              <option value="doughnut">Doughnut</option>
-              <option value="bar">Bar</option>
-            </select>
-          </div>
-          <canvas id="chart-oa" height="200"></canvas>
-        </div>
-        <div class="surface rounded-2xl p-5 lg:col-span-2">
-          <div class="flex justify-between items-center mb-4">
-            <p class="section-label mb-0"> TopAuthors</p>
-            <select id="authors-limit" onchange="reloadAuthorsChart()" style="width:auto;font-size:11px;padding:4px 10px">
-              <option value="10">Top 10</option>
-              <option value="15" selected>Top 15</option>
-              <option value="20">Top 20</option>
-              <option value="30">Top 30</option>
-            </select>
-          </div>
-          <canvas id="chart-authors" height="200"></canvas>
-        </div>
+      <div id="sco-loading" class="flex items-center gap-3 py-10 justify-center">
+        <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
+        <p class="text-sm" style="color:var(--text-muted)">Analyzing special collections...</p>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div class="surface rounded-2xl p-5">
-          <p class="section-label">Open Access per Faculty</p>
-          <canvas id="chart-faculty-oa" height="200"></canvas>
+      <div id="sco-content" class="hidden">
+        <!-- KPI strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="sco-kpis"></div>
+
+        <!-- Thematic composition + co-occurrence -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Thematic Composition <span class="info-icon" data-method="sc_thematic_composition">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">How the collection distributes across the eight special-collection themes. Items can carry several themes.</p>
+            <div style="position:relative;height:280px"><canvas id="sco-themes-chart"></canvas></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Theme Co-occurrence <span class="info-icon" data-method="sc_cooccurrence">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Interdisciplinary overlap between themes — a chord view commercial tools omit.</p>
+            <div id="sco-chord" style="height:280px"></div>
+          </div>
         </div>
-        <div class="surface rounded-2xl p-5">
-          <p class="section-label">Harvest Growth</p>
-          <canvas id="chart-growth" height="200"></canvas>
+
+        <!-- Knowledge sovereignty + SDG alignment -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <div class="flex justify-between items-center mb-1">
+              <p class="section-label mb-0">Knowledge Sovereignty <span class="info-icon" data-method="sc_knowledge_sovereignty">&#9432;</span></p>
+              <span id="sco-intra-african" class="badge-oa"></span>
+            </div>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">African countries custodian to this scholarship — centring African authorship over North-export prestige.</p>
+            <div id="sco-countries" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">SDG &amp; Development Alignment <span class="info-icon" data-method="sc_sdg_alignment">&#9432;</span></p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Which UN Sustainable Development Goals this cultural scholarship advances.</p>
+            <div style="position:relative;height:280px"><canvas id="sco-sdg-chart"></canvas></div>
+          </div>
         </div>
+
+        <!-- Custodians + cultural lexicon -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Institutional Custodians</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">Institutions holding the most special-collection works.</p>
+            <div id="sco-custodians" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+          <div class="surface rounded-2xl p-5">
+            <p class="section-label">Cultural Lexicon</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">The vocabulary of the collection — most frequent extracted terms.</p>
+            <div id="sco-lexicon" class="flex flex-wrap gap-1.5 overflow-y-auto" style="max-height:300px"></div>
+          </div>
+        </div>
+
+        <!-- Most influential works -->
         <div class="surface rounded-2xl p-5">
-          <p class="section-label">Repository Timeline</p>
-          <canvas id="chart-timeline" height="200"></canvas>
+          <p class="section-label">Most Influential Works <span class="info-icon" data-method="sc_influential_works">&#9432;</span></p>
+          <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach — one signal among several, not the sole measure of value.</p>
+          <div id="sco-influential" class="space-y-1.5"></div>
         </div>
       </div>
     </div>
@@ -558,60 +557,8 @@
         <p class="text-sm" style="color:var(--text-muted)">Analyzing special collections...</p>
       </div>
       <div id="special-content" class="hidden">
-        <!-- KPI strip -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" id="sc-kpis"></div>
-
-        <!-- Thematic composition + co-occurrence -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">Thematic Composition <span class="info-icon" data-method="sc_thematic_composition">&#9432;</span></p>
-            <p class="text-xs mb-2" style="color:var(--text-muted)">How the collection distributes across the eight special-collection themes. Items can carry several themes.</p>
-            <div style="position:relative;height:280px"><canvas id="sc-themes-chart"></canvas></div>
-          </div>
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">Theme Co-occurrence <span class="info-icon" data-method="sc_cooccurrence">&#9432;</span></p>
-            <p class="text-xs mb-2" style="color:var(--text-muted)">Interdisciplinary overlap between themes — a chord view commercial tools omit.</p>
-            <div id="sc-chord" style="height:280px"></div>
-          </div>
-        </div>
-
-        <!-- Knowledge sovereignty + SDG alignment -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-          <div class="surface rounded-2xl p-5">
-            <div class="flex justify-between items-center mb-1">
-              <p class="section-label mb-0">Knowledge Sovereignty <span class="info-icon" data-method="sc_knowledge_sovereignty">&#9432;</span></p>
-              <span id="sc-intra-african" class="badge-oa"></span>
-            </div>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">African countries custodian to this scholarship — centring African authorship over North-export prestige.</p>
-            <div id="sc-countries" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
-          </div>
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">SDG &amp; Development Alignment <span class="info-icon" data-method="sc_sdg_alignment">&#9432;</span></p>
-            <p class="text-xs mb-2" style="color:var(--text-muted)">Which UN Sustainable Development Goals this cultural scholarship advances.</p>
-            <div style="position:relative;height:280px"><canvas id="sc-sdg-chart"></canvas></div>
-          </div>
-        </div>
-
-        <!-- Custodians + cultural lexicon -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">Institutional Custodians</p>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">Institutions holding the most special-collection works.</p>
-            <div id="sc-custodians" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
-          </div>
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">Cultural Lexicon</p>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">The vocabulary of the collection — most frequent extracted terms.</p>
-            <div id="sc-lexicon" class="flex flex-wrap gap-1.5 overflow-y-auto" style="max-height:300px"></div>
-          </div>
-        </div>
-
-        <!-- Most influential works -->
-        <div class="surface rounded-2xl p-5">
-          <p class="section-label">Most Influential Works <span class="info-icon" data-method="sc_influential_works">&#9432;</span></p>
-          <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach — one signal among several, not the sole measure of value.</p>
-          <div id="sc-influential" class="space-y-1.5"></div>
-        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6" id="special-stats"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5" id="special-categories"></div>
       </div>
     </div>
 </div><!-- end main container -->
