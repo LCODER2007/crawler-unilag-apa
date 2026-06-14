@@ -13,8 +13,9 @@ class ProductionConfig:
 
     @staticmethod
     def is_production() -> bool:
-        """Detect if running on Render."""
-        return os.getenv("RENDER") == "true"
+        """Detect production: Render, or any host flagged URAAS_ENV=production
+        (e.g. a self-managed UNILAG DMZ deployment behind nginx)."""
+        return os.getenv("RENDER") == "true" or os.getenv("URAAS_ENV") == "production"
 
     @staticmethod
     def apply_config(app) -> None:

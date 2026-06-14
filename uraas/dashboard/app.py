@@ -7,7 +7,17 @@ import re
 import subprocess
 import threading
 
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 from flask_socketio import SocketIO
 from sqlalchemy import desc, extract, func, or_
 
@@ -23,15 +33,82 @@ from uraas.database import (
     db_year,
     db_year_month,
 )
+from uraas.dashboard.auth import (
+    ADMIN,
+    check_credentials,
+    clamped_int,
+    current_role,
+)
 from uraas.dashboard.responses import api_error, api_ok, csv_response
+from uraas.production_config import ProductionConfig
 from uraas.utils.analytics_cache import analytics_cache
+
+# Fail fast on insecure production config before the app even binds.
+config.validate()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.DASHBOARD_SECRET_KEY
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Session-cookie hardening applies in every environment (SECURE only where TLS
+# is present, i.e. production) so it is not Render-specific.
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=config.is_production(),
+)
+# Apply production hardening at import time so it also runs under gunicorn
+# (the __main__ block below never executes in a WSGI deployment).
+ProductionConfig.apply_config(app)
+
+# SocketIO: restrict the handshake to an explicit origin allowlist (no wildcard).
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=config.cors_origins(),
+    async_mode="threading",
+)
 logger = logging.getLogger(__name__)
 crawler_process = None
 crawler_lock = threading.Lock()
+
+# ── Access control (fail-closed) ───────────────────────────────────────────
+# Everything is gated by default. Endpoints are authorised by *endpoint name*
+# (function name) so path params don't matter and any NEW route is protected
+# until explicitly listed here.
+#
+#   PUBLIC_ENDPOINTS — reachable without a session (login page, health, static).
+#   ADMIN_ENDPOINTS  — require role == admin (crawler, mutations, bulk exports,
+#                      staff directory PII). Everything else needs any login.
+PUBLIC_ENDPOINTS = {"login", "logout", "health_check", "api_version", "static"}
+ADMIN_ENDPOINTS = {
+    "start_crawler",
+    "stop_crawler",
+    "crawler_status",
+    "flush_analytics_cache",
+    "update_citations",
+    "bulk_update_citations",
+    "export_csv",
+    "export_bibtex",
+    "export_special_collections_csv",
+    "alignment_export_csv",
+    "collaboration_export_csv",
+    "citations_velocity_csv",
+    "staff_directory",
+}
+
+
+@app.before_request
+def _enforce_authentication():
+    endpoint = request.endpoint
+    # Unknown endpoint (404s) and explicit public routes pass through.
+    if endpoint is None or endpoint in PUBLIC_ENDPOINTS:
+        return None
+    role = current_role()
+    if not role:
+        if request.path.startswith("/api/"):
+            return jsonify({"status": "error", "message": "Authentication required"}), 401
+        return redirect(url_for("login", next=request.path))
+    if endpoint in ADMIN_ENDPOINTS and role != ADMIN:
+        return jsonify({"status": "error", "message": "Administrator access required"}), 403
+    return None
 
 
 def crawler_monitor(process):
@@ -92,6 +169,71 @@ def inject_asset_version():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        role = check_credentials(username, password)
+        if role:
+            session.clear()
+            session["role"] = role
+            session["user"] = username
+            session.permanent = True
+            dest = request.args.get("next") or url_for("index")
+            # Only allow same-site relative redirects (avoid open redirect).
+            if not dest.startswith("/"):
+                dest = url_for("index")
+            return redirect(dest)
+        # Generic message — no user enumeration.
+        return render_template("login.html", error="Invalid username or password"), 401
+    if current_role():
+        return redirect(url_for("index"))
+    return render_template("login.html", error=None)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.after_request
+def set_security_headers(response):
+    """Defense-in-depth headers. CSP allows only the CDNs the dashboard uses."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+        "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com "
+        "https://unpkg.com https://cdn.tailwindcss.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+        "https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https://api.openalex.org https://api.crossref.org "
+        "https://ror.org https://*.basemaps.cartocdn.com; "
+        "worker-src 'self' blob:; "
+        "frame-ancestors 'none'"
+    )
+    if config.is_production():
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
+@socketio.on("connect")
+def _socket_auth():
+    """Reject WebSocket connections that are not from a logged-in session,
+    so the crawler event stream can't be driven anonymously."""
+    if not session.get("role"):
+        return False
+    return True
 
 
 @app.route("/ark:/<naan>/<path:name>")
@@ -253,6 +395,16 @@ def get_paper(item_id):
         session.close()
 
 
+def _is_open_access(item, file_record) -> bool:
+    """Open-access when the item's rights say so OR the file is policy-Public."""
+    rights = (item.dc_rights or "").lower() if item else ""
+    if "openaccess" in rights.replace("/", "").replace("-", ""):
+        return True
+    if file_record and (file_record.access_policy or "").lower() == "public":
+        return True
+    return False
+
+
 @app.route("/api/papers/<int:item_id>/download")
 def download_paper(item_id):
     session = SessionLocal()
@@ -260,15 +412,45 @@ def download_paper(item_id):
         file_record = session.query(File).filter_by(item_id=item_id).first()
         if not file_record:
             return jsonify({"error": "PDF not found"}), 404
+        item = session.query(Item).filter_by(id=item_id).first()
+
+        # Copyright gate: viewers may only download verified open-access files;
+        # restricted items are admin-only (see PRIVACY_NOTICE / readiness doc).
+        if not _is_open_access(item, file_record) and current_role() != ADMIN:
+            return (
+                jsonify(
+                    {
+                        "error": "This item is not open access.",
+                        "message": (
+                            "Full text is restricted by the publisher's licence. "
+                            "Use the publisher or open-access link on the record."
+                        ),
+                    }
+                ),
+                403,
+            )
+
+        # Resolve and contain the path under the project/storage root so a stored
+        # path can never escape via traversal into arbitrary files.
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
         file_path = file_record.file_path
         if not os.path.isabs(file_path):
-            project_root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            file_path = os.path.normpath(os.path.join(project_root, file_path))
-        if not os.path.exists(file_path):
+            file_path = os.path.join(project_root, file_path)
+        real_path = os.path.realpath(file_path)
+        allowed_roots = [
+            os.path.realpath(project_root),
+            os.path.realpath(config.STORAGE_PATH),
+        ]
+        if not any(
+            os.path.commonpath([real_path, root]) == root for root in allowed_roots
+        ):
+            logger.warning("download_paper %s: path escape blocked: %s", item_id, real_path)
+            return jsonify({"error": "Access denied"}), 403
+        if not os.path.exists(real_path):
             return jsonify({"error": "PDF file missing from storage"}), 404
-        item = session.query(Item).filter_by(id=item_id).first()
+
         filename = (
             f"{item.title[:50]}.pdf" if item and item.title else f"paper_{item_id}.pdf"
         )
@@ -276,7 +458,7 @@ def download_paper(item_id):
             c for c in filename if c.isalnum() or c in (" ", "-", "_", ".")
         ).strip()
         return send_file(
-            file_path,
+            real_path,
             mimetype="application/pdf",
             as_attachment=True,
             download_name=filename,
@@ -406,7 +588,7 @@ def papers_by_faculty():
 
 @app.route("/api/analytics/top-authors")
 def top_authors_analytics():
-    limit = int(request.args.get("limit", 15))
+    limit = clamped_int("limit", 15, 1, 200)
     institution = request.args.get("institution")
     return jsonify(
         analytics.get_authors_by_papers(limit=limit, institution=institution)
@@ -421,7 +603,7 @@ def oa_breakdown():
 
 @app.route("/api/analytics/recent-papers")
 def recent_papers():
-    limit = min(int(request.args.get("limit", 10)), 50)
+    limit = clamped_int("limit", 10, 1, 50)
     session = SessionLocal()
     try:
         items = session.query(Item).order_by(desc(Item.created_at)).limit(limit).all()
@@ -591,7 +773,7 @@ def analytics_search():
     year_from = request.args.get("year_from", type=int)
     year_to = request.args.get("year_to", type=int)
     oa_only = request.args.get("oa_only", "").lower() == "true"
-    limit = min(int(request.args.get("limit", 50)), 200)
+    limit = clamped_int("limit", 50, 1, 200)
     session = SessionLocal()
     try:
         q_obj = session.query(Item)
@@ -691,7 +873,7 @@ def list_institutions():
 @app.route("/api/analytics/authors-search")
 def authors_search():
     q = request.args.get("q", "")
-    limit = int(request.args.get("limit", 10))
+    limit = clamped_int("limit", 10, 1, 100)
     institution = request.args.get("institution")
     session = SessionLocal()
     try:
@@ -725,7 +907,7 @@ def author_network():
 @app.route("/api/analytics/keyword-cloud")
 def keyword_cloud():
     institution = request.args.get("institution", None)
-    top_n = min(int(request.args.get("top_n", 60)), 150)
+    top_n = clamped_int("top_n", 60, 1, 150)
     return jsonify(analytics.get_keyword_cloud(top_n=top_n, institution=institution))
 
 
@@ -1220,7 +1402,7 @@ def bulk_update_citations():
     try:
         from uraas.services.citation_tracker import CitationTracker
 
-        limit = min(int(request.args.get("limit", 50)), 200)
+        limit = clamped_int("limit", 50, 1, 200)
         force = request.args.get("force", "false").lower() == "true"
         stats = CitationTracker.bulk_update_citations(limit=limit, force=force)
         return jsonify(stats)
@@ -1253,8 +1435,8 @@ def advanced_search():
         from uraas.services.advanced_search import SearchQuery
 
         query = request.args.get("q", "").strip()
-        limit = min(int(request.args.get("limit", 50)), 200)
-        offset = int(request.args.get("offset", 0))
+        limit = clamped_int("limit", 50, 1, 200)
+        offset = clamped_int("offset", 0, 0, 100000)
         sort_by = request.args.get(
             "sort", "relevance"
         )  # relevance, date, citations, title
@@ -1720,7 +1902,7 @@ def collaboration_network():
     """Author collaboration network with Louvain communities + centrality."""
     try:
         author = request.args.get("author", "").strip() or None
-        limit = min(int(request.args.get("limit", 30)), 100)
+        limit = clamped_int("limit", 30, 1, 100)
         return api_ok(analytics.get_author_network(author, limit))
     except Exception as e:
         logger.error(f"collaboration_network: {e}")
@@ -2269,7 +2451,7 @@ def api_version():
     return jsonify(
         {
             "version": os.getenv("RENDER_GIT_COMMIT", "dev")[:8],
-            "env": "production" if os.getenv("RENDER") else "development",
+            "env": "production" if config.is_production() else "development",
             "phases_completed": [
                 "P4_citation_velocity",
                 "P5_ark_pids",

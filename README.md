@@ -500,7 +500,13 @@ docker-compose up -d
 
 ## 📝 License
 
-[Add your license here]
+Licensed under the **Apache License 2.0** — see [LICENSE](LICENSE).
+
+## 🔒 Privacy & Data Protection
+
+URAAS processes already-published scholarly metadata in line with the Nigeria Data Protection Act
+2023. See the [Privacy Notice](PRIVACY_NOTICE.md) for the lawful basis, data handled, and how
+researchers can request access, correction, or removal of their data.
 
 ## 🤝 Contributing
 

@@ -67,7 +67,8 @@ class FacultyDirectorySpider(scrapy.Spider):
     name = "unilag_faculty_directory"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.5,
-        "ROBOTSTXT_OBEY": False,
+        # Honor robots.txt — the institution's machine-readable usage signal.
+        "ROBOTSTXT_OBEY": True,
         "RETRY_ENABLED": True,
         "RETRY_TIMES": 2,
         "LOG_LEVEL": "WARNING",

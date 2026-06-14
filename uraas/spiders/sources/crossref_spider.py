@@ -6,6 +6,7 @@ import scrapy
 # Add project root to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
+from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
 
@@ -14,6 +15,11 @@ class CrossrefSpider(scrapy.Spider):
     name = "crossref_multi"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.0,
+        # Crossref etiquette: identify the bot + a contact so we land in the
+        # "polite pool" (https://www.crossref.org/documentation/retrieve-metadata/rest-api/).
+        "USER_AGENT": (
+            f"URAAS/1.0 (+https://github.com; mailto:{config.OPENALEX_MAILTO})"
+        ),
     }
 
     SELECT_FIELDS = "DOI,title,abstract,author,issued,URL,link"
@@ -62,12 +68,14 @@ class CrossrefSpider(scrapy.Spider):
 
         encoded_name = urllib.parse.quote(self.institution_name)
         q = f"&query={urllib.parse.quote(query)}" if query else ""
+        mailto = urllib.parse.quote(config.OPENALEX_MAILTO)
         return (
             f"https://api.crossref.org/works"
             f"?query.affiliation={encoded_name}"
             f"{q}"
             f"&select={self.SELECT_FIELDS}"
             f"&rows=50&offset={offset}"
+            f"&mailto={mailto}"
         )
 
     def start_requests(self):

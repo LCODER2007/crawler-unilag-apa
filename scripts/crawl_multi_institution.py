@@ -37,7 +37,7 @@ def main():
         "--spider",
         type=str,
         default="openalex",
-        choices=["openalex", "crossref", "arxiv", "scholar", "orcid"],
+        choices=["openalex", "crossref", "arxiv", "orcid"],
         help="Spider to use for crawling",
     )
     parser.add_argument(
@@ -98,7 +98,6 @@ def main():
         "openalex": "uraas.spiders.sources.openalex_spider.OpenAlexSpider",
         "crossref": "uraas.spiders.sources.crossref_spider.CrossrefSpider",
         "arxiv": "uraas.spiders.sources.arxiv_spider.ArxivSpider",
-        "scholar": "uraas.spiders.sources.scholar_spider.ScholarSpider",
         "orcid": "uraas.spiders.sources.orcid_spider.ORCIDSpider",
     }
 
