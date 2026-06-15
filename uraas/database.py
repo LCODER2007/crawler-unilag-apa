@@ -19,6 +19,10 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from uraas.config import config
 
 
+# Cache the dialect at import time — URL cannot change at runtime.
+_IS_SQLITE: bool = (config.DATABASE_URL or "").lower().startswith("sqlite")
+
+
 def db_year(col):
     """Cross-dialect YEAR() extraction returning a string ('2024').
 
@@ -26,16 +30,14 @@ def db_year(col):
     was populated from ISO strings, so we use strftime there. Postgres
     rejects strftime, so we use extract(year).
     """
-    url = (config.DATABASE_URL or "").lower()
-    if url.startswith("sqlite"):
+    if _IS_SQLITE:
         return func.strftime("%Y", col)
     return cast(extract("year", col), SAString)
 
 
 def db_year_month(col):
     """Cross-dialect YEAR-MONTH ('2024-03')."""
-    url = (config.DATABASE_URL or "").lower()
-    if url.startswith("sqlite"):
+    if _IS_SQLITE:
         return func.strftime("%Y-%m", col)
     return func.to_char(col, "YYYY-MM")
 
@@ -192,6 +194,28 @@ class Item(Base):
     special_collection_score = Column(Float, default=0.0, index=True)
     special_collection_categories = Column(Text)
 
+    # ── Framework alignment (AU charters / Agenda 2063 / regional blocs) ─────
+    # JSON: {"banjul": {"overall": 42.1, "pillars": {"civil_political_rights":
+    #   {"score": 61.0, "semantic": 0.55, "keyword": 0.71,
+    #    "matched_keywords": ["human rights", ...]}}}, ...}
+    alignment_scores = Column(Text)
+    alignment_version = Column(Integer, default=0)
+
+    # ── Intra-African collaboration (from OpenAlex authorships) ──────────────
+    coauthor_countries = Column(Text)  # sorted ISO2 csv, e.g. "KE,NG,ZA"
+    african_country_count = Column(Integer, default=0)
+    is_intra_african = Column(Boolean, default=False, index=True)
+
+    # ── Citation velocity (OpenAlex counts_by_year) ──────────────────────────
+    openalex_id = Column(String(64))  # e.g. "W2741809807"
+    counts_by_year = Column(Text)  # JSON [{"year": 2023, "cited_by_count": 4}, ...]
+    cited_by_count = Column(Integer, default=0)
+    african_citation_share = Column(Float)  # 0-100; NULL = not yet computed
+
+    # ── ARK persistent identifier (Archival Resource Key) ────────────────────
+    ark = Column(String(128))  # e.g. "ark:/99999/u1x7kq2m9b4cz" (unique index below)
+    ark_assigned_at = Column(DateTime)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     authors = relationship("Author", secondary=item_authors, back_populates="items")
@@ -218,6 +242,44 @@ class File(Base):
     item = relationship("Item", back_populates="files")
 
 
+class ItemAffiliation(Base):
+    """One row per (item, institution) authorship affiliation from OpenAlex.
+
+    Feeds the country-pair collaboration matrix, the Africa choropleth and
+    institution-level collaboration networks.
+    """
+
+    __tablename__ = "item_affiliations"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(
+        Integer, ForeignKey("items.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    ror = Column(String(128), index=True)  # short form, e.g. "05rk03822"
+    institution_name = Column(String(255))
+    country_code = Column(String(2), index=True)  # ISO2 from OpenAlex
+    author_count = Column(Integer, default=1)  # authors at this institution on this paper
+
+
+class AlignmentAggregate(Base):
+    """Precomputed per-institution framework/pillar alignment averages.
+
+    Recomputed by scripts/backfill_alignment.py and the post-crawl hook;
+    read directly by the radar/matrix/gap endpoints.
+    """
+
+    __tablename__ = "alignment_aggregates"
+
+    id = Column(Integer, primary_key=True)
+    institution = Column(String(255), index=True)  # full name; "" = all institutions
+    framework = Column(String(64), index=True)  # e.g. "banjul", "agenda2063"
+    pillar = Column(String(64))  # pillar key
+    avg_score = Column(Float, default=0.0)
+    paper_count = Column(Integer, default=0)  # papers with pillar score >= threshold
+    top_item_ids = Column(Text)  # csv of top-5 item ids (evidence chips)
+    computed_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CrawlJob(Base):
     """Tracks crawler sessions for provenance and growth-rate charts."""
 
@@ -237,6 +299,12 @@ Index("ix_items_language", Item.language_code)
 Index("ix_items_content_type", Item.content_type)
 Index("ix_items_created_at", Item.created_at)
 Index("ix_authors_orcid", Author.orcid)
+Index("ux_items_ark", Item.ark, unique=True)
+Index(
+    "ix_item_aff_item_country",
+    ItemAffiliation.item_id,
+    ItemAffiliation.country_code,
+)
 
 
 # ── Engine & Session ──────────────────────────────────────────────────────────

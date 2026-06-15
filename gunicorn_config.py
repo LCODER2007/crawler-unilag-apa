@@ -14,8 +14,13 @@ bind = f"0.0.0.0:{port}"
 # Free tier: 2 workers, Starter tier: 4 workers
 workers = int(os.getenv("GUNICORN_WORKERS", "2"))
 
-# Worker class - eventlet for WebSocket support (Flask-SocketIO requirement)
-worker_class = "eventlet"
+# Worker class — must match Flask-SocketIO async_mode.
+# app.py uses async_mode="threading", so we use gthread (synchronous + threads).
+# Do NOT use eventlet or gevent here without also changing async_mode in SocketIO.
+worker_class = "gthread"
+
+# Threads per worker (for gthread worker_class)
+threads = 4
 
 # Worker connections
 worker_connections = 1000

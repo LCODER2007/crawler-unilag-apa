@@ -13,10 +13,9 @@ load_dotenv()
 
 
 class Config:
-    # Database
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL", "postgresql://uraas_user:uraas_pass@localhost:5432/uraas_db"
-    )
+    # Database — defaults to SQLite for local dev.
+    # In any PostgreSQL deployment, DATABASE_URL must be explicitly set as an env var.
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///uraas.db")
 
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

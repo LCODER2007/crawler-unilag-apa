@@ -28,3 +28,8 @@ senate.csv
 .netlify
 .pytest_cache/
 pytest_out*
+
+# Logs and temp files
+*.log
+test_write.txt
+dashboard.log

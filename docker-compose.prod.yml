@@ -67,7 +67,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/analytics/overview"]
+      # Uses the public /health endpoint — /api/analytics/overview requires auth and returns 401.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -98,47 +99,49 @@ services:
     networks:
       - uraas-network
 
-  # Celery Worker (for background tasks)
-  celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: uraas-celery-worker
-    command: celery -A uraas.tasks worker --loglevel=info --concurrency=4
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
-      STORAGE_PATH: /app/storage/pdfs
-    volumes:
-      - ./storage:/app/storage
-      - ./data:/app/data
-      - ./logs:/app/logs
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - uraas-network
-
-  # Celery Beat (for scheduled tasks)
-  celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: uraas-celery-beat
-    command: celery -A uraas.tasks beat --loglevel=info
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-    restart: unless-stopped
-    networks:
-      - uraas-network
+  # NOTE: Celery services are commented out — uraas.tasks does not yet exist and
+  # celery is not listed in requirements.txt. Uncomment only after implementing
+  # uraas/tasks.py and adding celery to requirements.txt.
+  #
+  # celery-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: uraas-celery-worker
+  #   command: celery -A uraas.tasks worker --loglevel=info --concurrency=4
+  #   environment:
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+  #     REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+  #     STORAGE_PATH: /app/storage/pdfs
+  #   volumes:
+  #     - ./storage:/app/storage
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks:
+  #     - uraas-network
+  #
+  # celery-beat:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: uraas-celery-beat
+  #   command: celery -A uraas.tasks beat --loglevel=info
+  #   environment:
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+  #     REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+  #   volumes:
+  #     - ./logs:/app/logs
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+  #   networks:
+  #     - uraas-network
 
 volumes:
   postgres_data:

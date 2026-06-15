@@ -20,6 +20,7 @@ from flask import (
 )
 from flask_socketio import SocketIO
 from sqlalchemy import desc, extract, func, or_
+from sqlalchemy.orm import selectinload
 
 from uraas.analytics.engine import analytics
 from uraas.config import config
@@ -183,8 +184,11 @@ def login():
             session["user"] = username
             session.permanent = True
             dest = request.args.get("next") or url_for("index")
-            # Only allow same-site relative redirects (avoid open redirect).
-            if not dest.startswith("/"):
+            # Prevent open redirect: reject any URL with a scheme or netloc
+            # (this blocks both http://evil.com AND //evil.com style redirects).
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(dest)
+            if _parsed.scheme or _parsed.netloc or not dest.startswith("/"):
                 dest = url_for("index")
             return redirect(dest)
         # Generic message — no user enumeration.
@@ -2136,6 +2140,12 @@ def start_crawler():
         data = request.get_json() or {}
         target = min(max(int(data.get("target", 20)), 1), 250)
         institution = data.get("institution", "unilag")
+        # Validate institution against registry before passing to subprocess.
+        if institution != "all":
+            from uraas.config.institutions import get_registry as _get_reg
+            _reg = _get_reg()
+            if not _reg.get(institution):
+                return jsonify({"status": "error", "message": f"Unknown institution: {institution}"}), 400
         # Default ON — heavy bias toward Special Collections in every crawl.
         boost_special = bool(data.get("boost_special", True))
         sc_only = bool(data.get("sc_only", False))
