@@ -5,22 +5,76 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt && playwright install --with-deps chromium && python scripts/init_db.py && mkdir -p storage/pdfs"
-    startCommand: "gunicorn -k eventlet -w 1 --timeout 120 --bind 0.0.0.0:$PORT uraas.dashboard.app:app"
+    # Build: install deps, download spaCy model, init DB, run any pending migrations
+    buildCommand: >
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python -m spacy download en_core_web_sm &&
+      playwright install --with-deps chromium &&
+      python scripts/init_db.py &&
+      python scripts/migrate_2026_upgrade.py &&
+      mkdir -p storage/pdfs
+    # Uses gunicorn_config.py (gthread workers, matching SocketIO async_mode=threading)
+    startCommand: "gunicorn --config gunicorn_config.py uraas.dashboard.app:app"
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+
+      # ── Database ──────────────────────────────────────────────────────────
       - key: DATABASE_URL
         fromDatabase:
           name: uraas-db
           property: connectionString
+
+      # ── Secrets (set manually in Render Dashboard → Environment) ─────────
+      # Generate DASHBOARD_SECRET_KEY:
+      #   python -c "import secrets; print(secrets.token_hex(32))"
       - key: DASHBOARD_SECRET_KEY
         generateValue: true
-      - key: STORAGE_PATH
-        value: "/opt/render/project/storage"
+
+      # Generate ADMIN_PASSWORD_HASH:
+      #   python -c "from werkzeug.security import generate_password_hash as g; print(g('YOUR_STRONG_PASSWORD'))"
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+
+      - key: ADMIN_USERNAME
+        value: "admin"
+
+      # Generate VIEWER_PASSWORD_HASH the same way. Leave empty to disable viewer login.
+      - key: VIEWER_PASSWORD_HASH
+        sync: false
+
+      - key: VIEWER_USERNAME
+        value: "viewer"
+
+      # ── Production flags ──────────────────────────────────────────────────
+      - key: URAAS_ENV
+        value: "production"
+
       - key: RENDER
         value: "true"
+
+      # ── Storage ───────────────────────────────────────────────────────────
+      - key: STORAGE_PATH
+        value: "/opt/render/project/storage"
+
+      # ── CORS (set to your actual UNILAG HTTPS domain) ─────────────────────
+      # Example: https://repository.unilag.edu.ng
+      - key: DASHBOARD_CORS_ORIGINS
+        sync: false
+
+      # ── AI / external APIs ────────────────────────────────────────────────
+      - key: HF_HOME
+        value: "/opt/render/project/storage/hf-cache"
+
+      - key: OPENALEX_API_KEY
+        sync: false
+
+      # ── ARK persistent identifiers ────────────────────────────────────────
+      - key: ARK_NAAN
+        value: "99999"
+
     disk:
       name: uraas-storage
       mountPath: /opt/render/project/storage

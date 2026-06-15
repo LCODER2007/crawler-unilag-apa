@@ -40,6 +40,8 @@ from uraas.dashboard.auth import (
     clamped_int,
     current_role,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from uraas.dashboard.responses import api_error, api_ok, csv_response
 from uraas.production_config import ProductionConfig
 from uraas.utils.analytics_cache import analytics_cache
@@ -69,6 +71,15 @@ socketio = SocketIO(
 logger = logging.getLogger(__name__)
 crawler_process = None
 crawler_lock = threading.Lock()
+
+# Rate limiter — in-memory storage (no Redis dep). Limits login to 10 attempts
+# per minute to prevent brute-force attacks on admin/viewer credentials.
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[],  # No global limit; only login is rate-limited.
+    storage_uri="memory://",
+)
 
 # ── Access control (fail-closed) ───────────────────────────────────────────
 # Everything is gated by default. Endpoints are authorised by *endpoint name*
@@ -173,6 +184,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"], error_message="Too many login attempts — wait 60 seconds.")
 def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()

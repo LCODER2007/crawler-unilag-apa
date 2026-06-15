@@ -69,6 +69,18 @@ class Config:
                     "ADMIN_PASSWORD_HASH must be set in production "
                     "(generate with werkzeug.security.generate_password_hash)."
                 )
+            # Warn if CORS origins haven't been tightened for production.
+            # SocketIO will restrict to localhost-only origins which breaks the
+            # live dashboard for remote users connecting to the UNILAG server.
+            if "localhost" in self.DASHBOARD_CORS_ORIGINS:
+                import warnings
+                warnings.warn(
+                    "DASHBOARD_CORS_ORIGINS still contains 'localhost' in production. "
+                    "Set DASHBOARD_CORS_ORIGINS to the actual UNILAG HTTPS domain "
+                    "(e.g. https://repository.unilag.edu.ng) in the environment.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
     def cors_origins(self) -> list:
         return [o.strip() for o in self.DASHBOARD_CORS_ORIGINS.split(",") if o.strip()]

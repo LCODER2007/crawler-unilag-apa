@@ -296,6 +296,12 @@ class URAASAnalyticsEngine:
             tree: Dict = {}
             seen: set = set()
 
+            # Batch-fetch all File records once to avoid an O(N) query per paper.
+            file_map: Dict[int, object] = {
+                row.item_id: row
+                for row in session.query(File).all()
+            }
+
             for comm in communities:
                 dept_map: Dict = {}
                 for coll in comm.collections:
@@ -316,7 +322,7 @@ class URAASAnalyticsEngine:
                     paper_list = []
                     for p in papers:
                         seen.add(p.id)
-                        f = session.query(File).filter_by(item_id=p.id).first()
+                        f = file_map.get(p.id)
                         paper_list.append(
                             {
                                 "id": p.id,
@@ -370,6 +376,7 @@ class URAASAnalyticsEngine:
             return {}
         finally:
             session.close()
+
 
     def get_publications_by_year(self, institution: Optional[str] = None) -> List[Dict]:
         inst_name = self._resolve_institution_name(institution)
