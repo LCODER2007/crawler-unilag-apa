@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/041y27r28",
+  "name": "Université de Douala",
+  "short_name": "Douala",
+  "country": "Cameroon",
+  "sub_region": "Central Africa",
+  "staff_file": "data/douala_staff.json",
+  "affiliation_patterns": [
+    "Université de Douala",
+    "Douala",
+    "Université de Douala Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

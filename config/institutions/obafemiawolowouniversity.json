@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/013pcr241",
+  "name": "Obafemi Awolowo University",
+  "short_name": "Obafemi Awolowo University",
+  "country": "Nigeria",
+  "sub_region": "West Africa",
+  "staff_file": "data/obafemi_awolowo_university_staff.json",
+  "affiliation_patterns": [
+    "Obafemi Awolowo University",
+    "Obafemi Awolowo University",
+    "Obafemi Awolowo University Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

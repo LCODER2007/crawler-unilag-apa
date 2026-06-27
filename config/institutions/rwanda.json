@@ -1,13 +1,13 @@
 {
   "ror": "https://ror.org/02yr01r27",
   "name": "University of Rwanda",
-  "short_name": "UR",
+  "short_name": "Rwanda",
   "country": "Rwanda",
   "sub_region": "East Africa",
-  "staff_file": "data/ur_staff.json",
+  "staff_file": "data/rwanda_staff.json",
   "affiliation_patterns": [
     "University of Rwanda",
-    "UR",
+    "Rwanda",
     "University of Rwanda Department"
   ],
   "faculties": [

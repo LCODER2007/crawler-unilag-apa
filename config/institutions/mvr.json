@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/03vpy3v17",
+  "name": "Université Mohammed V de Rabat",
+  "short_name": "MVR",
+  "country": "Morocco",
+  "sub_region": "North Africa",
+  "staff_file": "data/mvr_staff.json",
+  "affiliation_patterns": [
+    "Université Mohammed V de Rabat",
+    "MVR",
+    "Université Mohammed V de Rabat Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

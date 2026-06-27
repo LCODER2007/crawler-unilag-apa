@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/032p18087",
+  "name": "Mansoura University",
+  "short_name": "Mansoura University",
+  "country": "Egypt",
+  "sub_region": "North Africa",
+  "staff_file": "data/mansoura_university_staff.json",
+  "affiliation_patterns": [
+    "Mansoura University",
+    "Mansoura University",
+    "Mansoura University Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

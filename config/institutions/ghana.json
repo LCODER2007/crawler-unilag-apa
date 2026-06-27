@@ -1,26 +1,23 @@
 {
-  "ror": "https://ror.org/01r22mr83",
+  "ror": "https://ror.org/00zpy3v12",
   "name": "University of Ghana",
   "short_name": "Ghana",
   "country": "Ghana",
+  "sub_region": "West Africa",
   "staff_file": "data/ghana_staff.json",
   "affiliation_patterns": [
     "University of Ghana",
-    "Univ. Ghana",
-    "UG Legon",
-    "@ug.edu.gh",
-    "University of Ghana Legon",
-    "Legon University",
-    "UoG Ghana"
+    "Ghana",
+    "University of Ghana Department"
   ],
   "faculties": [
-    "College of Basic and Applied Sciences",
-    "College of Education",
-    "College of Health Sciences",
-    "College of Humanities",
-    "School of Engineering Sciences",
-    "School of Law",
-    "School of Business"
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,

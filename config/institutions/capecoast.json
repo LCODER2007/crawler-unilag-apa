@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/01es3v123",
+  "name": "University of Cape Coast",
+  "short_name": "Cape Coast",
+  "country": "Ghana",
+  "sub_region": "West Africa",
+  "staff_file": "data/cape_coast_staff.json",
+  "affiliation_patterns": [
+    "University of Cape Coast",
+    "Cape Coast",
+    "University of Cape Coast Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

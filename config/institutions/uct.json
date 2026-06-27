@@ -1,26 +1,23 @@
 {
-  "ror": "https://ror.org/03p74gp79",
+  "ror": "https://ror.org/017620319",
   "name": "University of Cape Town",
   "short_name": "UCT",
   "country": "South Africa",
+  "sub_region": "Southern Africa",
   "staff_file": "data/uct_staff.json",
   "affiliation_patterns": [
     "University of Cape Town",
     "UCT",
-    "Univ. Cape Town",
-    "@uct.ac.za",
-    "University of Cape Town, South Africa",
-    "UCT South Africa",
-    "Groote Schuur Hospital"
+    "University of Cape Town Department"
   ],
   "faculties": [
-    "Faculty of Commerce",
-    "Faculty of Engineering and the Built Environment",
-    "Faculty of Health Sciences",
-    "Faculty of Humanities",
-    "Faculty of Law",
-    "Faculty of Science",
-    "School of Education"
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,

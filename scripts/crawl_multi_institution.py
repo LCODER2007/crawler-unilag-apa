@@ -37,8 +37,23 @@ def main():
         "--spider",
         type=str,
         default="openalex",
-        choices=["openalex", "crossref", "arxiv", "orcid"],
+        choices=["openalex", "crossref", "arxiv", "orcid", "oai"],
         help="Spider to use for crawling",
+    )
+    parser.add_argument(
+        "--from-date",
+        dest="from_date",
+        type=str,
+        default=None,
+        help="OAI harvest lower bound YYYY-MM-DD (oai spider only; "
+        "defaults to a recent look-back window)",
+    )
+    parser.add_argument(
+        "--until-date",
+        dest="until_date",
+        type=str,
+        default=None,
+        help="OAI harvest upper bound YYYY-MM-DD (oai spider only; optional)",
     )
     parser.add_argument(
         "--clean",
@@ -99,6 +114,7 @@ def main():
         "crossref": "uraas.spiders.sources.crossref_spider.CrossrefSpider",
         "arxiv": "uraas.spiders.sources.arxiv_spider.ArxivSpider",
         "orcid": "uraas.spiders.sources.orcid_spider.ORCIDSpider",
+        "oai": "uraas.spiders.sources.oai_spider.OAISpider",
     }
 
     spider_class_path = spider_map.get(args.spider)
@@ -145,13 +161,24 @@ def main():
     for inst in valid_institutions:
         config = registry.get(inst)
         print(f"  -> {config.name}", flush=True)
-        process.crawl(
-            spider_class,
-            institution=inst,
-            target=args.target,
-            boost_special=args.boost_special,
-            sc_only=args.sc_only,
-        )
+        if args.spider == "oai":
+            # OAI harvester has its own knobs (date window); it does not take the
+            # Special-Collections boost/seed flags.
+            process.crawl(
+                spider_class,
+                institution=inst,
+                target=args.target,
+                from_date=args.from_date,
+                until_date=args.until_date,
+            )
+        else:
+            process.crawl(
+                spider_class,
+                institution=inst,
+                target=args.target,
+                boost_special=args.boost_special,
+                sc_only=args.sc_only,
+            )
 
     print(
         f"\nStarting crawl for {len(valid_institutions)} institution(s)...", flush=True

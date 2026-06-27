@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/02157p641",
+  "name": "Université de Sfax",
+  "short_name": "Sfax",
+  "country": "Tunisia",
+  "sub_region": "North Africa",
+  "staff_file": "data/sfax_staff.json",
+  "affiliation_patterns": [
+    "Université de Sfax",
+    "Sfax",
+    "Université de Sfax Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

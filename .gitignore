@@ -5,7 +5,10 @@ __pycache__/
 venv/
 .venv/
 env/
+# Secrets — ignore all .env variants (incl. .env.prod) but keep the template.
 .env
+.env.*
+!.env.example
 
 # Databases
 *.db
@@ -18,6 +21,9 @@ data/
 logs/
 exports.csv
 senate.csv
+
+# TLS certs / keys (self-signed dry-run certs, real certs)
+nginx/ssl/
 
 # IDEs
 .vscode/

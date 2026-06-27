@@ -1,13 +1,13 @@
 {
   "ror": "https://ror.org/05vzwad88",
   "name": "Université de Kinshasa",
-  "short_name": "UNIKIN",
+  "short_name": "Kinshasa",
   "country": "DR Congo",
   "sub_region": "Central Africa",
-  "staff_file": "data/unikin_staff.json",
+  "staff_file": "data/kinshasa_staff.json",
   "affiliation_patterns": [
     "Université de Kinshasa",
-    "UNIKIN",
+    "Kinshasa",
     "Université de Kinshasa Department"
   ],
   "faculties": [

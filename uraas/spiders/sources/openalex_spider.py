@@ -43,8 +43,8 @@ class OpenAlexSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
 
-        self.boost_special = True
-        self.sc_only = True
+        self.boost_special = False
+        self.sc_only = False
         registry = get_registry()
         self.institution_config = registry.get(institution)
         if not self.institution_config:
@@ -97,8 +97,7 @@ class OpenAlexSpider(scrapy.Spider):
         # only concepts.id is). We rely on free-text seeds; the in-pipeline classifier
         # then scores the actual hits.
         if self.boost_special:
-            # SC_OPENALEX_CONCEPTS kept as broad terms in case concept-id lookup is added later
-            seeds = set(SC_SEED_KEYWORDS) | set(SC_OPENALEX_CONCEPTS)
+            seeds = set(SC_SEED_KEYWORDS)
             for seed in sorted(seeds):
                 seed_q = seed.replace(" ", "%20")
                 filters = (
@@ -115,6 +114,8 @@ class OpenAlexSpider(scrapy.Spider):
                 )
 
     def parse(self, response):
+        assert self.institution_config is not None, "Institution config must be loaded"
+
         # Hard stop if we've already reached the global target
         if self._accepted >= self.target_limit:
             return
@@ -195,15 +196,25 @@ class OpenAlexSpider(scrapy.Spider):
                 self.logger.debug(f"Gate 3 FAIL (pattern mismatch): {title[:60]}")
                 continue
 
+            doi = work.get("doi", "")
+            abstract = self._reconstruct_abstract(
+                work.get("abstract_inverted_index", {})
+            )
+            concepts = work.get("concepts", [])
+            dc_subject = ", ".join(c.get("display_name", "") for c in concepts[:5] if c)
+
+            # ── Gate 4: AI Special Collections Decision Engine ────────────────
+            from uraas.services.sc_engine import is_special_collection
+            is_sc, sc_score, sc_cats = is_special_collection(title, abstract, dc_subject)
+            if not is_sc:
+                self.logger.debug(f"Gate 4 FAIL (AI rejected): {title[:60]}")
+                continue
+
             self._accepted += 1
             wave_accepted += 1
             if is_sc_wave:
                 self._sc_accepted += 1
 
-            doi = work.get("doi", "")
-            abstract = self._reconstruct_abstract(
-                work.get("abstract_inverted_index", {})
-            )
             pub_date = work.get("publication_date", "")
 
             pdf_url = None
@@ -220,7 +231,6 @@ class OpenAlexSpider(scrapy.Spider):
                 url = f"https://openalex.org/{work.get('id', '').replace('https://openalex.org/', '')}"
 
             # Extract SDG tags from concepts
-            concepts = work.get("concepts", [])
             sdg_tags = self._extract_sdg_from_concepts(concepts)
 
             yield {

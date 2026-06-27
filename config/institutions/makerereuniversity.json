@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/05vzwad88",
+  "name": "Makerere University",
+  "short_name": "Makerere University",
+  "country": "Uganda",
+  "sub_region": "East Africa",
+  "staff_file": "data/makerere_university_staff.json",
+  "affiliation_patterns": [
+    "Makerere University",
+    "Makerere University",
+    "Makerere University Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

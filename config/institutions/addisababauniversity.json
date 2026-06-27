@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/01py3v171",
+  "name": "Addis Ababa University",
+  "short_name": "Addis Ababa University",
+  "country": "Ethiopia",
+  "sub_region": "East Africa",
+  "staff_file": "data/addis_ababa_university_staff.json",
+  "affiliation_patterns": [
+    "Addis Ababa University",
+    "Addis Ababa University",
+    "Addis Ababa University Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

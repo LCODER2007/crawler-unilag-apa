@@ -1,0 +1,136 @@
+"""
+African country reference data (AU member states).
+
+- AFRICAN_ISO2: ISO 3166-1 alpha-2 codes used to classify OpenAlex
+  authorship country_code values as African.
+- COUNTRY_NAMES: ISO2 -> display name (matches Natural Earth admin-0 names
+  where possible so the choropleth join works both ways).
+- COUNTRY_CENTROIDS: ISO2 -> (lat, lon) display anchors for collaboration
+  arcs and map labels. Approximate visual centroids — chosen to sit inside
+  each country's land area, not geodetic centroids.
+"""
+
+COUNTRY_NAMES = {
+    "DZ": "Algeria",
+    "AO": "Angola",
+    "BJ": "Benin",
+    "BW": "Botswana",
+    "BF": "Burkina Faso",
+    "BI": "Burundi",
+    "CV": "Cabo Verde",
+    "CM": "Cameroon",
+    "CF": "Central African Republic",
+    "TD": "Chad",
+    "KM": "Comoros",
+    "CG": "Republic of the Congo",
+    "CD": "Democratic Republic of the Congo",
+    "CI": "Côte d'Ivoire",
+    "DJ": "Djibouti",
+    "EG": "Egypt",
+    "GQ": "Equatorial Guinea",
+    "ER": "Eritrea",
+    "SZ": "Eswatini",
+    "ET": "Ethiopia",
+    "GA": "Gabon",
+    "GM": "Gambia",
+    "GH": "Ghana",
+    "GN": "Guinea",
+    "GW": "Guinea-Bissau",
+    "KE": "Kenya",
+    "LS": "Lesotho",
+    "LR": "Liberia",
+    "LY": "Libya",
+    "MG": "Madagascar",
+    "MW": "Malawi",
+    "ML": "Mali",
+    "MR": "Mauritania",
+    "MU": "Mauritius",
+    "MA": "Morocco",
+    "MZ": "Mozambique",
+    "NA": "Namibia",
+    "NE": "Niger",
+    "NG": "Nigeria",
+    "RW": "Rwanda",
+    "ST": "São Tomé and Príncipe",
+    "SN": "Senegal",
+    "SC": "Seychelles",
+    "SL": "Sierra Leone",
+    "SO": "Somalia",
+    "ZA": "South Africa",
+    "SS": "South Sudan",
+    "SD": "Sudan",
+    "TZ": "Tanzania",
+    "TG": "Togo",
+    "TN": "Tunisia",
+    "UG": "Uganda",
+    "ZM": "Zambia",
+    "ZW": "Zimbabwe",
+    # AU member state via the Sahrawi Republic; Natural Earth has a geometry.
+    "EH": "Western Sahara",
+}
+
+AFRICAN_ISO2 = frozenset(COUNTRY_NAMES)
+
+# (lat, lon) — display anchors for arcs/labels.
+COUNTRY_CENTROIDS = {
+    "DZ": (28.0, 2.6),
+    "AO": (-12.3, 17.5),
+    "BJ": (9.6, 2.3),
+    "BW": (-22.2, 23.8),
+    "BF": (12.3, -1.7),
+    "BI": (-3.4, 29.9),
+    "CV": (15.1, -23.6),
+    "CM": (5.7, 12.7),
+    "CF": (6.6, 20.5),
+    "TD": (15.4, 18.7),
+    "KM": (-11.7, 43.3),
+    "CG": (-0.8, 15.2),
+    "CD": (-2.9, 23.6),
+    "CI": (7.6, -5.6),
+    "DJ": (11.7, 42.6),
+    "EG": (26.6, 29.8),
+    "GQ": (1.6, 10.4),
+    "ER": (15.4, 38.8),
+    "SZ": (-26.6, 31.5),
+    "ET": (8.6, 39.6),
+    "GA": (-0.6, 11.8),
+    "GM": (13.4, -15.4),
+    "GH": (7.9, -1.2),
+    "GN": (10.4, -11.0),
+    "GW": (12.0, -15.0),
+    "KE": (0.5, 37.9),
+    "LS": (-29.6, 28.2),
+    "LR": (6.4, -9.3),
+    "LY": (27.0, 17.3),
+    "MG": (-19.4, 46.7),
+    "MW": (-13.2, 34.3),
+    "ML": (17.4, -4.0),
+    "MR": (20.3, -10.4),
+    "MU": (-20.3, 57.6),
+    "MA": (31.9, -6.9),
+    "MZ": (-17.3, 35.5),
+    "NA": (-22.1, 17.2),
+    "NE": (17.4, 9.4),
+    "NG": (9.6, 8.1),
+    "RW": (-2.0, 29.9),
+    "ST": (0.2, 6.6),
+    "SN": (14.4, -14.5),
+    "SC": (-4.7, 55.5),
+    "SL": (8.6, -11.8),
+    "SO": (6.1, 45.9),
+    "ZA": (-29.0, 25.1),
+    "SS": (7.3, 30.3),
+    "SD": (16.0, 30.0),
+    "TZ": (-6.4, 34.8),
+    "TG": (8.5, 1.0),
+    "TN": (34.1, 9.6),
+    "UG": (1.3, 32.4),
+    "ZM": (-13.5, 27.8),
+    "ZW": (-19.0, 29.9),
+    "EH": (24.6, -13.1),
+}
+
+
+def african_countries_in(codes) -> list:
+    """Sorted list of distinct African ISO2 codes from an iterable."""
+    return sorted({(c or "").upper() for c in codes} & AFRICAN_ISO2)

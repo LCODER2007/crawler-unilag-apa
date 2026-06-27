@@ -3,27 +3,22 @@
   "name": "University of Lagos",
   "short_name": "UNILAG",
   "country": "Nigeria",
+  "sub_region": "West Africa",
   "staff_file": "data/unilag_staff.json",
+  "oai_endpoint": "https://api-ir.unilag.edu.ng/server/oai/request",
   "affiliation_patterns": [
     "University of Lagos",
     "UNILAG",
-    "@unilag.edu.ng",
-    "Univ. Lagos",
-    "U. Lagos"
+    "University of Lagos Department"
   ],
   "faculties": [
-    "Arts",
     "Science",
+    "Humanities",
     "Engineering",
     "Medicine",
-    "Pharmacy",
-    "Dental Sciences",
-    "Basic Medical Sciences",
     "Social Sciences",
-    "Law",
-    "Education",
-    "Environmental Sciences",
-    "Management Sciences"
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,

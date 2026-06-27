@@ -24,6 +24,7 @@ class InstitutionConfig:
         faculties=None,
         crawler_settings=None,
         sub_region="Unknown",
+        oai_endpoint=None,
     ):
         self.ror = ror
         self.name = name
@@ -34,6 +35,9 @@ class InstitutionConfig:
         self.faculties = faculties or []
         self.crawler_settings = crawler_settings or {}
         self.sub_region = sub_region
+        # Optional public OAI-PMH base URL for the institution's repository
+        # (read-only harvest). None means no OAI harvest is configured.
+        self.oai_endpoint = oai_endpoint or None
         self._raw_staff: List[Any] = self._load_staff_raw()
 
     def _resolve_staff_file(self) -> str:
@@ -150,6 +154,7 @@ class InstitutionConfig:
             "faculties": self.faculties,
             "crawler_settings": self.crawler_settings,
             "sub_region": self.sub_region,
+            "oai_endpoint": self.oai_endpoint,
             "staff_count": len(self.staff_names),
             "staff_with_orcid_count": len(self.staff_with_orcid),
         }
@@ -204,6 +209,7 @@ class InstitutionConfig:
             faculties=data.get("faculties", []),
             crawler_settings=data.get("crawler_settings", {}),
             sub_region=sub_region,
+            oai_endpoint=data.get("oai_endpoint"),
         )
 
     @classmethod

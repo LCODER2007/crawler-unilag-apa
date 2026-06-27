@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/013y27r38",
+  "name": "Université Hassan II de Casablanca",
+  "short_name": "HC",
+  "country": "Morocco",
+  "sub_region": "North Africa",
+  "staff_file": "data/hc_staff.json",
+  "affiliation_patterns": [
+    "Université Hassan II de Casablanca",
+    "HC",
+    "Université Hassan II de Casablanca Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

@@ -128,6 +128,10 @@ class DatabaseStoragePipeline:
             except Exception as e:
                 spider.logger.error(f"Special-collections scoring error: {e}")
 
+            if sc_score <= 0.0:
+                from scrapy.exceptions import DropItem
+                raise DropItem(f"Not a special collection: {(item.get('title') or '')[:60]}")
+
             # Create Item with Dublin Core metadata
             doc = Item(
                 title=item.get("title"),
@@ -230,7 +234,8 @@ class DatabaseStoragePipeline:
             if doc.pdf_url:
                 try:
                     policy = item.get("suggested_access", "Private")
-                    pdf_metadata = pdf_downloader.download_pdf(doc.pdf_url, doc.id)
+                    # Cast explicitly to satisfy IDE static type checkers (MyPy)
+                    pdf_metadata = pdf_downloader.download_pdf(str(doc.pdf_url), int(doc.id))  # type: ignore
                     if pdf_metadata:
                         bitstream = File(
                             item_id=doc.id,

@@ -1,13 +1,13 @@
 {
   "ror": "https://ror.org/04h7g6177",
   "name": "Université de Yaoundé I",
-  "short_name": "Yaoundé I",
+  "short_name": "Yaounde I",
   "country": "Cameroon",
   "sub_region": "Central Africa",
-  "staff_file": "data/yaoundé_i_staff.json",
+  "staff_file": "data/yaounde_i_staff.json",
   "affiliation_patterns": [
     "Université de Yaoundé I",
-    "Yaoundé I",
+    "Yaounde I",
     "Université de Yaoundé I Department"
   ],
   "faculties": [

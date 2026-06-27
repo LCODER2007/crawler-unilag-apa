@@ -1,25 +1,23 @@
 {
-  "ror": "https://ror.org/00cb23x68",
+  "ror": "https://ror.org/00x4mpy73",
   "name": "Kwame Nkrumah University of Science and Technology",
   "short_name": "KNUST",
   "country": "Ghana",
+  "sub_region": "West Africa",
   "staff_file": "data/knust_staff.json",
   "affiliation_patterns": [
     "Kwame Nkrumah University of Science and Technology",
     "KNUST",
-    "KNUST Ghana",
-    "@knust.edu.gh",
-    "Kwame Nkrumah Univ",
-    "KN University of Science and Technology",
-    "KNUST Kumasi"
+    "Kwame Nkrumah University of Science and Technology Department"
   ],
   "faculties": [
-    "College of Agriculture and Natural Resources",
-    "College of Art and Built Environment",
-    "College of Engineering",
-    "College of Health Sciences",
-    "College of Humanities and Social Sciences",
-    "College of Science"
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,

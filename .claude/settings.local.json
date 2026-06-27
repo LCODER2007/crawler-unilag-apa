@@ -2,7 +2,30 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:developers.openalex.org)",
-      "Bash(timeout 120 python scripts/crawl_multi_institution.py --target 2 --institutions unilag --spider openalex)"
+      "Bash(timeout 120 python scripts/crawl_multi_institution.py --target 2 --institutions unilag --spider openalex)",
+      "WebFetch(domain:api-ir.unilag.edu.ng)",
+      "Bash(curl -s \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListRecords&metadataPrefix=oai_dc\" --max-time 40)",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListRecords&metadataPrefix=oai_dc\" --max-time 60 -o scratch/oai_sample.xml -w \"HTTP %{http_code} | %{size_download} bytes | %{time_total}s\\\\n\")",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListMetadataFormats\" --max-time 60 -w \"\\\\n[HTTP %{http_code}]\\\\n\")",
+      "Bash(curl -sL -A \"URAAS/1.0 \\(mailto:library@unilag.edu.ng\\)\" \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListRecords&metadataPrefix=oai_dc\" --max-time 90 -w \"\\\\n[HTTP %{http_code} size=%{size_download}]\\\\n\")",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListMetadataFormats\" --max-time 60)",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListIdentifiers&metadataPrefix=oai_dc&from=2026-05-01\" --max-time 90 -w \"\\\\n[HTTP %{http_code} size=%{size_download}]\\\\n\")",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListRecords&metadataPrefix=dim&from=2026-05-01\" --max-time 90 -w \"\\\\n[HTTP %{http_code} size=%{size_download}]\\\\n\")",
+      "Bash(curl -sL \"https://api-ir.unilag.edu.ng/server/oai/request?verb=ListRecords&metadataPrefix=oai_dc&from=2026-06-01\" --max-time 90 -o scratch/oai_dc.xml -w \"[HTTP %{http_code} size=%{size_download}]\\\\n\")",
+      "Bash(python -c ' *)",
+      "Bash(python *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(openssl version *)",
+      "Bash(openssl req *)",
+      "Bash(MSYS_NO_PATHCONV=1 openssl req -x509 -nodes -newkey rsa:2048 -keyout nginx/ssl/uraas.key -out nginx/ssl/uraas.crt -days 365 -subj '/C=NG/ST=Lagos/L=Lagos/O=University of Lagos/OU=ICT/CN=repository.unilag.edu.ng' -addext subjectAltName=DNS:repository.unilag.edu.ng,DNS:localhost)",
+      "Bash(openssl x509 *)",
+      "Bash(netstat -ano)",
+      "Bash(docker info *)",
+      "Bash(docker version *)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(powershell.exe *)"
     ]
   }
 }

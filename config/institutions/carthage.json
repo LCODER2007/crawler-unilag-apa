@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/011yvpy71",
+  "name": "Université de Carthage",
+  "short_name": "Carthage",
+  "country": "Tunisia",
+  "sub_region": "North Africa",
+  "staff_file": "data/carthage_staff.json",
+  "affiliation_patterns": [
+    "Université de Carthage",
+    "Carthage",
+    "Université de Carthage Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

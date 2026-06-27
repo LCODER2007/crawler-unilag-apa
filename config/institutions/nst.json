@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/01y6mpy73",
+  "name": "National University of Science and Technology",
+  "short_name": "NST",
+  "country": "Zimbabwe",
+  "sub_region": "Southern Africa",
+  "staff_file": "data/nst_staff.json",
+  "affiliation_patterns": [
+    "National University of Science and Technology",
+    "NST",
+    "National University of Science and Technology Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

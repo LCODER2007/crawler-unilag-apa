@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/02rry3m21",
+  "name": "Université de Lubumbashi",
+  "short_name": "Lubumbashi",
+  "country": "DR Congo",
+  "sub_region": "Central Africa",
+  "staff_file": "data/lubumbashi_staff.json",
+  "affiliation_patterns": [
+    "Université de Lubumbashi",
+    "Lubumbashi",
+    "Université de Lubumbashi Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

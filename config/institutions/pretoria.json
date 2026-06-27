@@ -1,13 +1,13 @@
 {
   "ror": "https://ror.org/047fpp722",
   "name": "University of Pretoria",
-  "short_name": "UP",
+  "short_name": "Pretoria",
   "country": "South Africa",
   "sub_region": "Southern Africa",
-  "staff_file": "data/up_staff.json",
+  "staff_file": "data/pretoria_staff.json",
   "affiliation_patterns": [
     "University of Pretoria",
-    "UP",
+    "Pretoria",
     "University of Pretoria Department"
   ],
   "faculties": [

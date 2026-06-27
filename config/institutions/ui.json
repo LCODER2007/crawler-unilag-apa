@@ -1,32 +1,23 @@
 {
-  "ror": "https://ror.org/03wx2rr30",
+  "ror": "https://ror.org/01es5me90",
   "name": "University of Ibadan",
   "short_name": "UI",
   "country": "Nigeria",
+  "sub_region": "West Africa",
   "staff_file": "data/ui_staff.json",
   "affiliation_patterns": [
     "University of Ibadan",
-    "Univ. Ibadan",
-    "U. Ibadan",
-    "UI Ibadan",
-    "Ibadan University",
-    "@ui.edu.ng",
-    "University College Ibadan"
+    "UI",
+    "University of Ibadan Department"
   ],
   "faculties": [
-    "Arts",
     "Science",
-    "Agriculture and Forestry",
-    "Clinical Sciences",
-    "Basic Medical Sciences",
-    "Dentistry",
-    "Pharmacy",
-    "Public Health",
+    "Humanities",
+    "Engineering",
+    "Medicine",
     "Social Sciences",
-    "Law",
-    "Education",
-    "Technology",
-    "Veterinary Medicine"
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,

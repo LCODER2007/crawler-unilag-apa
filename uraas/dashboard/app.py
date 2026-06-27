@@ -535,8 +535,12 @@ def analytics_overview():
     session = SessionLocal()
     institution = request.args.get("institution")
     try:
-        sc_ids = analytics._get_sc_item_ids(session, institution)
-        if not sc_ids:
+        q_item = session.query(Item)
+        if institution and institution.lower() != "all":
+            q_item = q_item.filter(Item.institution == institution)
+
+        total = q_item.count()
+        if total == 0:
             return jsonify(
                 {
                     "total_papers": 0,
@@ -548,14 +552,14 @@ def analytics_overview():
                 }
             )
 
-        q_item = session.query(Item).filter(Item.id.in_(sc_ids))
-        q_author = session.query(Author).join(Author.items).filter(Item.id.in_(sc_ids))
-        q_comm = session.query(Community).filter(
-            Community.collections.any(Collection.items.any(Item.id.in_(sc_ids)))
-        )
-        q_file = session.query(File).filter(File.item_id.in_(sc_ids))
+        item_ids_query = q_item.with_entities(Item.id)
 
-        total = q_item.count()
+        q_author = session.query(Author).join(Author.items).filter(Item.id.in_(item_ids_query))
+        q_comm = session.query(Community).filter(
+            Community.collections.any(Collection.items.any(Item.id.in_(item_ids_query)))
+        )
+        q_file = session.query(File).filter(File.item_id.in_(item_ids_query))
+
         authors = q_author.distinct().count()
         faculties = q_comm.distinct().count()
         oa = q_item.filter(Item.dc_rights.like("%openAccess%")).count()
@@ -2161,6 +2165,17 @@ def start_crawler():
         # Default ON — heavy bias toward Special Collections in every crawl.
         boost_special = bool(data.get("boost_special", True))
         sc_only = bool(data.get("sc_only", False))
+        # Optional spider selection (allowlisted). "oai" = read-only harvest of
+        # the institution's own repository (theses/grey literature).
+        spider = data.get("spider", "openalex")
+        if spider not in ("openalex", "crossref", "arxiv", "orcid", "oai"):
+            return jsonify({"status": "error", "message": f"Unknown spider: {spider}"}), 400
+        # OAI date window — accept only a safe YYYY-MM-DD shape; ignore anything else.
+        _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        from_date = data.get("from_date")
+        until_date = data.get("until_date")
+        from_date = from_date if (from_date and _date_re.match(str(from_date))) else None
+        until_date = until_date if (until_date and _date_re.match(str(until_date))) else None
         try:
             # Derive project root and script path
             project_root = os.path.dirname(
@@ -2173,10 +2188,17 @@ def start_crawler():
             cmd = [__import__("sys").executable, script_path, "--target", str(target)]
             if institution != "all":
                 cmd.extend(["--institutions", institution])
-            if not boost_special:
-                cmd.append("--no-boost-special")
-            if sc_only:
-                cmd.append("--sc-only")
+            cmd.extend(["--spider", spider])
+            if spider == "oai":
+                if from_date:
+                    cmd.extend(["--from-date", from_date])
+                if until_date:
+                    cmd.extend(["--until-date", until_date])
+            else:
+                if not boost_special:
+                    cmd.append("--no-boost-special")
+                if sc_only:
+                    cmd.append("--sc-only")
 
             logger.info(f"Executing crawler command: {' '.join(cmd)}")
 

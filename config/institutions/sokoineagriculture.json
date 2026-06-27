@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/011y27r38",
+  "name": "Sokoine University of Agriculture",
+  "short_name": "Sokoine Agriculture",
+  "country": "Tanzania",
+  "sub_region": "East Africa",
+  "staff_file": "data/sokoine_agriculture_staff.json",
+  "affiliation_patterns": [
+    "Sokoine University of Agriculture",
+    "Sokoine Agriculture",
+    "Sokoine University of Agriculture Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

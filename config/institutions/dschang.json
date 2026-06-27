@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/012y7p041",
+  "name": "Université de Dschang",
+  "short_name": "Dschang",
+  "country": "Cameroon",
+  "sub_region": "Central Africa",
+  "staff_file": "data/dschang_staff.json",
+  "affiliation_patterns": [
+    "Université de Dschang",
+    "Dschang",
+    "Université de Dschang Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "ror": "https://ror.org/01267r312",
+  "name": "University of KwaZulu-Natal",
+  "short_name": "KwaZulu-Natal",
+  "country": "South Africa",
+  "sub_region": "Southern Africa",
+  "staff_file": "data/kwazulu-natal_staff.json",
+  "affiliation_patterns": [
+    "University of KwaZulu-Natal",
+    "KwaZulu-Natal",
+    "University of KwaZulu-Natal Department"
+  ],
+  "faculties": [
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
+  ],
+  "crawler_settings": {
+    "rate_limit": 2.0,
+    "concurrent_requests": 8,
+    "retry_times": 3,
+    "download_delay": 2.0
+  }
+}

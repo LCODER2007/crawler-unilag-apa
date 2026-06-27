@@ -1,0 +1,118 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  UNILAG MOUNTING DRY-RUN — self-contained production REPLICA.
+#
+#  Mirrors docker-compose.prod.yml exactly (same Dockerfile build, same nginx
+#  image + nginx.conf, same Postgres 15 / Redis 7, same URAAS_ENV=production)
+#  so we exercise the real production artifacts. The ONLY differences are:
+#    • host-side ports remapped off 80/443/5432/6379/8080 to avoid colliding
+#      with the developer's local Postgres + dev dashboard;
+#    • app/db secrets supplied via .env.prod (what UNILAG ICT sets on the DMZ
+#      host per the mounting guide §5 Phase C — the base compose omits them).
+#  Container-internal ports, networking, and config are identical to prod.
+#
+#  Run:
+#    docker compose --env-file .env.prod -f docker-compose.replica.yml up --build -d
+# ═══════════════════════════════════════════════════════════════════════════
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: uraas-replica-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uraas_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-uraas_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-uraas_db}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - replica_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"          # host 55432 -> avoids local Postgres on 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uraas_user} -d ${POSTGRES_DB:-uraas_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - uraas-replica-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: uraas-replica-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-uraas_redis_pass}
+    volumes:
+      - replica_redis_data:/data
+    ports:
+      - "56379:6379"          # host 56379 -> avoids local Redis on 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - uraas-replica-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uraas-replica-app
+    env_file:
+      - .env.prod            # URAAS_ENV=production + auth hashes + CORS + secret
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+      STORAGE_PATH: /app/storage/pdfs
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "18080:8080"          # host 18080 -> direct app access (bypasses nginx)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - uraas-replica-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: uraas-replica-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./storage:/app/storage:ro
+    ports:
+      - "8081:80"             # host 8081 -> HTTP (301 redirect to HTTPS)
+      - "8443:443"            # host 8443 -> HTTPS reverse proxy (prod path)
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - uraas-replica-net
+
+volumes:
+  replica_postgres_data:
+    driver: local
+  replica_redis_data:
+    driver: local
+
+networks:
+  uraas-replica-net:
+    driver: bridge

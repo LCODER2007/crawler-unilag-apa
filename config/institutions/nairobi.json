@@ -1,27 +1,23 @@
 {
-  "ror": "https://ror.org/02y9nww90",
+  "ror": "https://ror.org/01078r490",
   "name": "University of Nairobi",
   "short_name": "Nairobi",
   "country": "Kenya",
+  "sub_region": "East Africa",
   "staff_file": "data/nairobi_staff.json",
   "affiliation_patterns": [
     "University of Nairobi",
-    "Univ. Nairobi",
-    "UoN",
-    "@uonbi.ac.ke",
-    "@uon.ac.ke",
-    "University of Nairobi, Kenya",
-    "Nairobi University"
+    "Nairobi",
+    "University of Nairobi Department"
   ],
   "faculties": [
-    "College of Agriculture and Veterinary Sciences",
-    "College of Biological and Physical Sciences",
-    "College of Education and External Studies",
-    "College of Health Sciences",
-    "College of Humanities and Social Sciences",
-    "School of Business",
-    "School of Engineering",
-    "School of Law"
+    "Science",
+    "Humanities",
+    "Engineering",
+    "Medicine",
+    "Social Sciences",
+    "Arts",
+    "Law"
   ],
   "crawler_settings": {
     "rate_limit": 2.0,
