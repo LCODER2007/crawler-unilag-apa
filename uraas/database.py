@@ -293,8 +293,51 @@ class CrawlJob(Base):
     ended_at = Column(DateTime)
 
 
+class DepositBatch(Base):
+    """Tracks a staged batch of items queued for deposit to the real DSpace IR.
+
+    Flow: pending_approval → approved/rejected → depositing → completed/failed.
+    An approval token is emailed to the address the admin typed in; only
+    clicking the link in that email advances the batch to 'approved'.
+    """
+
+    __tablename__ = "deposit_batches"
+
+    id = Column(Integer, primary_key=True)
+    # Cryptographically random URL-safe token that authorises this specific batch.
+    # Stored as-is (64 hex chars); treated as a one-time-use secret.
+    token = Column(String(128), unique=True, index=True, nullable=False)
+
+    # Lifecycle status
+    status = Column(String(30), default="pending_approval", nullable=False, index=True)
+    # Values: pending_approval | approved | rejected | depositing | completed | failed
+
+    approval_email = Column(String(255), nullable=False)
+    collection_uuid = Column(String(128))   # DSpace target collection UUID
+    collection_name = Column(String(255))   # for display only
+
+    # JSON array of local Item.id values to deposit, e.g. [1, 7, 42]
+    item_ids_json = Column(Text, nullable=False, default="[]")
+    item_count = Column(Integer, default=0)
+
+    deposited_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+
+    notes = Column(Text)           # rejection reason, or first fatal error
+    requested_by = Column(String(100))  # session username
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)       # approval link expires after 48 h
+    approved_at = Column(DateTime)
+    completed_at = Column(DateTime)
+
+    # JSON array of per-item results: [{"item_id": 1, "status": "ok", "dspace_id": "..."}, ...]
+    deposit_log = Column(Text, default="[]")
+
+
 # ── Indexes for query performance ─────────────────────────────────────────────
-Index("ix_items_docid", Item.docid)
+# ix_items_docid is auto-created by index=True on Item.docid — no duplicate needed
 Index("ix_items_language", Item.language_code)
 Index("ix_items_content_type", Item.content_type)
 Index("ix_items_created_at", Item.created_at)
@@ -324,4 +367,4 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, checkfirst=True)

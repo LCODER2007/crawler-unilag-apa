@@ -133,11 +133,24 @@
           </select>
           <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Select Institution</label>
           <select id="crawler-institution" class="w-full mb-3" style="font-size:13px"></select>
-          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">TargetPapers (1–250)</label>
+          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Target Papers (1–250)</label>
           <input type="number" id="target-count" min="1" max="250" value="20"/>
-          
-
-          
+          <label class="block text-xs mb-1.5 font-medium mt-3" style="color:var(--text-dim)">Discovery Source</label>
+          <select id="crawler-spider" class="w-full mb-3" style="font-size:13px">
+            <option value="openalex">OpenAlex (Default — 250M+ papers)</option>
+            <option value="all">All Sources (Maximum Coverage)</option>
+            <option value="crossref">Crossref (DOI Registry)</option>
+            <option value="semantic_scholar">Semantic Scholar (AI-indexed)</option>
+            <option value="doaj">DOAJ (African Open Access Journals)</option>
+            <option value="ajol">AJOL (African Journals Online)</option>
+            <option value="europepmc">EuropePMC (Biomedical)</option>
+            <option value="core">CORE (Global OA Repositories)</option>
+            <option value="pubmed">PubMed (Ethnobotany / Trad. Medicine)</option>
+            <option value="openaire">OpenAIRE (EU/African Networks)</option>
+            <option value="arxiv">arXiv (STEM Preprints)</option>
+            <option value="orcid">ORCID (Author Registry)</option>
+            <option value="oai">OAI-PMH (Institutional Repository)</option>
+          </select>
           <p class="text-xs mt-3" id="staff-validation-text" style="color:var(--text-muted)">Validated against institutional registry</p>
         </div>
         <div class="flex gap-2 flex-wrap">
@@ -148,6 +161,18 @@
           <button id="btn-stop" onclick="stopCrawler()" class="btn-danger hidden">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
             Stop
+          </button>
+          <button onclick="pruneNonSC(false)" class="btn-ghost text-xs" title="Preview what would be removed without deleting">
+            Dry Run Prune
+          </button>
+          <button onclick="pruneNonSC(true)" class="btn-ghost text-xs" style="color:var(--danger,#ef4444);border-color:var(--danger,#ef4444)" title="Delete all non-Special-Collection papers from the database">
+            Prune Non-SC
+          </button>
+          <button onclick="testSMTP()" class="btn-ghost text-xs" title="Send a test email to verify SMTP is working">
+            Test SMTP
+          </button>
+          <button onclick="recomputeAlignment()" class="btn-ghost text-xs" title="Score all SC papers against AU framework pillars and rebuild Charter Alignment data">
+            Recompute Alignment
           </button>
         </div>
         <div class="mt-4 progress-bar" id="crawler-progress"><div class="progress-bar-inner"></div></div>
@@ -433,6 +458,151 @@
           <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach — one signal among several, not the sole measure of value.</p>
           <div id="sco-influential" class="space-y-1.5"></div>
         </div>
+
+        <!-- PID Coverage panel — shown to PID Alliance audience -->
+        <div class="surface rounded-2xl p-5 mt-5" id="pid-coverage-panel">
+          <div class="flex items-center justify-between mb-1">
+            <p class="section-label mb-0">Africa PID Alliance — Persistent Identifier Coverage</p>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(99,102,241,.12);color:var(--accent)">DocID™</span>
+          </div>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Fraction of Special Collections items carrying each PID type. ARKs are minted at crawl time via the ARK Alliance test NAAN (99999); a production NAAN application is in progress with the Africa PID Alliance.</p>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="pid-kpis">
+            <div class="rounded-xl p-4 text-center" style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18)">
+              <p class="text-2xl font-bold" style="color:var(--accent)" id="pid-doi-pct">—</p>
+              <p class="text-xs font-semibold mt-0.5">DOI Coverage</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-doi-n"></p>
+            </div>
+            <div class="rounded-xl p-4 text-center" style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18)">
+              <p class="text-2xl font-bold" style="color:var(--success)" id="pid-orcid-pct">—</p>
+              <p class="text-xs font-semibold mt-0.5">ORCID Coverage</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-orcid-n"></p>
+            </div>
+            <div class="rounded-xl p-4 text-center" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18)">
+              <p class="text-2xl font-bold" style="color:var(--warning)" id="pid-ark-pct">—</p>
+              <p class="text-xs font-semibold mt-0.5">ARK Coverage</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-ark-n"></p>
+            </div>
+            <div class="rounded-xl p-4 text-center" style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.18)">
+              <p class="text-2xl font-bold" style="color:#8b5cf6" id="pid-ror-pct">—</p>
+              <p class="text-xs font-semibold mt-0.5">ROR Coverage</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-ror-n"></p>
+            </div>
+          </div>
+          <p class="text-xs mt-3" style="color:var(--text-muted)">Total Special Collections items tracked: <span class="font-semibold" style="color:var(--text)" id="pid-total">—</span></p>
+        </div>
+
+        <!-- Knowledge Repatriation Index -->
+        <div class="surface rounded-2xl p-5 mt-5">
+          <div class="flex items-center justify-between mb-1">
+            <p class="section-label mb-0">Knowledge Repatriation Index <span class="info-icon" title="Proportion of Africa-led scholarship vs. extractive North→South collaborations">&#9432;</span></p>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(16,185,129,.12);color:var(--success)">Novel Metric</span>
+          </div>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Africa-led research vs. North→South extraction. Score 100 = all African-first-author; 0 = all externally led. Continental baseline ~35/100.</p>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="rounded-xl p-5 text-center" style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18)">
+              <p class="text-4xl font-bold" style="color:var(--success)" id="kri-score">—</p>
+              <p class="text-xs font-semibold mt-1">KRI Score / 100</p>
+              <p class="text-xs mt-2" style="color:var(--text-muted)" id="kri-interpretation"></p>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(16,185,129,.04);border:1px solid rgba(16,185,129,.1)">
+              <p class="text-xs font-semibold mb-3" style="color:var(--text-muted)">BREAKDOWN</p>
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs">Africa-Led</span>
+                  <span class="text-sm font-bold" style="color:var(--success)" id="kri-africa-led">—</span>
+                </div>
+                <div class="w-full rounded-full h-1.5" style="background:rgba(16,185,129,.15)"><div class="h-1.5 rounded-full" style="background:var(--success);width:0%" id="kri-africa-bar"></div></div>
+                <div class="flex justify-between items-center mt-2">
+                  <span class="text-xs">North→South</span>
+                  <span class="text-sm font-bold" style="color:var(--warning)" id="kri-north-south">—</span>
+                </div>
+                <div class="w-full rounded-full h-1.5" style="background:rgba(245,158,11,.15)"><div class="h-1.5 rounded-full" style="background:var(--warning);width:0%" id="kri-ns-bar"></div></div>
+                <div class="flex justify-between items-center mt-2">
+                  <span class="text-xs">Unclassified</span>
+                  <span class="text-sm font-bold" style="color:var(--text-muted)" id="kri-unclassified">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(16,185,129,.04);border:1px solid rgba(16,185,129,.1)">
+              <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">TREND</p>
+              <p class="text-xl font-bold" id="kri-trend">—</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)">vs prior period</p>
+              <p class="text-xs font-semibold mt-4 mb-1" style="color:var(--text-muted)">TOTAL PAPERS</p>
+              <p class="text-xl font-bold" style="color:var(--text)" id="kri-total">—</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Research Portfolio Diversity Score -->
+        <div class="surface rounded-2xl p-5 mt-5">
+          <div class="flex items-center justify-between mb-1">
+            <p class="section-label mb-0">Research Portfolio Diversity <span class="info-icon" title="Shannon entropy across UN SDG tags, normalized 0–100">&#9432;</span></p>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(99,102,241,.12);color:var(--accent)">Novel Metric</span>
+          </div>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Shannon entropy across UN Sustainable Development Goals. 100 = perfectly balanced portfolio; continental baseline ≈ 45/100. Gap SDGs flag under-served research areas.</p>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="rounded-xl p-5 text-center" style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18)">
+              <p class="text-4xl font-bold" style="color:var(--accent)" id="rpd-score">—</p>
+              <p class="text-xs font-semibold mt-1">Diversity Score / 100</p>
+              <p class="text-xs mt-2" style="color:var(--text-muted)" id="rpd-interpretation"></p>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(99,102,241,.04);border:1px solid rgba(99,102,241,.1)">
+              <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">DOMINANT SDG</p>
+              <p class="text-base font-bold" style="color:var(--accent)" id="rpd-dominant">—</p>
+              <p class="text-xs font-semibold mt-4 mb-1" style="color:var(--text-muted)">VS CONTINENTAL BASELINE</p>
+              <p class="text-2xl font-bold" id="rpd-vs-baseline">—</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)">vs ~45 baseline</p>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(99,102,241,.04);border:1px solid rgba(99,102,241,.1)">
+              <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">GAP SDGs (UNDER-SERVED)</p>
+              <div id="rpd-gaps" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Open Science Health Score -->
+        <div class="surface rounded-2xl p-5 mt-5">
+          <div class="flex items-center justify-between mb-1">
+            <p class="section-label mb-0">Open Science Health Score <span class="info-icon" title="Composite: OA 40% + DOI 25% + ORCID 20% + ARK 15%">&#9432;</span></p>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(245,158,11,.12);color:var(--warning)">Novel Metric</span>
+          </div>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Composite open-access + identifier health. Weighted: Open Access (40%), DOI (25%), ORCID (20%), ARK (15%). Continental baseline ≈ 38/100.</p>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="rounded-xl p-5 text-center" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18)">
+              <p class="text-5xl font-bold" style="color:var(--warning)" id="oshs-grade">—</p>
+              <p class="text-xs font-semibold mt-1">Grade</p>
+              <p class="text-2xl font-bold mt-2" style="color:var(--text)" id="oshs-score">—</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)" id="oshs-interpretation"></p>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.1)">
+              <p class="text-xs font-semibold mb-3" style="color:var(--text-muted)">COMPONENTS</p>
+              <div class="space-y-3">
+                <div>
+                  <div class="flex justify-between text-xs mb-1"><span>Open Access (40%)</span><span class="font-bold" id="oshs-oa">—</span></div>
+                  <div class="w-full rounded-full h-1.5" style="background:rgba(245,158,11,.15)"><div class="h-1.5 rounded-full" style="background:var(--warning)" id="oshs-oa-bar"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1"><span>DOI (25%)</span><span class="font-bold" id="oshs-doi">—</span></div>
+                  <div class="w-full rounded-full h-1.5" style="background:rgba(99,102,241,.15)"><div class="h-1.5 rounded-full" style="background:var(--accent)" id="oshs-doi-bar"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1"><span>ORCID (20%)</span><span class="font-bold" id="oshs-orcid">—</span></div>
+                  <div class="w-full rounded-full h-1.5" style="background:rgba(16,185,129,.15)"><div class="h-1.5 rounded-full" style="background:var(--success)" id="oshs-orcid-bar"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1"><span>ARK (15%)</span><span class="font-bold" id="oshs-ark">—</span></div>
+                  <div class="w-full rounded-full h-1.5" style="background:rgba(139,92,246,.15)"><div class="h-1.5 rounded-full" style="background:#8b5cf6" id="oshs-ark-bar"></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-xl p-4" style="background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.1)">
+              <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">VS CONTINENTAL BASELINE</p>
+              <p class="text-2xl font-bold" id="oshs-vs-baseline">—</p>
+              <p class="text-xs mt-1" style="color:var(--text-muted)">vs ~38 continental avg</p>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -514,11 +684,6 @@
             <div style="position:relative;height:240px"><canvas id="chart-citation-velocity"></canvas></div>
             <p id="velocity-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
           </div>
-          <div class="surface rounded-2xl p-5">
-            <p class="section-label">Author Collaboration Network</p>
-            <p class="text-xs mb-2" style="color:var(--text-muted)">Communities detected with Louvain clustering; node size = centrality.</p>
-            <div id="collab-network" style="height:240px"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -527,13 +692,13 @@
     <div id="atab-language" class="atab-content hidden">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div class="surface rounded-2xl p-5">
-          <p class="section-label">Language &amp; CultureKeywords</p>
+          <p class="section-label">Language &amp; Culture Keywords</p>
           <div style="position: relative; height: 260px; width: 100%;">
             <canvas id="chart-language-kw"></canvas>
           </div>
         </div>
         <div class="surface rounded-2xl p-5">
-          <p class="section-label">Language ResearchPapers</p>
+          <p class="section-label">Language Research Papers</p>
           <p class="text-xs mb-3" style="color:var(--text-muted)">Papers on Nigerian languages, African literature, linguistics &amp; oral traditions</p>
           <div id="language-papers" class="space-y-1.5 overflow-y-auto" style="max-height:320px"></div>
         </div>

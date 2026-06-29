@@ -38,7 +38,7 @@ class ORCIDSpider(scrapy.Spider):
             f"{len(self.institution_config.staff_with_orcid)} staff with ORCIDs"
         )
 
-    def start_requests(self):
+    async def start(self):
         """Query ORCID API for each staff member that has an ORCID."""
         staff_with_orcid = self.institution_config.staff_with_orcid
         if not staff_with_orcid:

@@ -2,6 +2,8 @@
 import re
 from datetime import date
 
+from scrapy.exceptions import DropItem
+
 from uraas.database import Author, Collection, Community, File, Item, SessionLocal
 from uraas.utils.ai_classifier import (
     _clean_text,
@@ -9,6 +11,7 @@ from uraas.utils.ai_classifier import (
     extract_keywords,
 )
 from uraas.utils.analytics_cache import analytics_cache
+from uraas.utils.ark_generator import ark_generator
 from uraas.utils.pdf_downloader import pdf_downloader
 from uraas.utils.unilag_classifier import classifier
 
@@ -25,11 +28,11 @@ def _validate_doi(doi: str) -> bool:
 
 
 class DatabaseStoragePipeline:
-    def open_spider(self):
+    def open_spider(self, spider):
         self.session = SessionLocal()
         self._cache_invalidated = False
 
-    def close_spider(self):
+    def close_spider(self, spider):
         try:
             self.session.close()
         except Exception:
@@ -128,29 +131,72 @@ class DatabaseStoragePipeline:
             except Exception as e:
                 spider.logger.error(f"Special-collections scoring error: {e}")
 
+            # SC gate: only store papers classified as Special Collections
             if sc_score <= 0.0:
-                from scrapy.exceptions import DropItem
                 raise DropItem(f"Not a special collection: {(item.get('title') or '')[:60]}")
+
+            # Parse publication date — accept YYYY, YYYY-MM-DD, or full ISO timestamps.
+            pub_date_raw = item.get("publication_date") or ""
+            pub_date = None
+            if pub_date_raw:
+                try:
+                    from datetime import datetime as _dt
+                    pub_date_str = str(pub_date_raw).strip()
+                    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%Y-%m", "%Y"):
+                        try:
+                            pub_date = _dt.strptime(pub_date_str[:len(fmt)], fmt)
+                            break
+                        except ValueError:
+                            continue
+                except Exception:
+                    pass
+
+            # Normalise content/doc type
+            raw_type = (item.get("content_type") or item.get("dc_type") or "").strip()
+            # Map verbose DSpace dc:type values to our controlled vocabulary
+            _type_map = {
+                "thesis": "Thesis", "dissertation": "Thesis",
+                "article": "Article", "journal article": "Article",
+                "report": "Report", "technical report": "Report",
+                "conference paper": "Article", "book chapter": "Article",
+                "dataset": "Dataset", "preprint": "Article",
+            }
+            doc_type = _type_map.get(raw_type.lower(), raw_type) if raw_type else None
+
+            # URL: fall back to None — never use a generic domain as unique URL
+            item_url = item.get("url") or None
 
             # Create Item with Dublin Core metadata
             doc = Item(
                 title=item.get("title"),
                 dc_title=item.get("title"),
-                dc_identifier_uri=doi or item.get("url"),
+                dc_identifier_uri=doi or item_url,
                 dc_identifier_doi=doi,
+                dc_date_issued=pub_date_raw[:10] if pub_date_raw else None,
                 dc_description_provenance=provenance,
                 dc_rights=item.get(
                     "dc_rights", "info:eu-repo/semantics/restrictedAccess"
                 ),
+                dc_type=doc_type,
+                dc_language=item.get("dc_language") or item.get("language_code") or None,
                 abstract=item.get("abstract") or None,
                 doi=doi,
-                url=item.get("url") or "https://openalex.org",
+                url=item_url,
+                publication_date=pub_date,
                 source_repository=item.get("source_repository"),
                 pdf_url=item.get("pdf_url"),
+                content_type=doc_type,
+                language_code=item.get("language_code") or item.get("dc_language") or None,
+                is_african_language=bool(item.get("is_african_language", False)),
                 # AI keywords (comma-separated)
-                dc_subject=", ".join(tags[:15]),
+                dc_subject=item.get("dc_subject") or ", ".join(tags[:15]),
                 ai_keywords=", ".join(tags),
                 sdg_tags=item.get("sdg_tags"),
+                coauthor_countries=item.get("coauthor_countries") or None,
+                african_country_count=int(item.get("african_country_count") or 0),
+                is_intra_african=bool(item.get("is_intra_african", False)),
+                openalex_id=item.get("openalex_id") or None,
+                cited_by_count=int(item.get("cited_by_count") or 0),
                 # Institution tracking for multi-institution analytics
                 institution=institution_name,
                 ror=institution_ror,
@@ -211,6 +257,15 @@ class DatabaseStoragePipeline:
             self.session.add(doc)
             self.session.flush()  # Get doc.id
 
+            # Mint ARK — deterministic from DOI > URL > doc.id; idempotent on re-run.
+            try:
+                from datetime import datetime as _dt
+                ark_seed = doi or item_url or str(doc.id)
+                doc.ark = ark_generator.mint(ark_seed)
+                doc.ark_assigned_at = _dt.utcnow()
+            except Exception as e:
+                spider.logger.warning(f"ARK mint failed for item {doc.id}: {e}")
+
             # Map classified collections
             try:
                 for community_name, collection_name, score in classifications[:3]:
@@ -229,6 +284,17 @@ class DatabaseStoragePipeline:
                         continue
             except Exception as e:
                 spider.logger.error(f"Error processing classifications: {e}")
+
+            # Score framework alignment (AU charters, Agenda 2063, etc.)
+            try:
+                from uraas.services.alignment_engine import score_item_alignment
+                al_json, al_ver = score_item_alignment(
+                    doc.title or "", doc.abstract or "", doc.dc_subject or ""
+                )
+                doc.alignment_scores = al_json
+                doc.alignment_version = al_ver
+            except Exception as e:
+                spider.logger.warning(f"Alignment scoring skipped for item: {e}")
 
             # Download PDF if available
             if doc.pdf_url:
@@ -251,6 +317,8 @@ class DatabaseStoragePipeline:
             self._cache_invalidated = True
             return item
 
+        except DropItem:
+            raise
         except Exception as e:
             spider.logger.error(
                 f"Database storage error for '{item.get('title', 'Unknown')[:60]}': {e}"

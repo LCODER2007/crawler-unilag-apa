@@ -96,6 +96,28 @@ class Config:
     # Shoulder must use the betanumeric alphabet (no vowels / no 'l').
     ARK_SHOULDER = os.getenv("ARK_SHOULDER", "z1")
 
+    # ── Public dashboard URL (needed for approval email links) ────────────────
+    # Set to the URL users reach the dashboard at (no trailing slash).
+    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "http://localhost:8080").rstrip("/")
+
+    # ── Live DSpace IR (api-ir.unilag.edu.ng) ────────────────────────────────
+    # Backend API base — NOT the Angular frontend URL.
+    DSPACE_API_URL = os.getenv("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server").rstrip("/")
+    DSPACE_USERNAME = os.getenv("DSPACE_USERNAME", "")
+    DSPACE_PASSWORD = os.getenv("DSPACE_PASSWORD", "")
+
+    # ── SMTP for batch approval emails ────────────────────────────────────────
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM = os.getenv("SMTP_FROM", "URAAS IR Deposit <uraas-bot@unilag.edu.ng>")
+    S2_API_KEY = os.getenv("S2_API_KEY", "")
+    CORE_API_KEY = os.getenv("CORE_API_KEY", "")
+    NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
+    LENS_API_KEY = os.getenv("LENS_API_KEY", "")
+
 
 config = Config()
 

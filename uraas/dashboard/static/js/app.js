@@ -101,7 +101,7 @@ function switchTab(name, btn) {
   
   if (name === 'analytics' && !analyticsLoaded) {
     analyticsLoaded = true;
-    loadAnalyticsOverview();
+    switchAtab('overview', $('atab-btn-overview'));
   }
   if (name === 'archive') renderTree(archiveData);
   if (name === 'search') loadSearchFaculties();
@@ -116,6 +116,7 @@ function switchAtab(name, btn) {
   if (t) t.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   
+  if (name === 'overview') loadAnalyticsOverview();
   if (name === 'au') loadAlignmentTab();
   if (name === 'collab') loadCollabTab();
   if (name === 'compare') loadCompareDDs();
@@ -145,7 +146,6 @@ function applyGlobalInstitutionFilter() {
   const specCsv = $('sco-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
   
   if (currentAtab === 'overview') loadAnalyticsOverview();
-
   else if (currentAtab === 'au') { loadAlignmentTab(); }
   else if (currentAtab === 'collab') { loadCollabTab(); }
   else if (currentAtab === 'language') { loadLanguageTab(); }
@@ -253,7 +253,10 @@ function loadAnalyticsOverview() {
 
     // ── Most influential works ──────────────────────────────────────────
     const inf = data.influential || [];
-    $('sco-influential').innerHTML = inf.length ? inf.map((p, i) => `
+    const allZeroCites = inf.length > 0 && inf.every(p => !p.citations);
+    $('sco-influential').innerHTML = inf.length ? [
+      allZeroCites ? `<p class="text-[10px] text-muted italic mb-2 px-1">Citation counts not yet fetched — ranked by SC relevance score. Run <strong>Update Citations</strong> in the Crawler tab to populate.</p>` : '',
+      ...inf.map((p, i) => `
       <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
         <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>
         <div class="flex-1 min-w-0">
@@ -262,8 +265,77 @@ function loadAnalyticsOverview() {
             ${(p.categories || []).slice(0, 3).map(c => `<span class="chip text-[9px] py-0.5 px-1.5">${esc(c)}</span>`).join('')}
           </div>
         </div>
-        <span class="chip text-[10px] py-0.5 px-2 flex-shrink-0" style="background:#8b5cf618;color:#8b5cf6">${p.citations} cites</span>
-      </div>`).join('') : SC_EMPTY;
+        <span class="chip text-[10px] py-0.5 px-2 flex-shrink-0" style="background:#8b5cf618;color:#8b5cf6">${p.citations || 0} cites</span>
+      </div>`)
+    ].join('') : SC_EMPTY;
+  });
+
+  // ── PID Coverage (Africa PID Alliance) ─────────────────────────────
+  safeFetch(withInst('/api/analytics/pid-coverage'), pid => {
+    const fmt = (pct, n, label) =>
+      `${pct}%<title>${n} of ${pid.total} ${label}</title>`;
+    if ($('pid-doi-pct'))   { $('pid-doi-pct').textContent   = pid.doi_pct + '%';   $('pid-doi-n').textContent   = pid.doi_count + ' items'; }
+    if ($('pid-orcid-pct')) { $('pid-orcid-pct').textContent = pid.orcid_pct + '%'; $('pid-orcid-n').textContent = pid.orcid_count + ' items'; }
+    if ($('pid-ark-pct'))   { $('pid-ark-pct').textContent   = pid.ark_pct + '%';   $('pid-ark-n').textContent   = pid.ark_count + ' items'; }
+    if ($('pid-ror-pct'))   { $('pid-ror-pct').textContent   = pid.ror_pct + '%';   $('pid-ror-n').textContent   = pid.ror_count + ' items'; }
+    if ($('pid-total'))     { $('pid-total').textContent = pid.total; }
+  });
+
+  // ── Knowledge Repatriation Index ───────────────────────────────────
+  safeFetch(withInst('/api/analytics/knowledge-repatriation'), d => {
+    if ($('kri-score'))          { $('kri-score').textContent = d.score; }
+    if ($('kri-interpretation')) { $('kri-interpretation').textContent = d.interpretation || ''; }
+    if ($('kri-total'))          { $('kri-total').textContent = (d.total || 0).toLocaleString(); }
+    if ($('kri-trend')) {
+      const t = d.trend || 0;
+      $('kri-trend').textContent = (t >= 0 ? '+' : '') + t;
+      $('kri-trend').style.color = t >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
+    const classifiable = (d.africa_led || 0) + (d.north_south || 0) || 1;
+    if ($('kri-africa-led'))   { $('kri-africa-led').textContent   = (d.africa_led   || 0).toLocaleString(); }
+    if ($('kri-north-south'))  { $('kri-north-south').textContent  = (d.north_south  || 0).toLocaleString(); }
+    if ($('kri-unclassified')) { $('kri-unclassified').textContent = (d.unclassified || 0).toLocaleString(); }
+    if ($('kri-africa-bar'))   { $('kri-africa-bar').style.width   = Math.round((d.africa_led  || 0) / classifiable * 100) + '%'; }
+    if ($('kri-ns-bar'))       { $('kri-ns-bar').style.width       = Math.round((d.north_south || 0) / classifiable * 100) + '%'; }
+  });
+
+  // ── Research Portfolio Diversity ───────────────────────────────────
+  safeFetch(withInst('/api/analytics/research-diversity'), d => {
+    if ($('rpd-score'))          { $('rpd-score').textContent = d.score; }
+    if ($('rpd-interpretation')) { $('rpd-interpretation').textContent = d.interpretation || ''; }
+    if ($('rpd-dominant'))       { $('rpd-dominant').textContent = d.dominant_sdg || '—'; }
+    if ($('rpd-vs-baseline')) {
+      const diff = (d.score || 0) - 45;
+      $('rpd-vs-baseline').textContent = (diff >= 0 ? '+' : '') + diff;
+      $('rpd-vs-baseline').style.color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
+    if ($('rpd-gaps')) {
+      const gaps = d.gap_sdgs || [];
+      $('rpd-gaps').innerHTML = gaps.length
+        ? gaps.map(g => `<span class="chip text-[10px] py-0.5 px-2" style="background:rgba(245,158,11,.12);color:var(--warning)">${g}</span>`).join('')
+        : '<span class="text-xs" style="color:var(--text-muted)">None — great coverage!</span>';
+    }
+  });
+
+  // ── Open Science Health Score ──────────────────────────────────────
+  safeFetch(withInst('/api/analytics/open-science-health'), d => {
+    if ($('oshs-score'))          { $('oshs-score').textContent = (d.score || '—') + '/100'; }
+    if ($('oshs-grade'))          { $('oshs-grade').textContent = d.grade || '—'; }
+    if ($('oshs-interpretation')) { $('oshs-interpretation').textContent = d.interpretation || ''; }
+    const c = d.components || {};
+    const oaPct    = (c.open_access    && c.open_access.value    != null) ? c.open_access.value    : (c.open_access    || 0);
+    const doiPct   = (c.doi_coverage   && c.doi_coverage.value   != null) ? c.doi_coverage.value   : (c.doi_coverage   || 0);
+    const orcidPct = (c.orcid_coverage && c.orcid_coverage.value != null) ? c.orcid_coverage.value : (c.orcid_coverage || 0);
+    const arkPct   = (c.ark_coverage   && c.ark_coverage.value   != null) ? c.ark_coverage.value   : (c.ark_coverage   || 0);
+    if ($('oshs-oa'))    { $('oshs-oa').textContent    = oaPct    + '%'; $('oshs-oa-bar').style.width    = oaPct    + '%'; }
+    if ($('oshs-doi'))   { $('oshs-doi').textContent   = doiPct   + '%'; $('oshs-doi-bar').style.width   = doiPct   + '%'; }
+    if ($('oshs-orcid')) { $('oshs-orcid').textContent = orcidPct + '%'; $('oshs-orcid-bar').style.width = orcidPct + '%'; }
+    if ($('oshs-ark'))   { $('oshs-ark').textContent   = arkPct   + '%'; $('oshs-ark-bar').style.width   = arkPct   + '%'; }
+    if ($('oshs-vs-baseline')) {
+      const diff = d.vs_baseline != null ? d.vs_baseline : ((d.score || 0) - 38);
+      $('oshs-vs-baseline').textContent = (diff >= 0 ? '+' : '') + parseFloat(diff).toFixed(1);
+      $('oshs-vs-baseline').style.color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
   });
 }
 
@@ -1378,7 +1450,6 @@ function loadCollabTab() {
     renderCollabMap();
     loadCollabPairs();
     loadCitationVelocity();
-    loadCollabNetwork();
   }, () => {
     $('collab-loading').innerHTML = '<p class="text-sm text-center py-8 text-muted">Failed to load collaboration data.</p>';
   });
@@ -1414,9 +1485,19 @@ function renderCollabMap() {
   collabMap.on('load', () => {
     // ── Choropleth: country fill by paper count ───────────────────────
     safeFetch(withInst('/api/collaboration/countries'), resp => {
+      const countries = resp.data.countries || [];
       const counts = {};
-      (resp.data.countries || []).forEach(c => counts[c.code] = c);
+      countries.forEach(c => counts[c.code] = c);
       const maxPapers = Math.max(1, ...Object.values(counts).map(c => c.papers));
+
+      // When DB is empty, overlay a friendly message so the map isn't silent.
+      if (!countries.length) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.65);border-radius:12px;pointer-events:none;z-index:10';
+        overlay.innerHTML = '<p class="text-sm text-center px-8" style="color:rgba(255,255,255,0.7)">No intra-African co-publication data yet.<br>Crawl papers across multiple institutions to populate the map.</p>';
+        mapEl.style.position = 'relative';
+        mapEl.appendChild(overlay);
+      }
 
       fetch('/static/data/africa_admin0.geojson').then(r => r.json()).then(geo => {
         geo.features.forEach(f => {
@@ -1783,15 +1864,31 @@ function startCrawler() {
   const s = $('btn-start'); if (s) s.disabled = true;
   const inst = $('crawler-institution').value;
   const t = Math.min(Math.max(parseInt($('target-count').value) || 20, 1), 250);
-  
-  appendLog('// Starting crawler for ' + inst + ' — target: ' + t + ' papers [SC ONLY]');
-  toast('Mining started for ' + inst, 'info');
+  // Spider select: prefer the dropdown if present, otherwise default to openalex.
+  // The OpenAlex spider discovers SC papers from across the open web (journals,
+  // preprint servers, grey literature indexed by OpenAlex) and is the primary
+  // discovery engine. The "oai" spider reads FROM the institution's own IR (for
+  // dedup reference) and should NOT be the default discovery source.
+  const spiderEl = $('crawler-spider');
+  const spider = spiderEl ? spiderEl.value : 'openalex';
+
+  appendLog('// Starting ' + spider.toUpperCase() + ' harvest for ' + inst + ' — target: ' + t + ' SC papers');
+  toast('Harvest started for ' + inst + ' (' + spider + ')', 'info');
   updateCrawlerUI({ status: 'initializing' });
-  
+
+  const body = { target: t, institution: inst, spider: spider };
+  if (spider === 'oai') {
+    const fromEl = $('oai-from-date');
+    if (fromEl && fromEl.value) body.from_date = fromEl.value;
+  } else {
+    body.boost_special = true;
+    body.sc_only = false;
+  }
+
   fetch('/api/crawler/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: t, institution: inst, boost_special: true, sc_only: true })
+    body: JSON.stringify(body)
   })
   .then(r => r.json())
   .then(d => {
@@ -1812,6 +1909,70 @@ function stopCrawler() {
   fetch('/api/crawler/stop', { method: 'POST' })
     .then(r => r.json())
     .then(d => toast(d.message, d.status === 'success' ? 'warning' : 'error'));
+}
+
+function pruneNonSC(apply) {
+  if (apply && !confirm(
+    'This will permanently delete all non-Special-Collection papers from the database.\n\n' +
+    'Run "Dry Run Prune" first to preview what will be removed.\n\nProceed?'
+  )) return;
+
+  const label = apply ? 'Pruning non-SC papers…' : 'Running dry-run prune…';
+  toast(label, 'info');
+
+  fetch('/api/admin/prune-non-sc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apply }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status !== 'success') { toast(d.message || 'Error', 'error'); return; }
+      const msg = apply
+        ? `Pruned ${d.pruned_non_sc} non-SC papers. ${d.kept_sc} SC papers kept.`
+        : `Dry run: would remove ${d.pruned_non_sc} non-SC papers, keep ${d.kept_sc} SC papers.`;
+      toast(msg, apply ? 'success' : 'warning');
+      if (d.sample_dropped && d.sample_dropped.length) {
+        console.log('[Prune] sample dropped:', d.sample_dropped);
+        appendLog('[PRUNE] ' + (apply ? 'APPLIED' : 'DRY RUN') + ` — drop=${d.pruned_non_sc} keep=${d.kept_sc}`);
+        d.sample_dropped.slice(0, 5).forEach(p =>
+          appendLog(`  DROP: [${p.institution}] ${p.title}`)
+        );
+      }
+      if (apply) { fetchOverview(); invalidateCaches(); if (analyticsLoaded) loadAnalyticsOverview(); }
+    })
+    .catch(e => toast('Prune failed: ' + e.message, 'error'));
+}
+
+function testSMTP() {
+  toast('Sending SMTP test email…', 'info');
+  fetch('/api/admin/test-smtp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'success') toast(d.message, 'success');
+      else toast('SMTP error: ' + d.message, 'error');
+    })
+    .catch(e => toast('SMTP test failed: ' + e.message, 'error'));
+}
+
+function recomputeAlignment() {
+  toast('Scoring papers against AU framework pillars… this may take 10-30 s', 'info');
+  fetch('/api/admin/recompute-alignment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'success')
+        toast(`Alignment done — ${d.scored} papers scored, ${d.aggregate_rows} pillar aggregates built`, 'success');
+      else
+        toast('Alignment error: ' + d.message, 'error');
+    })
+    .catch(e => toast('Alignment recompute failed: ' + e.message, 'error'));
 }
 
 function updateCrawlerUI(d) {
@@ -1837,7 +1998,7 @@ function updateCrawlerUI(d) {
     bar?.classList.remove('active');
     setTimeout(() => {
       fetchOverview(); fetchArchive(); fetchRecentPapers(); invalidateCaches();
-      if (analyticsLoaded) loadAnalyticsOverview();
+      if (analyticsLoaded && currentAtab === 'overview') loadAnalyticsOverview();
     }, 2000);
   }
 }
@@ -2280,7 +2441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const badge = $('crawler-badge');
     if (badge && badge.textContent.includes('Running')) {
       fetchOverview(); fetchRecentPapers();
-      if (analyticsLoaded) { invalidateCaches(); loadAnalyticsOverview(); }
+      if (analyticsLoaded && currentAtab === 'overview') { invalidateCaches(); loadAnalyticsOverview(); }
     }
   }, 30000);
 });

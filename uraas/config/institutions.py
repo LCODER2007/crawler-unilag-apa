@@ -38,6 +38,10 @@ class InstitutionConfig:
         # Optional public OAI-PMH base URL for the institution's repository
         # (read-only harvest). None means no OAI harvest is configured.
         self.oai_endpoint = oai_endpoint or None
+        # Optional OAI-PMH set spec for filtering at source (e.g. DSpace community
+        # handle "com_1234_5").  When set, the OAI spider passes &set=... so only
+        # records from that collection are returned, reducing network overhead.
+        self.oai_set = (crawler_settings or {}).get("oai_set") or None
         self._raw_staff: List[Any] = self._load_staff_raw()
 
     def _resolve_staff_file(self) -> str:

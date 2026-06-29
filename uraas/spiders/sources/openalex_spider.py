@@ -28,23 +28,52 @@ class OpenAlexSpider(scrapy.Spider):
 
     name = "openalex_multi"
     custom_settings = {
-        "DOWNLOAD_DELAY": 1.0,
+        # OpenAlex polite pool: ~10 req/s per IP.  When multiple institution
+        # spiders run in parallel they share the IP budget, so we need a
+        # meaningful delay and generous autothrottle ceiling so 429s are
+        # absorbed gracefully rather than exhausting all retries.
+        "DOWNLOAD_DELAY": 2.0,
         "AUTOTHROTTLE_ENABLED": True,
-        "AUTOTHROTTLE_START_DELAY": 1.0,
-        "AUTOTHROTTLE_MAX_DELAY": 5.0,
+        "AUTOTHROTTLE_START_DELAY": 2.0,
+        "AUTOTHROTTLE_MAX_DELAY": 60.0,
+        "AUTOTHROTTLE_TARGET_CONCURRENCY": 1,
         "CONCURRENT_REQUESTS": 1,
+        "RETRY_ENABLED": True,
+        "RETRY_TIMES": 5,
+        "RETRY_HTTP_CODES": [429, 500, 502, 503, 504],
+        "HTTPERROR_ALLOWED_CODES": [429],
     }
 
-    def __init__(self, institution="unilag", target=20, *args, **kwargs):
+    def __init__(
+        self,
+        institution="unilag",
+        target=20,
+        boost_special=True,
+        sc_only=False,
+        *args,
+        **kwargs,
+    ):
         """
-        Permanently forced to crawl exclusively using Special Collections seeds.
-        General ROR-only waves have been disabled.
+        institution:   registry short name (e.g. "unilag")
+        target:        max SC papers to accept this run
+        boost_special: also run SC seed waves (topic+ROR) in addition to the
+                       general ROR wave — keeps SC recall high (default ON)
+        sc_only:       skip the general ROR wave and run ONLY SC seed waves;
+                       use when you only want targeted SC discovery, no noise
         """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
-
-        self.boost_special = False
-        self.sc_only = False
+        # Accept both bool and string ("true"/"false") — Scrapy passes CLI
+        # spider args as strings when launched via crawl_multi_institution.py.
+        _truthy = {"1", "true", "yes", "on"}
+        if isinstance(boost_special, str):
+            self.boost_special = boost_special.lower() in _truthy
+        else:
+            self.boost_special = bool(boost_special)
+        if isinstance(sc_only, str):
+            self.sc_only = sc_only.lower() in _truthy
+        else:
+            self.sc_only = bool(sc_only)
         registry = get_registry()
         self.institution_config = registry.get(institution)
         if not self.institution_config:
@@ -79,7 +108,7 @@ class OpenAlexSpider(scrapy.Spider):
             f"&mailto={MAILTO}"
         )
 
-    def start_requests(self):
+    async def start(self):
         # Wave 1 — general ROR-only crawl (skipped in sc_only mode)
         if not self.sc_only:
             url = self._build_url(filters=f"institutions.ror:{self.ror_short}")
@@ -115,6 +144,13 @@ class OpenAlexSpider(scrapy.Spider):
 
     def parse(self, response):
         assert self.institution_config is not None, "Institution config must be loaded"
+
+        if response.status == 429:
+            self.logger.warning(
+                "OpenAlex rate-limited (429) on wave=%s — Scrapy retry will back off",
+                response.meta.get("wave", "?"),
+            )
+            return
 
         # Hard stop if we've already reached the global target
         if self._accepted >= self.target_limit:
@@ -202,13 +238,6 @@ class OpenAlexSpider(scrapy.Spider):
             )
             concepts = work.get("concepts", [])
             dc_subject = ", ".join(c.get("display_name", "") for c in concepts[:5] if c)
-
-            # ── Gate 4: AI Special Collections Decision Engine ────────────────
-            from uraas.services.sc_engine import is_special_collection
-            is_sc, sc_score, sc_cats = is_special_collection(title, abstract, dc_subject)
-            if not is_sc:
-                self.logger.debug(f"Gate 4 FAIL (AI rejected): {title[:60]}")
-                continue
 
             self._accepted += 1
             wave_accepted += 1

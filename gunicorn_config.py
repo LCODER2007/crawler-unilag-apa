@@ -6,8 +6,9 @@ Optimized for Flask-SocketIO with WebSocket support.
 import multiprocessing
 import os
 
-# Server socket
-port = os.getenv("PORT", "10000")
+# Server socket — default 8080 matches Dockerfile EXPOSE and health checks.
+# HF Spaces overrides this with PORT=7860 via Space config.
+port = os.getenv("PORT", "8080")
 bind = f"0.0.0.0:{port}"
 
 # Worker processes

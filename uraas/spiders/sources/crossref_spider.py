@@ -48,7 +48,6 @@ class CrossrefSpider(scrapy.Spider):
         )
         self.sc_only = str(sc_only).lower() in ("true", "1", "yes", "on")
 
-        # Get institution configuration
         registry = get_registry()
         self.institution_config = registry.get(institution)
 
@@ -57,10 +56,12 @@ class CrossrefSpider(scrapy.Spider):
 
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
+        self._accepted = 0
+        self._rejected_aff = 0
 
         self.logger.info(f"Initialized Crossref spider for {self.institution_name}")
         self.logger.info(
-            f"ROR ID: {self.ror_id}  | boost_special={self.boost_special} | sc_only={self.sc_only}"
+            f"ROR ID: {self.ror_id}  | boost_special={self.boost_special} | sc_only={self.sc_only} | target={self.target_limit}"
         )
 
     def _build_url(self, *, query: str = "", offset: int = 0) -> str:
@@ -78,13 +79,13 @@ class CrossrefSpider(scrapy.Spider):
             f"&mailto={mailto}"
         )
 
-    def start_requests(self):
+    async def start(self):
         # Wave 1 — plain affiliation query
         if not self.sc_only:
             url = self._build_url()
             self.logger.info(f"[ROR wave] {url}")
             yield scrapy.Request(
-                url=url, callback=self.parse, meta={"wave": "ror", "query": ""}
+                url=url, callback=self.parse, meta={"wave": "ror", "query": "", "offset": 0}
             )
 
         # Wave 2 — one fan-out request per SC seed phrase, AND-ed with affiliation.
@@ -95,28 +96,51 @@ class CrossrefSpider(scrapy.Spider):
                 yield scrapy.Request(
                     url=url,
                     callback=self.parse,
-                    meta={"wave": f"sc:{seed}", "query": seed},
+                    meta={"wave": f"sc:{seed}", "query": seed, "offset": 0},
                 )
 
     def parse(self, response):
+        if self._accepted >= self.target_limit:
+            return
+
         data = response.json()
         items = data.get("message", {}).get("items", [])
+        wave = response.meta.get("wave", "ror")
+        self.logger.info(f"[{wave}] received {len(items)} works")
 
         for work in items:
+            if self._accepted >= self.target_limit:
+                break
+
             title = work.get("title", [""])[0] if work.get("title") else ""
+            if not title:
+                continue
+
             doi = work.get("DOI", "")
             url = work.get("URL", "")
-
-            # Abstract might be in abstract or we might not have it
             abstract = work.get("abstract", "")
 
-            # Authors
+            # Affiliation check using Crossref author.affiliation field.
+            # Crossref returns affiliation data when available; if empty we
+            # accept the paper (institution filter on the query is still active).
+            raw_affs = []
             authors = []
             for author in work.get("author", []):
                 given = author.get("given", "")
                 family = author.get("family", "")
                 if given or family:
                     authors.append(f"{given} {family}".strip())
+                for aff in author.get("affiliation", []):
+                    name = aff.get("name", "")
+                    if name:
+                        raw_affs.append(name)
+
+            if raw_affs:
+                aff_text = " ".join(raw_affs)
+                if not self.institution_config.matches_affiliation(aff_text):
+                    self._rejected_aff += 1
+                    self.logger.debug(f"Crossref aff FAIL: {title[:60]}")
+                    continue
 
             # Try to find a PDF link in the 'link' array if open access
             pdf_url = None
@@ -125,6 +149,7 @@ class CrossrefSpider(scrapy.Spider):
                     pdf_url = link.get("URL")
                     break
 
+            self._accepted += 1
             yield {
                 "title": title,
                 "authors": authors,
@@ -133,17 +158,19 @@ class CrossrefSpider(scrapy.Spider):
                 "url": url,
                 "pdf_url": pdf_url,
                 "source_repository": "Crossref",
-                "is_unilag_author": True,  # Legacy field
-                "raw_affiliation": self.institution_name,
-                # NEW: Multi-institution support
+                "is_unilag_author": True,
+                "raw_affiliation": " | ".join(raw_affs) if raw_affs else self.institution_name,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
             }
 
-        # Deep pagination — keep the originating wave's query so SC waves don't
-        # collapse back into plain-affiliation pagination.
+        # Deep pagination — stop when target reached or no more results.
         offset = response.meta.get("offset", 0) + 50
-        if items and offset < 500:
+        if (
+            items
+            and offset < 500
+            and self._accepted < self.target_limit
+        ):
             wave = response.meta.get("wave", "ror")
             query = response.meta.get("query", "")
             next_url = self._build_url(query=query, offset=offset)
@@ -152,3 +179,9 @@ class CrossrefSpider(scrapy.Spider):
                 callback=self.parse,
                 meta={"wave": wave, "query": query, "offset": offset},
             )
+
+    def closed(self, reason):
+        self.logger.info(
+            f"Crossref spider closed | {self.institution_name} | "
+            f"accepted={self._accepted} | rejected_aff={self._rejected_aff} | reason={reason}"
+        )

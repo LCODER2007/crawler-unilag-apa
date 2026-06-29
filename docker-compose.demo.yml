@@ -1,0 +1,106 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  URAAS Demo Compose — HTTP-only, works on any VPS by bare IP.
+#
+#  Identical to docker-compose.prod.yml except:
+#    • Uses nginx.demo.conf (HTTP only, catch-all server_name)
+#    • No SSL directory mount needed
+#
+#  Deploy:
+#    docker compose --env-file .env.prod -f docker-compose.demo.yml up --build -d
+#
+#  Access:
+#    http://<YOUR_SERVER_IP>     (via nginx on port 80)
+#    http://<YOUR_SERVER_IP>:8080  (direct to app, bypasses nginx)
+# ═══════════════════════════════════════════════════════════════════════════
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: uraas-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uraas_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-uraas_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-uraas_db}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uraas_user} -d ${POSTGRES_DB:-uraas_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - uraas-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: uraas-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-uraas_redis_pass}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-uraas_redis_pass}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - uraas-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uraas-app
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+      STORAGE_PATH: /app/storage/pdfs
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - uraas-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: uraas-nginx
+    volumes:
+      - ./nginx/nginx.demo.conf:/etc/nginx/nginx.conf:ro   # HTTP-only, bare IP
+      - ./storage:/app/storage:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - uraas-net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  uraas-net:
+    driver: bridge

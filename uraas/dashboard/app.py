@@ -95,6 +95,9 @@ ADMIN_ENDPOINTS = {
     "stop_crawler",
     "crawler_status",
     "flush_analytics_cache",
+    "prune_non_sc",
+    "test_smtp",
+    "recompute_alignment",
     "update_citations",
     "bulk_update_citations",
     "export_csv",
@@ -872,7 +875,7 @@ def list_faculties():
 
 @app.route("/api/institutions")
 def list_institutions():
-    """List all configured institutions with their staff counts."""
+    """List all configured institutions with their staff counts and OAI support flag."""
     from uraas.config.institutions import get_registry
 
     registry = get_registry()
@@ -885,6 +888,8 @@ def list_institutions():
                 "ror": inst.ror,
                 "sub_region": inst.sub_region,
                 "staff_count": len(inst.staff_names),
+                "has_oai": bool(inst.oai_endpoint),
+                "oai_endpoint": inst.oai_endpoint or None,
             }
         )
     return jsonify(results)
@@ -941,6 +946,179 @@ def flush_analytics_cache():
     """Manual cache flush endpoint (admin use)."""
     analytics_cache.invalidate_all()
     return jsonify({"status": "success", "message": "Analytics cache flushed"})
+
+
+@app.route("/api/admin/prune-non-sc", methods=["POST"])
+def prune_non_sc():
+    """Re-classify all items and delete non-SC papers (admin only).
+
+    POST body: {"apply": true}   — actually prune
+    POST body: {"apply": false}  — dry run (default), just return counts
+    """
+    from uraas.database import Author, Collection, Community, SessionLocal as _SL, item_authors
+    from uraas.services.sc_engine import is_special_collection
+    from sqlalchemy import text as _text
+
+    data = request.get_json() or {}
+    apply = bool(data.get("apply", False))
+
+    session = _SL()
+    try:
+        items = session.query(Item).all()
+        total = len(items)
+        keep_ids, drop_ids = [], []
+        samples = []
+
+        for it in items:
+            is_sc, score, cats = is_special_collection(
+                it.title or "", it.abstract or "", it.dc_subject or ""
+            )
+            if apply:
+                it.special_collection_score = float(score)
+                it.special_collection_categories = ",".join(cats) if is_sc else ""
+            if is_sc:
+                keep_ids.append(it.id)
+            else:
+                drop_ids.append(it.id)
+                if len(samples) < 20:
+                    samples.append({
+                        "id": it.id,
+                        "title": (it.title or "")[:80],
+                        "institution": it.institution or "",
+                    })
+
+        if apply:
+            session.commit()
+            # Delete non-SC items in chunks
+            session.execute(_text("PRAGMA foreign_keys=ON"))
+            deleted = 0
+            for i in range(0, len(drop_ids), 500):
+                chunk = drop_ids[i:i + 500]
+                for it in session.query(Item).filter(Item.id.in_(chunk)).all():
+                    session.delete(it)
+                    deleted += 1
+                session.commit()
+
+            # Sweep stray association rows
+            session.execute(_text(
+                "DELETE FROM item_authors WHERE item_id NOT IN (SELECT id FROM items) "
+                "OR author_id NOT IN (SELECT id FROM authors)"
+            ))
+            session.execute(_text(
+                "DELETE FROM item_collections WHERE item_id NOT IN (SELECT id FROM items) "
+                "OR collection_id NOT IN (SELECT id FROM collections)"
+            ))
+            session.commit()
+
+            # Orphan authors
+            orphan_authors = (
+                session.query(Author)
+                .filter(~Author.id.in_(session.query(item_authors.c.author_id)))
+                .all()
+            )
+            for a in orphan_authors:
+                session.delete(a)
+            empty_colls = [c for c in session.query(Collection).all() if not c.items]
+            for c in empty_colls:
+                session.delete(c)
+            session.commit()
+            empty_comms = [c for c in session.query(Community).all() if not c.collections]
+            for c in empty_comms:
+                session.delete(c)
+            session.commit()
+
+            analytics_cache.invalidate_all()
+
+        return jsonify({
+            "status": "success",
+            "applied": apply,
+            "total_before": total,
+            "kept_sc": len(keep_ids),
+            "pruned_non_sc": len(drop_ids),
+            "sample_dropped": samples,
+        })
+    except Exception as e:
+        logger.error("prune_non_sc: %s", e)
+        session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        session.close()
+
+
+@app.route("/api/admin/test-smtp", methods=["POST"])
+def test_smtp():
+    """Send a test email to verify SMTP configuration (admin only)."""
+    from uraas.services.email_service import _is_smtp_configured
+    from uraas.config import config
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.utils import parseaddr
+
+    if not _is_smtp_configured():
+        return jsonify({
+            "status": "error",
+            "message": "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in environment/secrets.",
+            "smtp_host": config.SMTP_HOST or "(not set)",
+            "smtp_user": config.SMTP_USER or "(not set)",
+        }), 400
+
+    to_email = (request.get_json(silent=True) or {}).get("to", config.SMTP_USER)
+    try:
+        msg = MIMEText("URAAS SMTP test — configuration is working correctly.", "plain", "utf-8")
+        msg["Subject"] = "[URAAS] SMTP Test"
+        msg["From"] = config.SMTP_FROM
+        msg["To"] = to_email
+        if config.SMTP_USE_TLS:
+            server = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+            server.ehlo(); server.starttls(); server.ehlo()
+        else:
+            server = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+        server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        envelope_from = parseaddr(config.SMTP_FROM)[1] or config.SMTP_USER
+        server.sendmail(envelope_from, [to_email], msg.as_bytes())
+        server.quit()
+        logger.info("SMTP test email sent to %s", to_email)
+        return jsonify({"status": "success", "message": f"Test email sent to {to_email}"})
+    except Exception as exc:
+        logger.error("SMTP test failed: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/admin/recompute-alignment", methods=["POST"])
+def recompute_alignment():
+    """Score all SC items against AU framework pillars and rebuild AlignmentAggregate (admin only).
+
+    This is the web-UI equivalent of running scripts/backfill_alignment.py.
+    Runs synchronously; expect 5-30 s for 100-200 papers."""
+    from uraas.services.alignment_engine import recompute_aggregates, score_item_alignment
+
+    session = SessionLocal()
+    try:
+        q = session.query(Item).filter(Item.special_collection_score > 0)
+        items = q.all()
+        scored = 0
+        for it in items:
+            try:
+                al_json, al_ver = score_item_alignment(
+                    it.title or "", it.abstract or "", it.dc_subject or ""
+                )
+                it.alignment_scores = al_json
+                it.alignment_version = al_ver
+                scored += 1
+            except Exception as e:
+                logger.warning("alignment scoring failed for item %s: %s", it.id, e)
+        session.commit()
+
+        rows = recompute_aggregates(session)
+        analytics_cache.invalidate_all()
+        logger.info("recompute_alignment: scored=%d, aggregate_rows=%d", scored, rows)
+        return jsonify({"status": "success", "scored": scored, "aggregate_rows": rows})
+    except Exception as e:
+        logger.error("recompute_alignment: %s", e)
+        session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        session.close()
 
 
 @app.route("/api/analytics/faculty-comparison")
@@ -1115,14 +1293,14 @@ def lecturer_profile():
 
 @app.route("/api/analytics/language-research")
 def language_research():
-    """Phase 7 cleanup: Uses pre-compiled regex from uraas.config.language_research."""
-    from uraas.analytics.engine import STOP_WORDS
-    from uraas.config.language_research import LANG_TIER1, LANG_TIER2, score_item
+    """Language & Culture research — returns SC papers matched by language keywords."""
+    from uraas.config.language_research import score_item
+    from uraas.services.sc_engine import SC_FILTER
 
     session = SessionLocal()
     try:
         institution = request.args.get("institution", "").strip()
-        q = session.query(Item)
+        q = session.query(Item).filter(SC_FILTER)
         if institution:
             q = q.filter(Item.institution.ilike(f"%{institution}%"))
         items = q.all()
@@ -1134,11 +1312,10 @@ def language_research():
                 score, matched = score_item(item.title or "", item.abstract or "")
                 if not score:
                     continue
-                text = (f"{item.title or ''} {item.abstract or ''}").lower()
-                import re as _re
-                for word in _re.findall(r"\b[a-z]{5,}\b", text):
-                    if word not in STOP_WORDS:
-                        keyword_counts[word] = keyword_counts.get(word, 0) + 1
+                # Count only the actual matched language terms (not all words)
+                for term in matched:
+                    t = term.lower()
+                    keyword_counts[t] = keyword_counts.get(t, 0) + 1
                 matches.append(
                     {
                         "id": item.id,
@@ -1509,6 +1686,30 @@ def tk_vitality_score():
 @app.route("/api/analytics/linguistic-diversity-index")
 def linguistic_diversity_index():
     return jsonify(analytics.get_linguistic_diversity_index())
+
+
+@app.route("/api/analytics/pid-coverage")
+def pid_coverage():
+    institution = request.args.get("institution", None)
+    return jsonify(analytics.get_pid_coverage(institution=institution))
+
+
+@app.route("/api/analytics/knowledge-repatriation")
+def knowledge_repatriation():
+    institution = request.args.get("institution", None)
+    return jsonify(analytics.get_knowledge_repatriation(institution=institution))
+
+
+@app.route("/api/analytics/research-diversity")
+def research_diversity():
+    institution = request.args.get("institution", None)
+    return jsonify(analytics.get_research_diversity(institution=institution))
+
+
+@app.route("/api/analytics/open-science-health")
+def open_science_health():
+    institution = request.args.get("institution", None)
+    return jsonify(analytics.get_open_science_health(institution=institution))
 
 
 @app.route("/api/analytics/special-collections")
@@ -2168,7 +2369,10 @@ def start_crawler():
         # Optional spider selection (allowlisted). "oai" = read-only harvest of
         # the institution's own repository (theses/grey literature).
         spider = data.get("spider", "openalex")
-        if spider not in ("openalex", "crossref", "arxiv", "orcid", "oai"):
+        _allowed_spiders = ("openalex", "crossref", "arxiv", "orcid", "oai",
+                            "semantic_scholar", "europepmc", "core", "pubmed",
+                            "openaire", "doaj", "ajol", "all")
+        if spider not in _allowed_spiders:
             return jsonify({"status": "error", "message": f"Unknown spider: {spider}"}), 400
         # OAI date window — accept only a safe YYYY-MM-DD shape; ignore anything else.
         _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -2464,6 +2668,287 @@ def get_unilag_report():
         return jsonify({"error": str(e)}), 500
     finally:
         session.close()
+
+
+# ── Live IR connection + batch deposit ───────────────────────────────────────
+# All write endpoints are admin-only (ADMIN_ENDPOINTS list at the top of this
+# file gates them automatically).  The approve/reject token endpoints are
+# intentionally PUBLIC — the token itself is the credential.
+
+ADMIN_ENDPOINTS.update({
+    "ir_status",
+    "ir_collections",
+    "ir_live_stats",
+    "ir_queue_batch",
+    "ir_list_batches",
+    "ir_batch_status",
+    "ir_test_harvest",
+})
+
+
+@app.route("/api/ir/test-harvest", methods=["POST"])
+def ir_test_harvest():
+    """Dry-run OAI harvest: collect SC papers, send preview email, save JSON.
+
+    Body JSON:
+      institution   – short name (default: "unilag")
+      count         – max SC papers to collect (default: 50, max: 100)
+      email         – confirmation address (required)
+      from_date     – OAI from date YYYY-MM-DD (optional)
+
+    DOES NOT save to DB. DOES NOT deposit to IR.
+    Runs in a background thread; returns immediately with a job ID.
+    """
+    data = request.get_json(silent=True) or {}
+    institution = (data.get("institution") or "unilag").strip().lower()
+    count = min(max(int(data.get("count") or 50), 1), 100)
+    email = (data.get("email") or "").strip()
+    from_date = (data.get("from_date") or "").strip() or None
+
+    if not email or "@" not in email:
+        return jsonify({"status": "error", "message": "A valid email address is required"}), 400
+
+    from uraas.config.institutions import get_registry as _get_reg
+    _reg = _get_reg()
+    inst_cfg = _reg.get(institution)
+    if not inst_cfg:
+        return jsonify({"status": "error", "message": f"Unknown institution: {institution}"}), 400
+    if not inst_cfg.oai_endpoint:
+        return jsonify({"status": "error", "message": f"'{institution}' has no OAI endpoint configured"}), 400
+
+    import subprocess, sys as _sys
+    script_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "scripts", "test_harvest_50.py",
+    )
+    cmd = [_sys.executable, script_path,
+           "--institution", institution,
+           "--count", str(count),
+           "--email", email]
+    if from_date:
+        cmd.extend(["--from-date", from_date])
+
+    try:
+        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            env=env,
+        )
+        # Stream output via existing SocketIO terminal
+        def _monitor():
+            for line in iter(process.stdout.readline, b""):
+                line_text = line.decode("utf-8", errors="replace").strip()
+                if line_text:
+                    socketio.emit("terminal_output", {"line": line_text})
+            process.wait()
+            socketio.emit("terminal_output", {"line": "[TEST HARVEST] Complete."})
+        threading.Thread(target=_monitor, daemon=True).start()
+
+        return jsonify({
+            "status": "started",
+            "message": f"Dry-run harvest started for {inst_cfg.name}. Preview will be emailed to {email}.",
+            "institution": inst_cfg.name,
+            "count": count,
+            "email": email,
+        }), 202
+    except Exception as exc:
+        logger.error("ir_test_harvest: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/ir/status")
+def ir_status():
+    """Check connectivity to the live DSpace IR (no credentials needed for read)."""
+    from uraas.services.ir_client import DSpaceClient
+    client = DSpaceClient()
+    result = client.probe()
+    return jsonify(result), 200 if result.get("ok") else 503
+
+
+@app.route("/api/ir/collections")
+def ir_collections():
+    """List DSpace collections for the deposit UI dropdown."""
+    from uraas.services.ir_client import DSpaceClient
+    try:
+        client = DSpaceClient()
+        cols = client.get_collections()
+        return jsonify({"status": "success", "collections": cols})
+    except Exception as exc:
+        logger.error("ir_collections: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/ir/live-stats")
+def ir_live_stats():
+    """Composite live stats tile pulled directly from the UNILAG DSpace IR."""
+    from uraas.services.ir_client import DSpaceClient
+    try:
+        client = DSpaceClient()
+        stats = client.get_live_stats()
+        return jsonify({"status": "success", "data": stats})
+    except Exception as exc:
+        logger.error("ir_live_stats: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/ir/deposit/queue", methods=["POST"])
+def ir_queue_batch():
+    """Queue a batch of local items for deposit to the real IR.
+
+    Body JSON:
+      item_ids         – list of local Item.id values to deposit
+      collection_uuid  – DSpace collection UUID (from /api/ir/collections)
+      collection_name  – display name (optional, for the email)
+      approval_email   – address to send the approve/reject email to
+    """
+    from uraas.services.batch_approval import queue_batch
+
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("item_ids", [])
+    collection_uuid = (data.get("collection_uuid") or "").strip()
+    collection_name = (data.get("collection_name") or "").strip()
+    approval_email = (data.get("approval_email") or "").strip()
+    requested_by = session.get("user", "admin")
+
+    if not item_ids:
+        return jsonify({"status": "error", "message": "item_ids required"}), 400
+    if not isinstance(item_ids, list) or not all(isinstance(i, int) for i in item_ids):
+        return jsonify({"status": "error", "message": "item_ids must be a list of integers"}), 400
+    if len(item_ids) > 500:
+        return jsonify({"status": "error", "message": "Maximum 500 items per batch"}), 400
+    if not approval_email or "@" not in approval_email:
+        return jsonify({"status": "error", "message": "A valid approval_email is required"}), 400
+    if not collection_uuid:
+        return jsonify({"status": "error", "message": "collection_uuid required"}), 400
+
+    try:
+        result = queue_batch(
+            item_ids=item_ids,
+            collection_uuid=collection_uuid,
+            collection_name=collection_name,
+            approval_email=approval_email,
+            requested_by=requested_by,
+        )
+        return jsonify(result), 201
+    except Exception as exc:
+        logger.error("ir_queue_batch: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/ir/batch/<token>/approve", methods=["GET"])
+def ir_approve_batch(token):
+    """Email approval link — no login required; token is the credential.
+
+    Renders a plain HTML confirmation page so it works directly in a browser
+    after the approver clicks the link in their email.
+    """
+    from uraas.services.batch_approval import approve_batch
+
+    # Minimal token sanity-check (URL-safe base64 chars only)
+    import re as _re
+    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
+        return _approval_html("Invalid Link", "The approval link is malformed.", ok=False), 400
+
+    result = approve_batch(token)
+
+    if result["status"] == "approved":
+        return _approval_html(
+            "Deposit Approved",
+            result["message"],
+            ok=True,
+        ), 200
+    elif result["status"] == "already_actioned":
+        return _approval_html(
+            "Already Actioned",
+            result["message"],
+            ok=True,
+        ), 200
+    elif result["status"] == "expired":
+        return _approval_html("Link Expired", result["message"], ok=False), 410
+    else:
+        return _approval_html("Not Found", result["message"], ok=False), 404
+
+
+@app.route("/api/ir/batch/<token>/reject", methods=["GET"])
+def ir_reject_batch(token):
+    """Email rejection link — no login required; token is the credential."""
+    from uraas.services.batch_approval import reject_batch
+
+    import re as _re
+    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
+        return _approval_html("Invalid Link", "The rejection link is malformed.", ok=False), 400
+
+    reason = request.args.get("reason", "Rejected via email link")
+    result = reject_batch(token, reason=reason)
+
+    if result["status"] == "rejected":
+        return _approval_html(
+            "Batch Rejected",
+            result["message"],
+            ok=False,
+        ), 200
+    elif result["status"] == "already_actioned":
+        return _approval_html("Already Actioned", result["message"], ok=True), 200
+    else:
+        return _approval_html("Not Found", result["message"], ok=False), 404
+
+
+@app.route("/api/ir/batches")
+def ir_list_batches():
+    """List all deposit batches (admin panel)."""
+    from uraas.services.batch_approval import get_batches
+    try:
+        limit = min(int(request.args.get("limit", 50)), 200)
+        batches = get_batches(limit=limit)
+        return jsonify({"status": "success", "batches": batches})
+    except Exception as exc:
+        logger.error("ir_list_batches: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/ir/batch/<token>/status")
+def ir_batch_status(token):
+    """Get status of a specific batch (admin polling)."""
+    from uraas.services.batch_approval import get_batch
+    import re as _re
+    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
+        return jsonify({"status": "error", "message": "Invalid token"}), 400
+    batch = get_batch(token)
+    if not batch:
+        return jsonify({"status": "error", "message": "Batch not found"}), 404
+    return jsonify({"status": "success", "batch": batch})
+
+
+def _approval_html(title: str, message: str, ok: bool) -> str:
+    colour = "#1a7a4a" if ok else "#c0392b"
+    icon = "✓" if ok else "✗"
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>URAAS — {title}</title>
+  <style>
+    body{{margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}}
+    .card{{background:#fff;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.12);padding:48px 40px;max-width:480px;text-align:center}}
+    .icon{{font-size:52px;color:{colour};margin-bottom:16px}}
+    h1{{margin:0 0 12px;font-size:24px;color:#1a3a5c}}
+    p{{color:#555;font-size:15px;line-height:1.6;margin:0 0 24px}}
+    a{{display:inline-block;padding:12px 28px;background:#1a3a5c;color:#fff;border-radius:6px;text-decoration:none;font-size:14px}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">{icon}</div>
+    <h1>{title}</h1>
+    <p>{message}</p>
+    <a href="/">Return to Dashboard</a>
+  </div>
+</body>
+</html>"""
 
 
 #  Error Handlers

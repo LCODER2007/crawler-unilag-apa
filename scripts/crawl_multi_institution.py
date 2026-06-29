@@ -37,8 +37,14 @@ def main():
         "--spider",
         type=str,
         default="openalex",
-        choices=["openalex", "crossref", "arxiv", "orcid", "oai"],
-        help="Spider to use for crawling",
+        choices=["openalex", "crossref", "arxiv", "orcid", "oai",
+                 "semantic_scholar", "europepmc", "core", "pubmed",
+                 "openaire", "doaj", "ajol", "all"],
+        help=(
+            "Spider to use for crawling. "
+            "'all' fans out across every web source (openalex + crossref + "
+            "semantic_scholar + europepmc + arxiv + orcid) for maximum coverage."
+        ),
     )
     parser.add_argument(
         "--from-date",
@@ -104,28 +110,53 @@ def main():
     print("\n" + "=" * 60, flush=True)
     print("MULTI-INSTITUTION CRAWLER", flush=True)
     print("=" * 60, flush=True)
-    print(f"\nTarget: {args.target} papers per institution", flush=True)
+    print(f"\nTarget: {args.target} papers total per institution", flush=True)
     print(f"Spider: {args.spider}", flush=True)
     print(f"\nValidating institutions...", flush=True)
 
     # Map spider names to classes (defined early so we can validate)
     spider_map = {
-        "openalex": "uraas.spiders.sources.openalex_spider.OpenAlexSpider",
-        "crossref": "uraas.spiders.sources.crossref_spider.CrossrefSpider",
-        "arxiv": "uraas.spiders.sources.arxiv_spider.ArxivSpider",
-        "orcid": "uraas.spiders.sources.orcid_spider.ORCIDSpider",
-        "oai": "uraas.spiders.sources.oai_spider.OAISpider",
+        "openalex":        "uraas.spiders.sources.openalex_spider.OpenAlexSpider",
+        "crossref":        "uraas.spiders.sources.crossref_spider.CrossrefSpider",
+        "arxiv":           "uraas.spiders.sources.arxiv_spider.ArxivSpider",
+        "orcid":           "uraas.spiders.sources.orcid_spider.ORCIDSpider",
+        "oai":             "uraas.spiders.sources.oai_spider.OAISpider",
+        "semantic_scholar":"uraas.spiders.sources.semantic_scholar_spider.SemanticScholarSpider",
+        "europepmc":       "uraas.spiders.sources.europepmc_spider.EuropePMCSpider",
+        "core":            "uraas.spiders.sources.core_spider.CORESpider",
+        "pubmed":          "uraas.spiders.sources.pubmed_spider.PubMedSpider",
+        "openaire":        "uraas.spiders.sources.openaire_spider.OpenAIRESpider",
+        "doaj":            "uraas.spiders.sources.doaj_spider.DOAJSpider",
+        "ajol":            "uraas.spiders.sources.ajol_spider.AJOLSpider",
     }
 
-    spider_class_path = spider_map.get(args.spider)
-    if not spider_class_path:
-        print(f"\n[ERR] Spider '{args.spider}' not supported", flush=True)
-        return 1
+    # "all" = every web-discovery spider (excludes "oai" which reads FROM the IR)
+    ALL_WEB_SPIDERS = [
+        "openalex", "crossref", "semantic_scholar", "europepmc",
+        "core", "pubmed", "openaire", "doaj", "ajol", "arxiv", "orcid",
+    ]
 
-    # Import spider class before crawl starts so errors appear early
-    module_path, class_name = spider_class_path.rsplit(".", 1)
-    module = __import__(module_path, fromlist=[class_name])
-    spider_class = getattr(module, class_name)
+    if args.spider == "all":
+        spider_names_to_run = ALL_WEB_SPIDERS
+        # Divide target across spiders so total ≈ requested target
+        per_spider_target = max(1, args.target // len(spider_names_to_run))
+    else:
+        spider_names_to_run = [args.spider]
+        per_spider_target = args.target
+
+    # Validate + import all spider classes up front so errors appear early
+    spider_classes = {}
+    for sname in spider_names_to_run:
+        path = spider_map.get(sname)
+        if not path:
+            print(f"\n[ERR] Spider '{sname}' not supported", flush=True)
+            return 1
+        mod_path, cls_name = path.rsplit(".", 1)
+        mod = __import__(mod_path, fromlist=[cls_name])
+        spider_classes[sname] = getattr(mod, cls_name)
+
+    # Legacy single-spider variable (used below)
+    spider_class = spider_classes.get(spider_names_to_run[0])
 
     for inst in valid_institutions:
         config = registry.get(inst)
@@ -157,28 +188,29 @@ def main():
 
     print(f"  Boost special collections: {args.boost_special}", flush=True)
     print(f"  SC-only mode: {args.sc_only}", flush=True)
+    print(f"  Spiders: {', '.join(spider_names_to_run)}", flush=True)
 
     for inst in valid_institutions:
-        config = registry.get(inst)
-        print(f"  -> {config.name}", flush=True)
-        if args.spider == "oai":
-            # OAI harvester has its own knobs (date window); it does not take the
-            # Special-Collections boost/seed flags.
-            process.crawl(
-                spider_class,
-                institution=inst,
-                target=args.target,
-                from_date=args.from_date,
-                until_date=args.until_date,
-            )
-        else:
-            process.crawl(
-                spider_class,
-                institution=inst,
-                target=args.target,
-                boost_special=args.boost_special,
-                sc_only=args.sc_only,
-            )
+        cfg = registry.get(inst)
+        print(f"  -> {cfg.name}", flush=True)
+        for sname in spider_names_to_run:
+            scls = spider_classes[sname]
+            if sname == "oai":
+                process.crawl(
+                    scls,
+                    institution=inst,
+                    target=per_spider_target,
+                    from_date=args.from_date,
+                    until_date=args.until_date,
+                )
+            else:
+                process.crawl(
+                    scls,
+                    institution=inst,
+                    target=per_spider_target,
+                    boost_special=args.boost_special,
+                    sc_only=args.sc_only,
+                )
 
     print(
         f"\nStarting crawl for {len(valid_institutions)} institution(s)...", flush=True

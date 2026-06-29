@@ -46,8 +46,11 @@ _NS = {
     "dc": "http://purl.org/dc/elements/1.1/",
 }
 
-# Default incremental look-back when no from_date is supplied (days).
-_DEFAULT_LOOKBACK_DAYS = 365
+# Default look-back when no from_date is supplied.
+# Keep at ~5 years: covers the bulk of active IR deposits without causing 500s
+# on DSpace servers that struggle with very large date-range requests.
+# For a full back-catalogue harvest, pass --from-date 2000-01-01 explicitly.
+_DEFAULT_LOOKBACK_DAYS = 1825  # ~5 years
 
 
 class OAISpider(scrapy.Spider):
@@ -76,6 +79,7 @@ class OAISpider(scrapy.Spider):
         target=200,
         from_date=None,
         until_date=None,
+        oai_set=None,
         *args,
         **kwargs,
     ):
@@ -84,6 +88,11 @@ class OAISpider(scrapy.Spider):
         target:      max records to accept this run (hard stop).
         from_date:   lower bound ``YYYY-MM-DD`` (defaults to a recent look-back).
         until_date:  optional upper bound ``YYYY-MM-DD``.
+        oai_set:     optional OAI-PMH set spec (e.g. a DSpace community/collection
+                     handle like ``com_1234_56``) to filter at source.  When set,
+                     only records belonging to that set are returned by the server —
+                     drastically reducing traffic for focused harvests.  If None,
+                     the institution config's ``oai_set`` field is used if present.
         """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
@@ -107,15 +116,22 @@ class OAISpider(scrapy.Spider):
 
         self.from_date = self._normalize_date(from_date) or self._default_from()
         self.until_date = self._normalize_date(until_date)
+        # OAI set: explicit arg > institution config > None (no set filter)
+        self.oai_set = (
+            oai_set
+            or getattr(self.institution_config, "oai_set", None)
+            or None
+        )
 
         self._accepted = 0
 
         self.logger.info(
-            "OAI harvester | %s | endpoint=%s | from=%s until=%s | target=%d",
+            "OAI harvester | %s | endpoint=%s | from=%s until=%s | set=%s | target=%d",
             self.institution_name,
             self.oai_endpoint,
             self.from_date,
             self.until_date or "(now)",
+            self.oai_set or "(all)",
             self.target_limit,
         )
 
@@ -145,6 +161,8 @@ class OAISpider(scrapy.Spider):
         }
         if self.until_date:
             params["until"] = self.until_date
+        if self.oai_set:
+            params["set"] = self.oai_set
         return f"{self.oai_endpoint}?{urlencode(params)}"
 
     def _resume_url(self, token: str) -> str:
@@ -153,7 +171,7 @@ class OAISpider(scrapy.Spider):
         # Per OAI-PMH spec, resumptionToken is sent alone with the verb.
         return f"{self.oai_endpoint}?{urlencode({'verb': 'ListRecords', 'resumptionToken': token})}"
 
-    def start_requests(self):
+    async def start(self):
         url = self._list_records_url()
         self.logger.info("[OAI ListRecords] %s", url)
         yield scrapy.Request(url=url, callback=self.parse, meta={"oai": True})

@@ -1,152 +1,197 @@
+"""
+arXiv spider — uses the official Atom API (export.arxiv.org/api/query).
+
+The HTML search page at arxiv.org/search was fragile and layout-dependent.
+The Atom API is stable, rate-limit-friendly (1 req/3s recommended), and
+returns clean structured XML metadata.
+
+Docs: info.arxiv.org/help/api/basics.html
+Rate limit: 3 req/s; we use 1.5s download delay to stay polite.
+"""
+
 import os
 import sys
-from datetime import datetime
+from urllib.parse import urlencode
+from xml.etree import ElementTree
 
 import scrapy
-from scrapy.http import Request
 
-# Add project root to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
+from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+
+_BASE = "http://export.arxiv.org/api/query"
+_NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "arxiv": "http://arxiv.org/schemas/atom",
+    "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
+}
+_BATCH = 50
+# arXiv is primarily CS/STEM — only a few SC seed terms will yield results.
+_SC_RELEVANT = {
+    "indigenous", "cultural heritage", "traditional knowledge", "oral tradition",
+    "ethnobotany", "decolonial", "african literature", "postcolonial",
+}
 
 
 class ArxivSpider(scrapy.Spider):
     name = "arxiv_multi"
-    allowed_domains = ["arxiv.org"]
+    custom_settings = {
+        "DOWNLOAD_DELAY": 1.5,
+        "CONCURRENT_REQUESTS": 1,
+        "USER_AGENT": f"URAAS/1.0 (+SC discovery; mailto:{config.OPENALEX_MAILTO})",
+    }
 
     def __init__(
         self,
         institution="unilag",
-        target=20,
+        target=50,
         boost_special=True,
-        sc_only=True,
+        sc_only=False,
         *args,
         **kwargs,
     ):
-        """
-        boost_special: fire extra arXiv searches AND-ed with SC seed phrases
-                       (default True — heavy SC weight).
-        sc_only:       skip the plain institution search; only SC-seeded waves.
-        """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
-        self.boost_special = str(boost_special).lower() not in (
-            "false",
-            "0",
-            "no",
-            "off",
+        _truthy = {"1", "true", "yes", "on"}
+        self.boost_special = (
+            boost_special.lower() in _truthy
+            if isinstance(boost_special, str)
+            else bool(boost_special)
         )
-        self.sc_only = str(sc_only).lower() not in ("false", "0", "no", "off")
-
-        # Get institution configuration
+        self.sc_only = (
+            sc_only.lower() in _truthy
+            if isinstance(sc_only, str)
+            else bool(sc_only)
+        )
         registry = get_registry()
         self.institution_config = registry.get(institution)
-
         if not self.institution_config:
             raise ValueError(f"Institution '{institution}' not found in registry")
-
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
+        self._accepted = 0
+        self._seen_ids: set = set()
 
-        self.logger.info(f"Initialized ArXiv spider for {self.institution_name}")
-        self.logger.info(
-            f"ROR ID: {self.ror_id}  | boost_special={self.boost_special} | sc_only={self.sc_only}"
-        )
+    def _build_url(self, query: str, start: int = 0) -> str:
+        params = {"search_query": query, "start": start, "max_results": _BATCH}
+        return f"{_BASE}?{urlencode(params)}"
 
-    def _build_url(self, *, extra_term: str = "") -> str:
-        import urllib.parse
+    async def start(self):
+        seen_queries: set = set()
 
-        encoded_name = urllib.parse.quote(self.institution_name)
-        extra = ""
-        if extra_term:
-            extra_q = urllib.parse.quote(extra_term)
-            # terms-1 AND-ed with the institution term-0 (search all fields)
-            extra = f"&terms-1-operator=AND&terms-1-term={extra_q}&terms-1-field=all"
-        return (
-            f"https://arxiv.org/search/advanced?advanced=1"
-            f"&terms-0-operator=AND&terms-0-term={encoded_name}&terms-0-field=all"
-            f"{extra}"
-            f"&date-filter_by=all_dates&date-year=&date-from_date=&date-to_date="
-            f"&date-date_type=submitted_date&abstracts=show&size=50&order=-announced_date_first"
-        )
-
-    def start_requests(self):
-        # Wave 1 — institution-only
         if not self.sc_only:
-            url = self._build_url()
-            self.logger.info(f"[ROR wave] {url}")
-            yield Request(url=url, callback=self.parse, meta={"wave": "ror"})
+            # Primary institution wave — exact phrase in all fields
+            q = f'all:"{self.institution_name}"'
+            seen_queries.add(q)
+            yield scrapy.Request(
+                self._build_url(q, 0),
+                callback=self.parse,
+                meta={"query": q, "start": 0},
+            )
 
-        # Wave 2 — institution AND each SC seed phrase
         if self.boost_special:
-            for seed in SC_SEED_KEYWORDS:
-                url = self._build_url(extra_term=seed)
-                self.logger.info(f"[SC wave seed={seed!r}] {url}")
-                yield Request(
-                    url=url,
-                    callback=self.parse,
-                    meta={"wave": f"sc:{seed}"},
-                )
+            # Combine institution with SC seeds that are relevant to arXiv
+            inst_q = f'all:"{self.institution_name}"'
+            priority_seeds = [
+                s for s in SC_SEED_KEYWORDS
+                if any(k in s.lower() for k in _SC_RELEVANT)
+            ][:8]
+            for seed in priority_seeds:
+                q = f'{inst_q} AND all:"{seed}"'
+                if q not in seen_queries:
+                    seen_queries.add(q)
+                    yield scrapy.Request(
+                        self._build_url(q, 0),
+                        callback=self.parse,
+                        meta={"query": q, "start": 0},
+                        priority=5,
+                    )
 
     def parse(self, response):
-        # Extract individual paper listings from the search results
-        papers = response.css("li.arxiv-result")
+        if self._accepted >= self.target_limit:
+            return
 
-        for paper in papers:
-            title = paper.css("p.title.is-5.mathjax::text").get(default="").strip()
-            authors = paper.css("p.authors a::text").getall()
-            abstract = paper.css("span.abstract-full::text").get(default="").strip()
+        try:
+            root = ElementTree.fromstring(response.text)
+        except ElementTree.ParseError:
+            self.logger.warning(f"arXiv XML parse error: {response.url[:120]}")
+            return
 
-            # The URL to the paper's specific page
-            paper_url = paper.css("p.list-title.is-inline-block a::attr(href)").get()
-            if paper_url:
-                if paper_url.startswith("/"):
-                    paper_url = f"https://arxiv.org{paper_url}"
+        entries = root.findall("atom:entry", _NS)
+        for entry in entries:
+            if self._accepted >= self.target_limit:
+                return
 
-                # Yield request to the paper page to get full affiliations/DOI/pdf
-                yield Request(
-                    url=paper_url,
-                    callback=self.parse_paper,
-                    meta={
-                        "title": title,
-                        "authors": authors,
-                        "abstract": abstract,
-                        "url": paper_url,
-                    },
-                )
+            arxiv_id = (entry.findtext("atom:id", "", _NS) or "").strip()
+            if arxiv_id in self._seen_ids:
+                continue
+            self._seen_ids.add(arxiv_id)
 
-        # Handle pagination
-        next_page = response.css("a.pagination-next::attr(href)").get()
-        if next_page:
-            yield Request(response.urljoin(next_page), callback=self.parse)
+            title = (
+                (entry.findtext("atom:title", "", _NS) or "")
+                .strip()
+                .replace("\n", " ")
+            )
+            abstract = (
+                (entry.findtext("atom:summary", "", _NS) or "")
+                .strip()
+                .replace("\n", " ")
+            )
+            if not title:
+                continue
 
-    def parse_paper(self, response):
-        """Parse individual paper page for detailed metadata."""
-        item = response.meta.copy()
+            authors = []
+            for a in entry.findall("atom:author", _NS):
+                name = (a.findtext("atom:name", "", _NS) or "").strip()
+                if name:
+                    authors.append(name)
 
-        # arXiv doesn't always have explicit affiliation tags easily extractable,
-        # but the abstract or comments sometimes mention "University of Lagos".
-        # We will parse the raw_text from the whole page as a fallback for the filter pipeline.
+            doi = (entry.findtext("arxiv:doi", "", _NS) or "").strip() or None
+            pub_date = (entry.findtext("atom:published", "", _NS) or "")[:10]
 
-        item["doi"] = response.css("td.tablecell.arxivdoi a::text").get()
+            pdf_url = None
+            for link in entry.findall("atom:link", _NS):
+                if link.get("title") == "pdf":
+                    pdf_url = link.get("href")
+                    break
 
-        # Determine the PDF url
-        pdf_link = response.css(
-            "div.extra-services ul li a.download-pdf::attr(href)"
-        ).get()
-        if pdf_link:
-            item["pdf_url"] = f"https://arxiv.org{pdf_link}"
+            # Extract affiliations from arxiv:affiliation elements
+            affiliations = [
+                aff.text.strip()
+                for a in entry.findall("atom:author", _NS)
+                for aff in a.findall("arxiv:affiliation", _NS)
+                if aff.text
+            ]
+            raw_affiliation = "; ".join(affiliations) or self.institution_name
 
-        # Get raw text for affiliation matching
-        item["raw_affiliation"] = " ".join(
-            response.css("div.leftcolumn ::text").getall()
-        )
-        item["source_repository"] = "arXiv"
-        item["is_unilag_author"] = True  # Legacy field
-        # NEW: Multi-institution support
-        item["institution"] = self.institution_name
-        item["institution_ror"] = self.ror_id
+            self._accepted += 1
+            yield {
+                "title": title,
+                "abstract": abstract,
+                "authors": authors,
+                "doi": doi,
+                "url": arxiv_id,
+                "pdf_url": pdf_url,
+                "publication_date": pub_date,
+                "source_repository": "arXiv",
+                "is_unilag_author": True,
+                "raw_affiliation": raw_affiliation,
+                "institution": self.institution_name,
+                "institution_ror": self.ror_id,
+            }
 
-        yield item
+        # Pagination
+        total_text = root.findtext("opensearch:totalResults", "0", _NS) or "0"
+        total = int(total_text) if total_text.isdigit() else 0
+        query = response.meta.get("query", "")
+        start = response.meta.get("start", 0)
+        next_start = start + _BATCH
+        if next_start < min(total, 500) and self._accepted < self.target_limit:
+            yield scrapy.Request(
+                self._build_url(query, next_start),
+                callback=self.parse,
+                meta={"query": query, "start": next_start},
+            )

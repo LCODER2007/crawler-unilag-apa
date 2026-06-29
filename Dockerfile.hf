@@ -1,0 +1,40 @@
+# ── URAAS — Hugging Face Spaces Dockerfile ────────────────────────────────────
+# Single container: SQLite on /data (persistent bucket), gunicorn on port 7860.
+# No PostgreSQL or Redis needed — SQLite stored in HF persistent storage.
+# ──────────────────────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    URAAS_ENV=production \
+    PORT=7860
+
+# System deps
+RUN apt-get update && apt-get install -y \
+    gcc g++ curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# App user — HF Spaces runs as root but we keep the same uid as prod
+RUN useradd -m -u 1000 uraas && \
+    mkdir -p /app /app/storage/pdfs /app/data /app/logs && \
+    chown -R uraas:uraas /app
+
+WORKDIR /app
+
+# Install Python dependencies (no libpq — SQLite only)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    python -m spacy download en_core_web_sm
+
+# Copy application code
+COPY --chown=uraas:uraas . .
+
+# Make startup script executable
+RUN chmod +x scripts/start_hf.sh
+
+USER uraas
+
+EXPOSE 7860
+
+# Startup: init DB in /data then start gunicorn
+CMD ["bash", "scripts/start_hf.sh"]
