@@ -1,30 +1,26 @@
-"""Batch approval orchestration for IR deposits.
+"""Batch deposit orchestration for the UNILAG IR.
 
-Lifecycle
----------
-pending_approval  ← batch created, approval email sent
-   │
-   ├─(approve link clicked)─→ approved  ─→ depositing ─→ completed
-   │                                                    └─→ failed
-   └─(reject link clicked) ─→ rejected
+UNILAG deposits go **directly** to the live DSpace IR using the configured
+crawler credentials — there is no email-approval confirmation step.
 
-Security
---------
-* Tokens are 32-byte cryptographically random values (URL-safe base64, ~43 chars).
-* Tokens expire after APPROVAL_LINK_TTL_HOURS (default 48 h).
-* Each token is single-use: once consumed (approved or rejected) its status
-  changes and subsequent requests return 410 Gone.
+Lifecycle (direct path)
+-----------------------
+approved (auto)  ─→ depositing ─→ completed
+                                 └─→ failed
+
+The legacy email approve/reject helpers (approve_batch / reject_batch) are
+retained for backward compatibility with any old links, but the normal flow
+created by queue_batch is auto-approved and deposits immediately.
 """
 
 import json
 import logging
 import secrets
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from uraas.config import config
 from uraas.database import DepositBatch, Item, File, SessionLocal
-from uraas.services.email_service import send_batch_approval_request
 
 logger = logging.getLogger(__name__)
 
@@ -38,31 +34,37 @@ def queue_batch(
     item_ids: list[int],
     collection_uuid: str,
     collection_name: str,
-    approval_email: str,
+    approval_email: str = "",
     requested_by: str,
 ) -> dict:
-    """Persist a pending batch and fire the approval email.
+    """Persist a batch and deposit it straight to the live UNILAG IR.
 
-    Returns a result dict with status, batch_id, and email_sent flag.
+    The email-approval gate has been removed: UNILAG deposits go directly to
+    DSpace through the configured crawler credentials (DSPACE_USERNAME /
+    DSPACE_PASSWORD).  The DepositBatch row is still written for audit and
+    progress tracking, but the batch is auto-approved and the deposit starts
+    immediately in a background thread.
+
+    Returns a result dict with status and batch_id.
     """
     if not item_ids:
         return {"status": "error", "message": "No item IDs provided"}
 
+    # Token retained only as a stable, unique batch handle for status polling.
     token = secrets.token_urlsafe(32)
-    expires = datetime.utcnow() + timedelta(hours=APPROVAL_LINK_TTL_HOURS)
 
     db = SessionLocal()
     try:
         batch = DepositBatch(
             token=token,
-            status="pending_approval",
-            approval_email=approval_email,
+            status="approved",  # auto-approved — no email confirmation required
+            approval_email=approval_email or "",
             collection_uuid=collection_uuid,
             collection_name=collection_name,
             item_ids_json=json.dumps(item_ids),
             item_count=len(item_ids),
             requested_by=requested_by,
-            expires_at=expires,
+            approved_at=datetime.utcnow(),
         )
         db.add(batch)
         db.commit()
@@ -71,30 +73,21 @@ def queue_batch(
     finally:
         db.close()
 
-    approve_url = f"{config.DASHBOARD_BASE_URL}/api/ir/batch/{token}/approve"
-    reject_url = f"{config.DASHBOARD_BASE_URL}/api/ir/batch/{token}/reject"
-
-    email_sent = send_batch_approval_request(
-        to_email=approval_email,
-        approve_url=approve_url,
-        reject_url=reject_url,
-        batch_id=batch_id,
-        item_count=len(item_ids),
-        collection_name=collection_name,
-        requested_by=requested_by,
-        expires_hours=APPROVAL_LINK_TTL_HOURS,
-    )
+    # Deposit immediately in the background so the HTTP response returns fast.
+    t = threading.Thread(target=_run_deposit, args=(batch_id,), daemon=True)
+    t.start()
 
     return {
-        "status": "queued",
+        "status": "depositing",
         "batch_id": batch_id,
+        "token": token,
         "item_count": len(item_ids),
-        "approval_email": approval_email,
-        "email_sent": email_sent,
-        "expires_at": expires.isoformat(),
-        # Return the approve URL so an admin can action it directly from the
-        # dashboard if SMTP is not yet configured.
-        "approve_url": approve_url,
+        "collection_name": collection_name,
+        "message": (
+            f"Batch #{batch_id} approved automatically — depositing "
+            f"{len(item_ids)} item(s) directly to the UNILAG IR. "
+            "Track progress on the dashboard."
+        ),
     }
 
 

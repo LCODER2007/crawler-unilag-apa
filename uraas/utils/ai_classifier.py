@@ -1200,6 +1200,19 @@ def classify_special_collections(
     return results
 
 
+def sc_score_of(title: str, abstract: str, dc_subject: str = "") -> float:
+    """Special-Collections score for a paper, identical to the gate the
+    storage pipeline applies before saving.
+
+    The pipeline keeps an item iff this score is > 0 (see
+    uraas/pipelines/database.py). Spiders call this to count ONLY genuine SC
+    papers toward their crawl target — otherwise the target fills up with
+    papers the pipeline later drops, and the crawl halts early.
+    """
+    hits = classify_special_collections(title or "", abstract or "", dc_subject or "")
+    return float(sum(h["score"] for h in hits))
+
+
 def extract_keywords(
     title: str, abstract: str, top_n: int = 60, all_texts: Optional[List[str]] = None
 ) -> List[Dict]:

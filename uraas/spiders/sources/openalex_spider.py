@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_OPENALEX_CONCEPTS, SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 OPENALEX_BASE = "https://api.openalex.org/works"
 MAILTO = "cokiki@unilag.edu.ng"
@@ -239,6 +240,12 @@ class OpenAlexSpider(scrapy.Spider):
             )
             concepts = work.get("concepts", [])
             dc_subject = ", ".join(c.get("display_name", "") for c in concepts[:5] if c)
+
+            # SC gate — only count papers that the storage pipeline will keep.
+            # Without this the target fills with non-SC papers that get dropped
+            # downstream, and the crawl stops before reaching `target` SC papers.
+            if sc_score_of(title, abstract, dc_subject) <= 0.0:
+                continue
 
             self._accepted += 1
             wave_accepted += 1

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _BASE = "https://doaj.org/api/v3/search/articles"
 _SC_AFFINITY = {
@@ -146,6 +147,11 @@ class DOAJSpider(scrapy.Spider):
 
             year = str(bib.get("year") or "")
             journal = (bib.get("journal") or {}).get("title", "")
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {

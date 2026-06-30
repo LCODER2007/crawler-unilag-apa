@@ -2265,6 +2265,44 @@ function loadCrawlerInstitutions() {
   loadInstitutionsCache(() => populateCrawlerInstitutions());
 }
 
+// Grey out Discovery Source options whose required API key isn't configured on
+// the server (e.g. CORE without CORE_API_KEY). Such options become disabled so
+// they can't be selected; the server also rejects them as a backstop.
+function loadCrawlerSources() {
+  const sel = $('crawler-spider');
+  if (!sel) return;
+  fetch('/api/crawler/sources')
+    .then(r => r.json())
+    .then(d => {
+      if (!d || d.status !== 'success' || !Array.isArray(d.sources)) return;
+      const byId = {};
+      d.sources.forEach(s => { byId[s.id] = s; });
+      let activeDisabled = false;
+      Array.from(sel.options).forEach(opt => {
+        const info = byId[opt.value];
+        if (!info) return;
+        if (info.available) {
+          opt.disabled = false;
+          // Strip any previously-appended unavailable marker.
+          opt.textContent = opt.textContent.replace(/\s*—\s*(?:API key required|unavailable).*$/i, '');
+        } else {
+          opt.disabled = true;
+          if (!/API key required/i.test(opt.textContent)) {
+            opt.textContent = `${opt.textContent} — API key required`;
+          }
+          if (opt.selected) activeDisabled = true;
+        }
+      });
+      // If the currently-selected source got disabled, fall back to the first
+      // available option so Start Mining never launches an unusable source.
+      if (activeDisabled) {
+        const firstOk = Array.from(sel.options).find(o => !o.disabled);
+        if (firstOk) sel.value = firstOk.value;
+      }
+    })
+    .catch(() => { /* non-fatal: leave all sources enabled */ });
+}
+
 function onCrawlerRegionChange() {
   populateCrawlerInstitutions();
 }
@@ -2450,6 +2488,7 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchArchive();
   fetchRecentPapers();
   loadCrawlerInstitutions();
+  loadCrawlerSources();
   initMethodologyTooltips();
 
   // ARK resolver deep-link: /?paper=<id> opens that paper's modal on load.

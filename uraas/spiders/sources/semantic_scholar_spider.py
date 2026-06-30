@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _S2_BASE = "https://api.semanticscholar.org/graph/v1/paper/search"
 _FIELDS = "title,abstract,authors,year,externalIds,openAccessPdf,fieldsOfStudy,venue"
@@ -36,15 +37,17 @@ class SemanticScholarSpider(scrapy.Spider):
         # When running alongside other spiders the shared IP exhausts the
         # budget quickly, so we use a conservative 3 s delay + autothrottle
         # with a generous max to absorb 429 bursts.
-        "DOWNLOAD_DELAY": 3.0,
+        "DOWNLOAD_DELAY": 6.0,
         "CONCURRENT_REQUESTS": 1,
         "AUTOTHROTTLE_ENABLED": True,
-        "AUTOTHROTTLE_START_DELAY": 3.0,
-        "AUTOTHROTTLE_MAX_DELAY": 30.0,
+        "AUTOTHROTTLE_START_DELAY": 6.0,
+        "AUTOTHROTTLE_MAX_DELAY": 120.0,
         "AUTOTHROTTLE_TARGET_CONCURRENCY": 1,
         "RETRY_ENABLED": True,
-        "RETRY_TIMES": 3,
+        "RETRY_TIMES": 5,
         "RETRY_HTTP_CODES": [429, 500, 502, 503, 504],
+        "RETRY_BACKOFF_BASE": 6.0,
+        "RETRY_BACKOFF_MAX": 120.0,
         "USER_AGENT": (
             f"URAAS/1.0 (+read-only SC discovery; mailto:{config.OPENALEX_MAILTO})"
         ),
@@ -182,9 +185,14 @@ class SemanticScholarSpider(scrapy.Spider):
                 a.get("name", "") for a in (paper.get("authors") or []) if a.get("name")
             ]
 
-            fields = [
-                f.get("category", "") for f in (paper.get("fieldsOfStudy") or []) if f.get("category")
-            ]
+            fields = []
+            for f in (paper.get("fieldsOfStudy") or []):
+                if isinstance(f, dict):
+                    cat = f.get("category", "")
+                    if cat:
+                        fields.append(cat)
+                elif isinstance(f, str) and f:
+                    fields.append(f)
             dc_subject = ", ".join(fields[:6])
 
             # S2 doesn't return author affiliations in basic search — verify
@@ -192,6 +200,11 @@ class SemanticScholarSpider(scrapy.Spider):
             if not self._institution_match(title, abstract, venue):
                 rejected_aff += 1
                 self.logger.debug(f"S2 aff FAIL: {title[:60]}")
+                continue
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract, dc_subject) <= 0.0:
                 continue
 
             self._accepted += 1

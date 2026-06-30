@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _EPMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 _PAGE_SIZE = 100
@@ -166,6 +167,11 @@ class EuropePMCSpider(scrapy.Spider):
                 for a in authors_raw
                 if a.get("lastName")
             ]
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {

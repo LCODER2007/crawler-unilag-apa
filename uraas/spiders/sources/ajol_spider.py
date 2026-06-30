@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _SEARCH_BASE = "https://www.ajol.info/index.php/ajol/search/results"
 _DOI_RE = re.compile(r"10\.\d{4,}/\S+")
@@ -229,6 +230,11 @@ class AJOLSpider(scrapy.Spider):
             matches = any(term in page_text for term in self._affil_terms)
 
         if not matches:
+            return
+
+        # SC gate — only count papers the storage pipeline will keep, so the
+        # crawl keeps following links until `target` real SC papers are found.
+        if sc_score_of(title, abstract) <= 0.0:
             return
 
         self._accepted += 1

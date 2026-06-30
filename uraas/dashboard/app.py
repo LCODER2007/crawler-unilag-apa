@@ -94,6 +94,7 @@ ADMIN_ENDPOINTS = {
     "start_crawler",
     "stop_crawler",
     "crawler_status",
+    "crawler_sources",
     "flush_analytics_cache",
     "prune_non_sc",
     "test_smtp",
@@ -1554,31 +1555,67 @@ def generate_senate_report():
 
 @app.route("/api/citations/<int:item_id>")
 def get_citations(item_id):
-    """Get citation data for a paper — enriched with ARK + Pan-African share (Phase 5)."""
+    """Get citation data for a paper — enriched with ARK + Pan-African share (Phase 5).
+
+    Citation count resolution (highest trustworthy value wins, never clobbered
+    to zero):
+      1. cited_by_count captured at crawl time from OpenAlex (authoritative).
+      2. CitationMetrics row, if a separate citation update has run.
+      3. Lazy live fetch from OpenAlex/Crossref when we have a DOI but no count
+         yet — result is persisted back to cited_by_count for next time.
+    """
     session = SessionLocal()
+    doi = None
     try:
         item = session.query(Item).filter_by(id=item_id).first()
         # Base citation count from DB (fast, no API call)
         base = {
             "item_id": item_id,
-            "citation_count": item.cited_by_count or 0 if item else 0,
-            "ark": item.ark or "" if item else "",
-            "docid": item.docid or "" if item else "",
+            "citation_count": (item.cited_by_count or 0) if item else 0,
+            "ark": (item.ark or "") if item else "",
+            "docid": (item.docid or "") if item else "",
             "african_citation_share": item.african_citation_share if item else None,
-            "openalex_id": item.openalex_id or "" if item else "",
+            "openalex_id": (item.openalex_id or "") if item else "",
         }
+        doi = item.doi if item else None
     except Exception:
         base = {"item_id": item_id, "citation_count": 0}
     finally:
         session.close()
 
-    # Supplement with live CitationMetrics record if available
+    # Supplement with live CitationMetrics record (citing-paper list + count),
+    # but never let it overwrite a good count with zero.
     try:
         from uraas.services.citation_tracker import get_paper_citations
         live = get_paper_citations(item_id)
-        base.update(live)
+        live_count = live.pop("citation_count", 0) or 0
+        base.update(live)  # citing_papers, last_updated, etc.
+        base["citation_count"] = max(base.get("citation_count", 0) or 0, live_count)
     except Exception as e:
         logger.debug(f"get_citations live lookup {item_id}: {e}")
+
+    # Lazy live fetch: if we still have zero citations but do have a DOI, query
+    # OpenAlex/Crossref once and persist the result so it sticks next time.
+    if not base.get("citation_count") and doi:
+        try:
+            from uraas.services.citation_tracker import CitationTracker
+            count = CitationTracker.fetch_citations_crossref(doi)
+            if not count:
+                oa = CitationTracker.fetch_citations_openalex(doi)
+                count = (oa or {}).get("citation_count", 0)
+            if count:
+                base["citation_count"] = count
+                s2 = SessionLocal()
+                try:
+                    it = s2.query(Item).filter_by(id=item_id).first()
+                    if it and not (it.cited_by_count or 0):
+                        it.cited_by_count = int(count)
+                        s2.commit()
+                finally:
+                    s2.close()
+        except Exception as e:
+            logger.debug(f"get_citations lazy fetch {item_id}: {e}")
+
     return jsonify(base)
 
 
@@ -2423,6 +2460,55 @@ def export_bibtex():
 
 #  Crawler control
 
+# Discovery sources and the API key (if any) each one needs to run. A source
+# whose required key is unset is reported as unavailable by /api/crawler/sources
+# and rejected by start_crawler — the UI greys it out so it can't be selected.
+# `config_attr` is the attribute on `config` that holds the key (empty string
+# when missing). Sources with config_attr=None need no key.
+CRAWLER_SOURCES = [
+    {"id": "openalex",         "label": "OpenAlex (Default — 250M+ papers)",        "config_attr": None},
+    {"id": "all",              "label": "All Sources (Maximum Coverage)",           "config_attr": None},
+    {"id": "crossref",         "label": "Crossref (DOI Registry)",                  "config_attr": None},
+    {"id": "semantic_scholar", "label": "Semantic Scholar (AI-indexed)",            "config_attr": None},
+    {"id": "doaj",             "label": "DOAJ (African Open Access Journals)",      "config_attr": None},
+    {"id": "ajol",             "label": "AJOL (African Journals Online)",           "config_attr": None},
+    {"id": "europepmc",        "label": "EuropePMC (Biomedical)",                   "config_attr": None},
+    {"id": "core",             "label": "CORE (Global OA Repositories)",            "config_attr": "CORE_API_KEY"},
+    {"id": "pubmed",           "label": "PubMed (Ethnobotany / Trad. Medicine)",    "config_attr": None},
+    {"id": "openaire",         "label": "OpenAIRE (EU/African Networks)",           "config_attr": None},
+    {"id": "arxiv",            "label": "arXiv (STEM Preprints)",                   "config_attr": None},
+    {"id": "orcid",            "label": "ORCID (Author Registry)",                  "config_attr": None},
+    {"id": "oai",              "label": "OAI-PMH (Institutional Repository)",       "config_attr": None},
+]
+
+
+def _source_available(src) -> bool:
+    """A source is available unless it needs an API key that isn't configured."""
+    attr = src.get("config_attr")
+    if not attr:
+        return True
+    return bool(getattr(config, attr, "") or os.environ.get(attr, ""))
+
+
+@app.route("/api/crawler/sources")
+def crawler_sources():
+    """Discovery sources + whether each is usable (its API key is configured).
+
+    The dashboard uses this to disable any source whose key is missing so it
+    can't be selected. Keeping the gating server-driven means adding a key in
+    the environment is all it takes to light a source back up — no code change.
+    """
+    sources = [
+        {
+            "id": src["id"],
+            "label": src["label"],
+            "available": _source_available(src),
+            "requires_key": src.get("config_attr") or None,
+        }
+        for src in CRAWLER_SOURCES
+    ]
+    return jsonify({"status": "success", "sources": sources})
+
 
 @app.route("/api/crawler/start", methods=["POST"])
 def start_crawler():
@@ -2453,6 +2539,15 @@ def start_crawler():
                             "openaire", "doaj", "ajol", "all")
         if spider not in _allowed_spiders:
             return jsonify({"status": "error", "message": f"Unknown spider: {spider}"}), 400
+        # Reject sources whose required API key isn't configured (the UI greys
+        # these out, but enforce server-side too so the crawl can't be triggered
+        # via a direct API call).
+        _src = next((s for s in CRAWLER_SOURCES if s["id"] == spider), None)
+        if _src and not _source_available(_src):
+            return jsonify({
+                "status": "error",
+                "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
+            }), 400
         # OAI date window — accept only a safe YYYY-MM-DD shape; ignore anything else.
         _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         from_date = data.get("from_date")
@@ -2876,13 +2971,16 @@ def ir_live_stats():
 
 @app.route("/api/ir/deposit/queue", methods=["POST"])
 def ir_queue_batch():
-    """Queue a batch of local items for deposit to the real IR.
+    """Deposit a batch of local items directly to the live UNILAG IR.
+
+    No email-approval step: the batch is deposited straight to DSpace using the
+    configured crawler credentials (DSPACE_USERNAME / DSPACE_PASSWORD).
 
     Body JSON:
       item_ids         – list of local Item.id values to deposit
       collection_uuid  – DSpace collection UUID (from /api/ir/collections)
-      collection_name  – display name (optional, for the email)
-      approval_email   – address to send the approve/reject email to
+      collection_name  – display name (optional)
+      approval_email   – optional; recorded for audit only, no email is sent
     """
     from uraas.services.batch_approval import queue_batch
 
@@ -2899,8 +2997,6 @@ def ir_queue_batch():
         return jsonify({"status": "error", "message": "item_ids must be a list of integers"}), 400
     if len(item_ids) > 500:
         return jsonify({"status": "error", "message": "Maximum 500 items per batch"}), 400
-    if not approval_email or "@" not in approval_email:
-        return jsonify({"status": "error", "message": "A valid approval_email is required"}), 400
     if not collection_uuid:
         return jsonify({"status": "error", "message": "collection_uuid required"}), 400
 

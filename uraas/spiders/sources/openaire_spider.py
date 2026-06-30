@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _BASE = "https://api.openaire.eu/search/publications"
 
@@ -106,6 +107,11 @@ class OpenAIRESpider(scrapy.Spider):
 
             year = str(metadata.get("dateofacceptance", "") or "")[:4]
             url_val = f"https://doi.org/{doi}" if doi else ""
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {

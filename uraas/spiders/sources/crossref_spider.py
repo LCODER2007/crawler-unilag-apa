@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 
 class CrossrefSpider(scrapy.Spider):
@@ -141,6 +142,11 @@ class CrossrefSpider(scrapy.Spider):
                     self._rejected_aff += 1
                     self.logger.debug(f"Crossref aff FAIL: {title[:60]}")
                     continue
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             # Try to find a PDF link in the 'link' array if open access
             pdf_url = None

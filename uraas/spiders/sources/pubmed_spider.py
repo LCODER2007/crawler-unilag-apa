@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config import config
 from uraas.config.institutions import get_registry
+from uraas.utils.ai_classifier import sc_score_of
 
 _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 _EFETCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
@@ -137,6 +138,11 @@ class PubMedSpider(scrapy.Spider):
                 art.xpath(".//PubDate/Year/text()").get("")
                 or art.xpath(".//PubDate/MedlineDate/text()").get("")[:4]
             )
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {

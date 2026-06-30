@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
+from uraas.utils.ai_classifier import sc_score_of
 
 _CORE_BASE = "https://api.core.ac.uk/v3/search/works"
 
@@ -98,6 +99,11 @@ class CORESpider(scrapy.Spider):
             url_val = r.get("sourceFulltextUrls", [None])[0] or (f"https://doi.org/{doi}" if doi else "")
             pdf_url = r.get("downloadUrl") or None
             doc_type = r.get("documentType") or ""
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # crawl keeps paginating until `target` real SC papers are found.
+            if sc_score_of(title, abstract) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {

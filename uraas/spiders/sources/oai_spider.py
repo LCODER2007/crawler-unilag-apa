@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config import config
 from uraas.config.institutions import get_registry
+from uraas.utils.ai_classifier import sc_score_of
 
 log = logging.getLogger(__name__)
 
@@ -253,6 +254,12 @@ class OAISpider(scrapy.Spider):
             url, doi = self._pick_url_and_doi(identifiers)
             pub_date = self._pick_publication_date(dates)
             abstract = max(descriptions, key=len) if descriptions else ""
+
+            # SC gate — only count papers the storage pipeline will keep, so the
+            # harvest keeps following resumptionTokens until `target` real SC
+            # papers are found.
+            if sc_score_of(title, abstract, ", ".join(subjects[:8])) <= 0.0:
+                continue
 
             self._accepted += 1
             yield {
