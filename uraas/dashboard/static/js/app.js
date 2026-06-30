@@ -1488,53 +1488,76 @@ function renderCollabMap() {
       const countries = resp.data.countries || [];
       const counts = {};
       countries.forEach(c => counts[c.code] = c);
-      const maxPapers = Math.max(1, ...Object.values(counts).map(c => c.papers));
+      const maxPapers = Math.max(1, ...Object.values(counts).map(c => c.papers), 1);
 
-      // When DB is empty, overlay a friendly message so the map isn't silent.
-      if (!countries.length) {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.65);border-radius:12px;pointer-events:none;z-index:10';
-        overlay.innerHTML = '<p class="text-sm text-center px-8" style="color:rgba(255,255,255,0.7)">No intra-African co-publication data yet.<br>Crawl papers across multiple institutions to populate the map.</p>';
-        mapEl.style.position = 'relative';
-        mapEl.appendChild(overlay);
-      }
+      // Resolve home-country ISO2 then paint the map (always shown).
+      const instSel = document.getElementById('institution-select');
+      const instVal = instSel ? instSel.value : '';
 
-      fetch('/static/data/africa_admin0.geojson').then(r => r.json()).then(geo => {
-        geo.features.forEach(f => {
-          const c = counts[f.properties.iso_a2];
-          f.properties.papers = c ? c.papers : 0;
-          f.properties.intensity = c ? c.papers / maxPapers : 0;
-        });
-        if (!collabMap) return;
-        collabMap.addSource('africa', { type: 'geojson', data: geo });
-        collabMap.addLayer({
-          id: 'africa-fill', type: 'fill', source: 'africa',
-          paint: {
-            'fill-color': ['interpolate', ['linear'], ['get', 'intensity'],
-              0, 'rgba(59,130,246,0.04)', 0.05, 'rgba(59,130,246,0.25)',
-              0.4, 'rgba(34,197,94,0.55)', 1, 'rgba(34,197,94,0.85)'],
-            'fill-outline-color': 'rgba(148,163,184,0.35)',
-          },
-        });
-        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
-        collabMap.on('mousemove', 'africa-fill', e => {
-          const p = e.features[0].properties;
-          if (p.papers > 0) popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br>${p.papers} papers`).addTo(collabMap);
-        });
-        collabMap.on('mouseleave', 'africa-fill', () => popup.remove());
-
-        // ── Arcs above the fill ───────────────────────────────────────
-        safeFetch(withInst('/api/collaboration/arcs'), arcs => {
-          if (!collabMap || !arcs.features) return;
-          const maxCount = Math.max(1, ...arcs.features.map(f => f.properties.count));
-          arcs.features.forEach(f => f.properties.w = 1 + 4 * (f.properties.count / maxCount));
-          collabMap.addSource('arcs', { type: 'geojson', data: arcs });
+      function paintMap(homeCode) {
+        fetch('/static/data/africa_admin0.geojson').then(r => r.json()).then(geo => {
+          geo.features.forEach(f => {
+            const iso = f.properties.iso_a2;
+            const c = counts[iso];
+            f.properties.papers    = c ? c.papers : 0;
+            f.properties.intensity = c ? c.papers / maxPapers : 0;
+            f.properties.is_home   = iso === homeCode ? 1 : 0;
+          });
+          if (!collabMap) return;
+          collabMap.addSource('africa', { type: 'geojson', data: geo });
           collabMap.addLayer({
-            id: 'arcs-line', type: 'line', source: 'arcs',
-            paint: { 'line-color': '#f59e0b', 'line-opacity': 0.55, 'line-width': ['get', 'w'] },
+            id: 'africa-fill', type: 'fill', source: 'africa',
+            paint: {
+              // Home country with no collab data → amber glow; otherwise normal choropleth.
+              'fill-color': ['case',
+                ['all', ['==', ['get', 'is_home'], 1], ['==', ['get', 'papers'], 0]],
+                'rgba(251,191,36,0.45)',
+                ['interpolate', ['linear'], ['get', 'intensity'],
+                  0, 'rgba(59,130,246,0.04)', 0.05, 'rgba(59,130,246,0.25)',
+                  0.4, 'rgba(34,197,94,0.55)', 1, 'rgba(34,197,94,0.85)'],
+              ],
+              'fill-outline-color': ['case',
+                ['==', ['get', 'is_home'], 1],
+                'rgba(251,191,36,0.85)',
+                'rgba(148,163,184,0.35)',
+              ],
+            },
+          });
+
+          const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+          collabMap.on('mousemove', 'africa-fill', e => {
+            const p = e.features[0].properties;
+            if (p.papers > 0) {
+              popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br>${p.papers} papers`).addTo(collabMap);
+            } else if (p.is_home) {
+              popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br>Home institution`).addTo(collabMap);
+            }
+          });
+          collabMap.on('mouseleave', 'africa-fill', () => popup.remove());
+
+          // ── Arcs above the fill ─────────────────────────────────────
+          safeFetch(withInst('/api/collaboration/arcs'), arcs => {
+            if (!collabMap || !arcs.features) return;
+            const maxCount = Math.max(1, ...arcs.features.map(f => f.properties.count));
+            arcs.features.forEach(f => f.properties.w = 1 + 4 * (f.properties.count / maxCount));
+            collabMap.addSource('arcs', { type: 'geojson', data: arcs });
+            collabMap.addLayer({
+              id: 'arcs-line', type: 'line', source: 'arcs',
+              paint: { 'line-color': '#f59e0b', 'line-opacity': 0.55, 'line-width': ['get', 'w'] },
+            });
           });
         });
-      });
+      }
+
+      if (instVal) {
+        safeFetch(
+          `/api/institution/info?institution=${encodeURIComponent(instVal)}`,
+          info => paintMap(info.country_code || null),
+          ()    => paintMap(null)
+        );
+      } else {
+        paintMap(null);
+      }
     });
   });
 }

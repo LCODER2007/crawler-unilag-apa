@@ -2142,6 +2142,36 @@ def collaboration_matrix():
         return api_error(str(e))
 
 
+@app.route("/api/institution/info")
+def institution_info():
+    """Return home-country ISO2 for the selected institution.
+
+    Used by the frontend to highlight the institution's country on the
+    Africa choropleth even when no intra-African collaboration data exists.
+    """
+    from uraas.config.african_countries import COUNTRY_NAMES
+    from uraas.config.institutions import get_registry
+
+    institution = request.args.get("institution", "").strip().lower() or None
+    if not institution:
+        return api_ok({"country_code": None, "country_name": None, "institution_name": None})
+
+    registry = get_registry()
+    inst_cfg = registry.get(institution)
+    if not inst_cfg:
+        return api_ok({"country_code": None, "country_name": None, "institution_name": None})
+
+    country_name = getattr(inst_cfg, "country", None) or ""
+    name_to_iso2 = {v.lower(): k for k, v in COUNTRY_NAMES.items()}
+    country_code = name_to_iso2.get(country_name.lower())
+
+    return api_ok({
+        "country_code": country_code,
+        "country_name": country_name,
+        "institution_name": inst_cfg.name,
+    })
+
+
 @app.route("/api/collaboration/countries")
 def collaboration_countries():
     """Per-country paper counts for the Africa choropleth."""
