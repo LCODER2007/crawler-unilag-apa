@@ -1467,15 +1467,8 @@ function renderCollabMap() {
     container: 'collab-map',
     style: {
       version: 8,
-      sources: {
-        carto: {
-          type: 'raster',
-          tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          attribution: '© CARTO © OpenStreetMap contributors',
-        },
-      },
-      layers: [{ id: 'carto', type: 'raster', source: 'carto' }],
+      sources: {},
+      layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0d1117' } }],
     },
     center: [17, 2],
     zoom: 2.2,
@@ -1511,16 +1504,22 @@ function renderCollabMap() {
               // Home country with no collab data → amber glow; otherwise normal choropleth.
               'fill-color': ['case',
                 ['all', ['==', ['get', 'is_home'], 1], ['==', ['get', 'papers'], 0]],
-                'rgba(251,191,36,0.45)',
+                'rgba(251,191,36,0.35)',
                 ['interpolate', ['linear'], ['get', 'intensity'],
-                  0, 'rgba(59,130,246,0.04)', 0.05, 'rgba(59,130,246,0.25)',
-                  0.4, 'rgba(34,197,94,0.55)', 1, 'rgba(34,197,94,0.85)'],
+                  0, 'rgba(59,130,246,0.06)', 0.05, 'rgba(59,130,246,0.3)',
+                  0.4, 'rgba(34,197,94,0.6)', 1, 'rgba(34,197,94,0.9)'],
               ],
-              'fill-outline-color': ['case',
+            },
+          });
+          collabMap.addLayer({
+            id: 'africa-border', type: 'line', source: 'africa',
+            paint: {
+              'line-color': ['case',
                 ['==', ['get', 'is_home'], 1],
-                'rgba(251,191,36,0.85)',
-                'rgba(148,163,184,0.35)',
+                'rgba(251,191,36,0.9)',
+                'rgba(100,116,139,0.4)',
               ],
+              'line-width': ['case', ['==', ['get', 'is_home'], 1], 1.8, 0.5],
             },
           });
 
@@ -1552,7 +1551,7 @@ function renderCollabMap() {
       if (instVal) {
         safeFetch(
           `/api/institution/info?institution=${encodeURIComponent(instVal)}`,
-          info => paintMap(info.country_code || null),
+          resp  => paintMap((resp.data || resp).country_code || null),
           ()    => paintMap(null)
         );
       } else {
