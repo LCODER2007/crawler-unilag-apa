@@ -255,7 +255,7 @@ function loadAnalyticsOverview() {
     const inf = data.influential || [];
     const allZeroCites = inf.length > 0 && inf.every(p => !p.citations);
     $('sco-influential').innerHTML = inf.length ? [
-      allZeroCites ? `<p class="text-[10px] text-muted italic mb-2 px-1">Citation counts not yet fetched — ranked by SC relevance score. Run <strong>Update Citations</strong> in the Crawler tab to populate.</p>` : '',
+      allZeroCites ? `<p class="text-[10px] text-muted italic mb-2 px-1">Citation counts populate automatically after the next crawl — ranked by Special Collections relevance score for now.</p>` : '',
       ...inf.map((p, i) => `
       <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
         <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>

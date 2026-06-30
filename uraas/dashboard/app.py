@@ -126,6 +126,52 @@ def _enforce_authentication():
     return None
 
 
+def _auto_backfill_citation_share():
+    """Background: fill african_citation_share for SC items that have an
+    openalex_id and citations but no share value yet.  Runs after each crawl,
+    so users never have to trigger this manually."""
+    import time as _time
+
+    from uraas.services.citation_tracker import CitationTracker
+    from uraas.services.sc_engine import SC_FILTER
+
+    session = SessionLocal()
+    try:
+        items = (
+            session.query(Item)
+            .filter(
+                SC_FILTER,
+                Item.openalex_id.isnot(None),
+                Item.african_citation_share.is_(None),
+                Item.cited_by_count > 0,
+            )
+            .order_by(Item.cited_by_count.desc())
+            .limit(100)
+            .all()
+        )
+        if not items:
+            return
+        logger.info(f"[auto-backfill] fetching african_citation_share for {len(items)} SC items")
+        updated = 0
+        for it in items:
+            share = CitationTracker.fetch_african_citation_share(it.openalex_id)
+            if share is not None:
+                it.african_citation_share = share
+                updated += 1
+            _time.sleep(1.0)
+        session.commit()
+        analytics_cache.invalidate_all()
+        logger.info(f"[auto-backfill] african_citation_share set for {updated}/{len(items)} items")
+    except Exception as exc:
+        logger.error(f"[auto-backfill] citation share backfill failed: {exc}")
+        try:
+            session.rollback()
+        except Exception:
+            pass
+    finally:
+        session.close()
+
+
 def crawler_monitor(process):
     global crawler_process
     try:
@@ -164,6 +210,9 @@ def crawler_monitor(process):
                 crawler_process = None
         analytics_cache.invalidate_all()  # Flush stale analytics after crawl
         socketio.emit("crawl_status", {"status": "stopped"})
+        # Auto-populate african_citation_share for any SC items missing it.
+        # Runs in a daemon thread so the crawl status response returns immediately.
+        threading.Thread(target=_auto_backfill_citation_share, daemon=True).start()
 
 
 @app.context_processor

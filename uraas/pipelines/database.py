@@ -1,4 +1,5 @@
 # Define your item pipelines here
+import json
 import re
 from datetime import date
 
@@ -197,6 +198,11 @@ class DatabaseStoragePipeline:
                 is_intra_african=bool(item.get("is_intra_african", False)),
                 openalex_id=item.get("openalex_id") or None,
                 cited_by_count=int(item.get("cited_by_count") or 0),
+                counts_by_year=(
+                    json.dumps(item["counts_by_year"])
+                    if item.get("counts_by_year")
+                    else None
+                ),
                 # Institution tracking for multi-institution analytics
                 institution=institution_name,
                 ror=institution_ror,

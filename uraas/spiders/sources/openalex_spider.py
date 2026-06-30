@@ -95,7 +95,8 @@ class OpenAlexSpider(scrapy.Spider):
 
     SELECT_FIELDS = (
         "id,doi,title,abstract_inverted_index,authorships,"
-        "publication_date,open_access,primary_location,concepts"
+        "publication_date,open_access,primary_location,concepts,"
+        "counts_by_year,cited_by_count"
     )
 
     def _build_url(self, *, filters: str, cursor: str = "*") -> str:
@@ -281,6 +282,9 @@ class OpenAlexSpider(scrapy.Spider):
                 "dc_subject": ", ".join(
                     c.get("display_name", "") for c in concepts[:5] if c
                 ),
+                "cited_by_count": work.get("cited_by_count", 0),
+                "counts_by_year": work.get("counts_by_year", []),
+                "openalex_id": work.get("id", ""),
             }
 
         # Cursor-based pagination — keep paginating within the same wave until its
