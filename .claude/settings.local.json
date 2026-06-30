@@ -25,7 +25,16 @@
       "Bash(docker version *)",
       "Bash(git check-ignore *)",
       "Bash(echo \"exit: $?\")",
-      "Bash(powershell.exe *)"
+      "Bash(powershell.exe *)",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; $env:PYTHONUTF8 = \"1\"; cd \"C:\\\\Users\\\\hp\\\\Downloads\\\\crawler-unilag-apa\"; python scripts/push_to_hf.py 2>&1)",
+      "Bash(PYTHONUTF8=1 python scripts/push_to_hf.py)",
+      "Bash(HF_TOKEN=*** PYTHONUTF8=1 python scripts/push_to_hf.py)",
+      "Bash(git reset *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

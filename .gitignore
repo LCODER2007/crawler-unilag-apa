@@ -10,6 +10,9 @@ env/
 .env.*
 !.env.example
 
+# Claude Code local settings (may contain tokens/keys from shell history)
+.claude/settings.local.json
+
 # Databases
 *.db
 *.db-journal
