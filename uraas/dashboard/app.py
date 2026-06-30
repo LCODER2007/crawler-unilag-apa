@@ -2770,11 +2770,12 @@ def ir_status():
 
 @app.route("/api/ir/collections")
 def ir_collections():
-    """List DSpace collections for the deposit UI dropdown."""
+    """List DSpace collections the configured account can submit to."""
     from uraas.services.ir_client import DSpaceClient
     try:
         client = DSpaceClient()
-        cols = client.get_collections()
+        client.login()
+        cols = client.get_submittable_collections()
         return jsonify({"status": "success", "collections": cols})
     except Exception as exc:
         logger.error("ir_collections: %s", exc)

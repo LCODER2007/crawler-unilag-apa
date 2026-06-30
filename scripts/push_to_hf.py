@@ -178,6 +178,9 @@ def main():
         ("ARK_NAAN",               "99999"),
         ("ARK_SHOULDER",           "z1"),
         ("OPENALEX_MAILTO",        "lawalgiyath200716@gmail.com"),
+        ("DSPACE_API_URL",         "https://api-ir.unilag.edu.ng/server"),
+        ("DSPACE_USERNAME",        "<professor email — set as Secret, not Variable>"),
+        ("DSPACE_PASSWORD",        "<professor password — set as Secret, not Variable>"),
     ]
     max_k = max(len(k) for k, _ in secrets)
     for k, v in secrets:

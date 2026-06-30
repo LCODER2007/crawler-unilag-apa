@@ -43,23 +43,38 @@ class DSpaceClient:
     # ── Authentication ────────────────────────────────────────────────────────
 
     def _prime_csrf(self) -> str:
-        """GET /api/authn/status to seed the CSRF cookie/header."""
+        """GET /api/authn/status to seed the CSRF cookie/header.
+
+        DSpace 9.1 does not return a CSRF token on GET requests — the token is
+        only issued on the first failed write (403).  This method returns
+        whatever it finds; the login() method handles the missing-token case
+        by retrying after the first 403.
+        """
         r = self._s.get(f"{self.base}/api/authn/status", timeout=_TIMEOUT)
         r.raise_for_status()
         token = (
             r.headers.get("DSPACE-XSRF-TOKEN")
             or self._s.cookies.get("DSPACE-XSRF-TOKEN", "")
+            or self._s.cookies.get("DSPACE-XSRF-COOKIE", "")
         )
         self.csrf = token
         return token
 
     def _refresh_csrf(self, response: requests.Response):
-        new = response.headers.get("DSPACE-XSRF-TOKEN")
+        new = (
+            response.headers.get("DSPACE-XSRF-TOKEN")
+            or self._s.cookies.get("DSPACE-XSRF-COOKIE", "")
+        )
         if new:
             self.csrf = new
 
     def login(self):
-        """Authenticate and store JWT + CSRF token for subsequent writes."""
+        """Authenticate and store JWT + CSRF token for subsequent writes.
+
+        DSpace 9.1 CSRF dance: the first POST to /api/authn/login returns 403
+        and seeds the CSRF token in the response header + cookie.  We catch
+        that specific 403, extract the token, and retry once.
+        """
         if not config.DSPACE_USERNAME or not config.DSPACE_PASSWORD:
             raise IRConnectionError(
                 "DSPACE_USERNAME / DSPACE_PASSWORD not configured in .env"
@@ -67,11 +82,22 @@ class DSpaceClient:
         self._prime_csrf()
         r = self._s.post(
             f"{self.base}/api/authn/login",
-            headers={"X-XSRF-TOKEN": self.csrf},
+            headers={"X-XSRF-TOKEN": self.csrf} if self.csrf else {},
             data={"user": config.DSPACE_USERNAME, "password": config.DSPACE_PASSWORD},
             timeout=_TIMEOUT,
         )
         self._refresh_csrf(r)
+
+        # DSpace 9.1: first write with no/stale CSRF returns 403 + new token.
+        if r.status_code == 403 and self.csrf:
+            r = self._s.post(
+                f"{self.base}/api/authn/login",
+                headers={"X-XSRF-TOKEN": self.csrf},
+                data={"user": config.DSPACE_USERNAME, "password": config.DSPACE_PASSWORD},
+                timeout=_TIMEOUT,
+            )
+            self._refresh_csrf(r)
+
         if r.status_code == 401:
             raise IRConnectionError("DSpace login failed — check DSPACE_USERNAME/PASSWORD")
         r.raise_for_status()
@@ -141,8 +167,8 @@ class DSpaceClient:
             logger.warning("get_facet %s: %s", facet, exc)
             return []
 
-    def get_collections(self, size: int = 100) -> list[dict]:
-        """List all DSpace collections (§4.2) for the deposit UI dropdown."""
+    def get_collections(self, size: int = 200) -> list[dict]:
+        """List all DSpace collections for the deposit UI dropdown."""
         try:
             r = self._s.get(
                 f"{self.base}/api/core/collections",
@@ -157,6 +183,55 @@ class DSpaceClient:
             ]
         except Exception as exc:
             logger.warning("get_collections: %s", exc)
+            return []
+
+    def get_submittable_collections(self) -> list[dict]:
+        """Return only collections the logged-in user has submission rights to.
+
+        Reads the eperson's group memberships, extracts collection UUIDs from
+        COLLECTION_{uuid}_SUBMIT group names, then resolves names via the
+        collections endpoint.  Requires prior login().
+        """
+        if not self.jwt:
+            self.login()
+        import re as _re
+        try:
+            # 1. Get authn/status to find eperson link
+            r = self._s.get(
+                f"{self.base}/api/authn/status",
+                headers=self._write_headers(),
+                timeout=_TIMEOUT,
+            )
+            r.raise_for_status()
+            ep_href = r.json().get("_links", {}).get("eperson", {}).get("href", "")
+            if not ep_href:
+                return []
+
+            # 2. Fetch eperson → groups link
+            r2 = self._s.get(ep_href, headers=self._write_headers(), timeout=_TIMEOUT)
+            r2.raise_for_status()
+            groups_href = r2.json().get("_links", {}).get("groups", {}).get("href", "")
+            if not groups_href:
+                return []
+
+            # 3. Extract collection UUIDs from COLLECTION_{uuid}_SUBMIT group names
+            r3 = self._s.get(groups_href, headers=self._write_headers(), timeout=_TIMEOUT)
+            r3.raise_for_status()
+            groups = r3.json().get("_embedded", {}).get("groups", [])
+            submit_uuids = set()
+            for g in groups:
+                m = _re.match(r"COLLECTION_([0-9a-f\-]{36})_SUBMIT", g.get("name", ""))
+                if m:
+                    submit_uuids.add(m.group(1))
+
+            if not submit_uuids:
+                return []
+
+            # 4. Fetch all collections and filter to submittable ones
+            all_cols = self.get_collections(size=300)
+            return [c for c in all_cols if c["uuid"] in submit_uuids]
+        except Exception as exc:
+            logger.warning("get_submittable_collections: %s", exc)
             return []
 
     def get_live_stats(self) -> dict:
@@ -240,10 +315,12 @@ class DSpaceClient:
                     timeout=60,
                 )
         else:
+            # DSpace 9 requires Content-Type: application/json even for an empty body.
             r = self._s.post(
                 f"{self.base}/api/submission/workspaceitems",
-                headers=headers,
+                headers={**headers, "Content-Type": "application/json"},
                 params=params,
+                data="{}",
                 timeout=_TIMEOUT,
             )
 
@@ -253,14 +330,20 @@ class DSpaceClient:
             self.login()
             r = self._s.post(
                 f"{self.base}/api/submission/workspaceitems",
-                headers=self._write_headers(),
+                headers={**self._write_headers(), "Content-Type": "application/json"},
                 params=params,
+                data="{}",
                 timeout=_TIMEOUT,
             )
             self._refresh_csrf(r)
 
         r.raise_for_status()
-        ws_id = r.json().get("id")
+        data = r.json()
+        # File uploads return {_embedded: {workspaceitems: [{id: ...}]}}
+        # Empty-body creates return a flat {id: ...} object.
+        ws_id = data.get("id") or (
+            data.get("_embedded", {}).get("workspaceitems", [{}])[0].get("id")
+        )
         if not ws_id:
             return {"status": "error", "message": "No workspace item ID returned"}
 
@@ -273,12 +356,44 @@ class DSpaceClient:
             timeout=_TIMEOUT,
         )
         self._refresh_csrf(r2)
-        # A failed patch is non-fatal — the item still ends up in the IR, just with
-        # less metadata; log the warning and continue.
         if not r2.ok:
             logger.warning("metadata patch failed for ws %s: %s %s", ws_id, r2.status_code, r2.text[:200])
 
-        # 3. Deposit to workflow ───────────────────────────────────────────────
+        # 3. Grant the submission license (required by UNILAG DSpace 9 form) ──
+        license_patch = [{"op": "replace", "path": "/sections/license/granted", "value": True}]
+        rl = self._s.patch(
+            f"{self.base}/api/submission/workspaceitems/{ws_id}",
+            headers={**self._write_headers(), "Content-Type": "application/json"},
+            json=license_patch,
+            timeout=_TIMEOUT,
+        )
+        self._refresh_csrf(rl)
+        if not rl.ok:
+            logger.warning("license grant failed for ws %s: %s", ws_id, rl.status_code)
+
+        # 4. Check for blocking validation errors before submitting ───────────
+        rv = self._s.get(
+            f"{self.base}/api/submission/workspaceitems/{ws_id}",
+            headers=self._write_headers(),
+            timeout=_TIMEOUT,
+        )
+        self._refresh_csrf(rv)
+        if rv.ok:
+            errors = rv.json().get("errors", [])
+            blocking = [e for e in errors if "filerequired" in e.get("message", "")]
+            if blocking:
+                # This collection requires a file; we have no PDF → abort cleanly.
+                self._s.delete(
+                    f"{self.base}/api/submission/workspaceitems/{ws_id}",
+                    headers=self._write_headers(),
+                    timeout=_TIMEOUT,
+                )
+                return {
+                    "status": "error",
+                    "message": "Collection requires a PDF file; no local file available for this item",
+                }
+
+        # 5. Submit to workflow → archived ────────────────────────────────────
         r3 = self._s.post(
             f"{self.base}/api/workflow/workflowitems",
             headers={**self._write_headers(), "Content-Type": "text/uri-list"},
@@ -294,53 +409,86 @@ class DSpaceClient:
 
 # ── Dublin Core field mapping (§6.4) ─────────────────────────────────────────
 
+def _mv(value: str, place: int = 0) -> dict:
+    """Build a DSpace 9 metadata value object (language/authority/confidence required)."""
+    return {
+        "value": value,
+        "language": None,
+        "authority": None,
+        "confidence": -1,
+        "place": place,
+    }
+
+
 def _build_metadata_patch(item) -> list[dict]:
-    """Build JSON-Patch ops to set DC fields on a DSpace workspace item."""
+    """Build JSON-Patch ops to set DC fields on a DSpace 9 workspace item.
+
+    DSpace 9 requires full value objects with language/authority/confidence/place.
+    Multi-value fields are batched into a single op (repeated ops on the same
+    path would overwrite instead of append).
+    """
     ops = []
 
-    def _add(dc_path: str, value: str):
+    def _add(dc_path: str, value: str, section: str = "traditionalpageone"):
         if value and value.strip():
             ops.append({
                 "op": "add",
-                "path": f"/sections/traditionalpageone/{dc_path}",
-                "value": [{"value": value.strip()}],
+                "path": f"/sections/{section}/{dc_path}",
+                "value": [_mv(value.strip())],
             })
 
     _add("dc.title", item.title or "")
-    _add("dc.description.abstract", item.abstract or "")
     _add("dc.date.issued", item.dc_date_issued or "")
-    _add("dc.rights", item.dc_rights or "")
     _add("dc.type", item.dc_type or "")
     _add("dc.language.iso", item.dc_language or "en")
-    _add("dc.identifier.uri", item.dc_identifier_uri or item.url or "")
-    _add("dc.identifier.doi", item.doi or "")
     if item.institution:
         _add("dc.publisher", item.institution)
 
-    # Authors — one patch op per author
-    for author in getattr(item, "authors", []):
-        name = getattr(author, "name", "")
-        if name:
-            ops.append({
-                "op": "add",
-                "path": "/sections/traditionalpageone/dc.contributor.author",
-                "value": [{"value": name}],
-            })
+    # URI: prefer explicit dc.identifier.uri, else build from DOI, else fallback to url.
+    # dc.rights and dc.identifier.doi are not in the UNILAG submission form.
+    doi = item.doi or ""
+    uri = (
+        item.dc_identifier_uri
+        or (f"https://doi.org/{doi}" if doi else "")
+        or item.url
+        or ""
+    )
+    _add("dc.identifier.uri", uri)
 
-    # Subject tags
-    for tag in (item.dc_subject or "").split(","):
-        tag = tag.strip()
-        if tag:
-            ops.append({
-                "op": "add",
-                "path": "/sections/traditionalpageone/dc.subject",
-                "value": [{"value": tag}],
-            })
+    # Authors — all in one op so every author is preserved
+    author_names = [
+        a.name for a in getattr(item, "authors", []) if getattr(a, "name", "")
+    ]
+    if author_names:
+        ops.append({
+            "op": "add",
+            "path": "/sections/traditionalpageone/dc.contributor.author",
+            "value": [_mv(n, i) for i, n in enumerate(author_names)],
+        })
 
-    # ARK / DocID as identifiers
-    if item.ark:
-        _add("dc.identifier.other", item.ark)
-    if item.docid:
-        _add("dc.identifier.other", item.docid)
+    # Abstract and subjects go in traditionalpagetwo (DSpace 9 default layout)
+    if item.abstract and item.abstract.strip():
+        ops.append({
+            "op": "add",
+            "path": "/sections/traditionalpagetwo/dc.description.abstract",
+            "value": [_mv(item.abstract.strip())],
+        })
+
+    subject_tags = [t.strip() for t in (item.dc_subject or "").split(",") if t.strip()]
+    if subject_tags:
+        ops.append({
+            "op": "add",
+            "path": "/sections/traditionalpagetwo/dc.subject",
+            "value": [_mv(t, i) for i, t in enumerate(subject_tags)],
+        })
+
+    # ARK + DocID as identifiers
+    other_ids = [v for v in [item.ark, item.docid] if v]
+    if other_ids:
+        ops.append({
+            "op": "add",
+            "path": "/sections/traditionalpageone/dc.identifier.other",
+            "value": [_mv(v, i) for i, v in enumerate(other_ids)],
+        })
 
     return ops
