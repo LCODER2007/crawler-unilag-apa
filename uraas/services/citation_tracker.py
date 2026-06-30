@@ -2,16 +2,18 @@
 Citation Tracking Service
 Fetches citation counts and citation graphs from OpenAlex and Crossref.
 Calculates h-index and other bibliometric indicators.
+Scoped to Special Collections items (SC_FILTER) — mirrors the analytics engine.
 """
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import requests
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
+from uraas.config.african_countries import AFRICAN_ISO2
 from uraas.database import Author, Base, Item, SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -356,6 +358,65 @@ class CitationTracker:
 
         finally:
             session.close()
+
+
+    @staticmethod
+    def fetch_work_velocity(openalex_id: str) -> Optional[Dict]:
+        """Fetch counts_by_year + cited_by_count for one work from OpenAlex.
+
+        Used by backfill_citation_velocity.py to fill gaps where the spider
+        did not capture this data at crawl time.
+        """
+        try:
+            url = f"https://api.openalex.org/works/{openalex_id}"
+            headers = {"User-Agent": "URAAS/1.0 (mailto:library@unilag.edu.ng)"}
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            return {
+                "counts_by_year": data.get("counts_by_year", []),
+                "cited_by_count": data.get("cited_by_count", 0),
+            }
+        except Exception as e:
+            logger.error(f"fetch_work_velocity failed for {openalex_id}: {e}")
+            return None
+
+    @staticmethod
+    def fetch_african_citation_share(openalex_id: str) -> Optional[float]:
+        """Return the % of citations coming from African institutions (0–100).
+
+        Calls OpenAlex with group_by=authorships.institutions.country_code on
+        the set of works that cite the given work, then sums the African
+        country buckets.  Returns None if the work has no citations or the API
+        call fails.
+        """
+        try:
+            url = (
+                f"https://api.openalex.org/works"
+                f"?filter=cites:{openalex_id}"
+                f"&group_by=authorships.institutions.country_code"
+                f"&per_page=200"
+            )
+            headers = {"User-Agent": "URAAS/1.0 (mailto:library@unilag.edu.ng)"}
+            r = requests.get(url, headers=headers, timeout=15)
+            if r.status_code != 200:
+                return None
+            groups = r.json().get("group_by", [])
+            if not groups:
+                return None
+            total = sum(g.get("count", 0) for g in groups)
+            if not total:
+                return None
+            african = sum(
+                g.get("count", 0)
+                for g in groups
+                if g.get("key", "").upper() in AFRICAN_ISO2
+            )
+            return round(african / total * 100, 1)
+        except Exception as e:
+            logger.error(f"fetch_african_citation_share failed for {openalex_id}: {e}")
+            return None
 
 
 # ── API Helper Functions ──────────────────────────────────────────────────────
