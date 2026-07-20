@@ -22,7 +22,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config import config
 from uraas.config.institutions import get_registry
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 _EFETCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
@@ -37,7 +38,7 @@ _PUBMED_SEEDS = [
 ]
 
 
-class PubMedSpider(scrapy.Spider):
+class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "pubmed"
     custom_settings = {
         "DOWNLOAD_DELAY": 0.4,  # NCBI etiquette: max 3 req/s without key, 10 with
@@ -57,6 +58,8 @@ class PubMedSpider(scrapy.Spider):
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
         self._accepted = 0
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
+        self._init_dedup_index()
 
     def _affil_term(self) -> str:
         return f'"{self.institution_name}"[Affiliation]'
@@ -91,7 +94,7 @@ class PubMedSpider(scrapy.Spider):
 
     def parse_search(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
         data = response.json()
         ids = data.get("esearchresult", {}).get("idlist", [])
         if not ids:
@@ -102,14 +105,14 @@ class PubMedSpider(scrapy.Spider):
 
         total = int(data.get("esearchresult", {}).get("count", 0))
         retstart = response.meta["retstart"] + _BATCH
-        if retstart < min(total, 500) and self._accepted < self.target_limit:
+        if retstart < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
             next_url = self._esearch_url(seed, retstart)
             yield scrapy.Request(url=next_url, callback=self.parse_search,
                                  meta={"seed": seed, "retstart": retstart})
 
     def parse_fetch(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
         # PubMed efetch returns XML; parse with Scrapy's Selector
         from scrapy import Selector
         sel = Selector(text=response.text, type="xml")
@@ -144,12 +147,30 @@ class PubMedSpider(scrapy.Spider):
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
+            url_val = (
+                f"https://doi.org/{doi}" if doi
+                else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+            )
+
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB.
+            if self._is_known(doi=doi, url=url_val, title=title):
+                continue
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title, "abstract": abstract, "authors": authors, "doi": doi,
-                "url": f"https://doi.org/{doi}" if doi else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+                "url": url_val,
                 "pdf_url": None, "publication_date": str(year),
                 "source_repository": "PubMed", "is_unilag_author": True,
                 "raw_affiliation": self.institution_name, "institution": self.institution_name,
                 "institution_ror": self.ror_id,
             }
+            yield item
+            self._mark_seen(doi=doi, url=url_val, title=title)
+
+    def closed(self, reason):
+        self.logger.info(
+            "PubMed spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
+            self.institution_name, self._accepted, self._skipped_known, reason,
+        )

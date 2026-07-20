@@ -89,7 +89,7 @@ limiter = Limiter(
 #   PUBLIC_ENDPOINTS — reachable without a session (login page, health, static).
 #   ADMIN_ENDPOINTS  — require role == admin (crawler, mutations, bulk exports,
 #                      staff directory PII). Everything else needs any login.
-PUBLIC_ENDPOINTS = {"login", "logout", "health_check", "api_version", "static"}
+PUBLIC_ENDPOINTS = {"login", "logout", "health_check", "api_version", "static", "auth_role"}
 ADMIN_ENDPOINTS = {
     "start_crawler",
     "stop_crawler",
@@ -108,6 +108,7 @@ ADMIN_ENDPOINTS = {
     "collaboration_export_csv",
     "citations_velocity_csv",
     "staff_directory",
+    "clear_half_and_recrawl",
 }
 
 
@@ -1667,6 +1668,66 @@ def update_citations(item_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/admin/clear-half-recrawl", methods=["POST"])
+def clear_half_and_recrawl():
+    """Delete the oldest ~50% of papers then kick off a fresh crawl (admin only).
+
+    Designed to free space on HF Spaces persistent storage and repopulate
+    with fresh data.  Returns counts immediately; the crawl runs in the
+    background via the normal crawler_monitor thread.
+    """
+    global crawler_process
+    session = SessionLocal()
+    try:
+        total = session.query(func.count(Item.id)).scalar() or 0
+        half = max(1, total // 2)
+        # Delete the oldest half by primary-key order (cheapest scan)
+        old_ids = [r[0] for r in session.query(Item.id).order_by(Item.id).limit(half).all()]
+        if old_ids:
+            session.query(Item).filter(Item.id.in_(old_ids)).delete(synchronize_session=False)
+            session.commit()
+        remaining = (session.query(func.count(Item.id)).scalar() or 0)
+        analytics_cache.invalidate_all()
+        logger.info(f"clear-half: deleted {len(old_ids)} papers, {remaining} remain")
+    except Exception as exc:
+        session.rollback()
+        logger.error(f"clear-half: {exc}")
+        return api_error(str(exc))
+    finally:
+        session.close()
+
+    # Kick off a fresh crawl (same logic as /api/crawler/start)
+    with crawler_lock:
+        if crawler_process is None or crawler_process.poll() is not None:
+            try:
+                cmd = [
+                    sys.executable, "scripts/crawl_multi_institution.py",
+                    "--spider", "openalex",
+                    "--institutions", "unilag",
+                    "--target", "50",
+                ]
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                )
+                crawler_process = proc
+                import threading
+                threading.Thread(target=crawler_monitor, args=(proc,), daemon=True).start()
+                crawl_started = True
+            except Exception as exc2:
+                logger.error(f"clear-half recrawl launch failed: {exc2}")
+                crawl_started = False
+        else:
+            crawl_started = False
+
+    return api_ok(
+        {"deleted": len(old_ids), "remaining": remaining, "crawl_started": crawl_started},
+        narrative=f"Cleared {len(old_ids)} older papers. Fresh crawl {'started' if crawl_started else 'already running'}.",
+    )
+
+
 @app.route("/api/author/<int:author_id>/metrics")
 def get_author_metrics(author_id):
     """Get bibliometric indicators for an author (h-index, citations, etc.)."""
@@ -2634,6 +2695,12 @@ def crawler_status():
 
 
 #  Health Check Endpoint for Render
+
+
+@app.route("/api/auth/role")
+def auth_role():
+    """Return the current session role (or null). Public endpoint used by the UI."""
+    return jsonify({"role": current_role()})
 
 
 @app.route("/health")

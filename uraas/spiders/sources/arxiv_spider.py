@@ -6,7 +6,12 @@ The Atom API is stable, rate-limit-friendly (1 req/3s recommended), and
 returns clean structured XML metadata.
 
 Docs: info.arxiv.org/help/api/basics.html
-Rate limit: 3 req/s; we use 1.5s download delay to stay polite.
+Rate limit: arXiv's own Terms of Use (info.arxiv.org/help/api/tou.html) say
+"make no more than one request every three seconds" — i.e. DOWNLOAD_DELAY
+must be >= 3.0s. This file's two rate-limit comments used to disagree with
+each other (one said "1 req/3s", the other said "3 req/s" — a 10x gap) and
+the configured delay (1.5s) matched neither, running at 2x the real allowed
+rate.
 """
 
 import os
@@ -21,9 +26,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
-_BASE = "http://export.arxiv.org/api/query"
+_BASE = "https://export.arxiv.org/api/query"
 _NS = {
     "atom": "http://www.w3.org/2005/Atom",
     "arxiv": "http://arxiv.org/schemas/atom",
@@ -37,10 +43,10 @@ _SC_RELEVANT = {
 }
 
 
-class ArxivSpider(scrapy.Spider):
+class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "arxiv_multi"
     custom_settings = {
-        "DOWNLOAD_DELAY": 1.5,
+        "DOWNLOAD_DELAY": 3.0,
         "CONCURRENT_REQUESTS": 1,
         "USER_AGENT": f"URAAS/1.0 (+SC discovery; mailto:{config.OPENALEX_MAILTO})",
     }
@@ -75,6 +81,8 @@ class ArxivSpider(scrapy.Spider):
         self.ror_id = self.institution_config.ror
         self._accepted = 0
         self._seen_ids: set = set()
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
+        self._init_dedup_index()
 
     def _build_url(self, query: str, start: int = 0) -> str:
         params = {"search_query": query, "start": start, "max_results": _BATCH}
@@ -113,7 +121,7 @@ class ArxivSpider(scrapy.Spider):
 
     def parse(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
 
         try:
             root = ElementTree.fromstring(response.text)
@@ -159,7 +167,18 @@ class ArxivSpider(scrapy.Spider):
                     pdf_url = link.get("href")
                     break
 
-            # Extract affiliations from arxiv:affiliation elements
+            # Extract affiliations from arxiv:affiliation elements — populated
+            # for only a minority of papers (live-verified: 0/3 on a sample
+            # UNILAG query), but when present it's real per-author data, so
+            # gate on it the same way openalex_spider.py's Gate 3 does: only
+            # reject when structured data exists AND contradicts the query.
+            # This can't catch the "paper ABOUT the institution, not FROM it"
+            # case (e.g. a scientometric study of UNILAG) when affiliation
+            # data is absent — arXiv's `all:` query already guarantees the
+            # institution name appears in title/abstract/authors/comments,
+            # so a title/abstract text-match gate would be a redundant no-op
+            # here, unlike core_spider.py/openaire_spider.py where the query
+            # itself provides no such guarantee.
             affiliations = [
                 aff.text.strip()
                 for a in entry.findall("atom:author", _NS)
@@ -167,14 +186,23 @@ class ArxivSpider(scrapy.Spider):
                 if aff.text
             ]
             raw_affiliation = "; ".join(affiliations) or self.institution_name
+            if affiliations and not self.institution_config.matches_affiliation(
+                raw_affiliation
+            ):
+                continue
 
             # SC gate — only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB.
+            if self._is_known(doi=doi, url=arxiv_id, title=title):
+                continue
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title,
                 "abstract": abstract,
                 "authors": authors,
@@ -188,6 +216,8 @@ class ArxivSpider(scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
             }
+            yield item
+            self._mark_seen(doi=doi, url=arxiv_id, title=title)
 
         # Pagination
         total_text = root.findtext("opensearch:totalResults", "0", _NS) or "0"
@@ -195,9 +225,15 @@ class ArxivSpider(scrapy.Spider):
         query = response.meta.get("query", "")
         start = response.meta.get("start", 0)
         next_start = start + _BATCH
-        if next_start < min(total, 500) and self._accepted < self.target_limit:
+        if next_start < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
             yield scrapy.Request(
                 self._build_url(query, next_start),
                 callback=self.parse,
                 meta={"query": query, "start": next_start},
             )
+
+    def closed(self, reason):
+        self.logger.info(
+            f"arXiv spider closed | {self.institution_name} | "
+            f"accepted={self._accepted} | skipped_known={self._skipped_known} | reason={reason}"
+        )

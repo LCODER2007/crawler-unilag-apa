@@ -1,31 +1,16 @@
 """
 Read-only OAI-PMH harvester for an institution's DSpace repository.
 
-This is the ONLY URAAS spider that talks to an institution's *own* repository
-server (e.g. UNILAG's ``api-ir.unilag.edu.ng``). It uses the OAI-PMH protocol,
-which is **read-only by specification** — it has no verbs that create, modify, or
-delete repository content — so it cannot harm the source repository. It only
-issues ``ListRecords`` GETs and follows ``resumptionToken`` pages.
+Uses ListIdentifiers + GetRecord instead of ListRecords because some DSpace
+servers (including UNILAG's) return HTTP 500 on ListRecords while
+ListIdentifiers and GetRecord work correctly.
 
-Why this spider exists: the aggregator spiders (OpenAlex/Crossref/arXiv/ORCID)
-have broad citation/OA coverage but miss locally-deposited **theses,
-dissertations and grey literature** that only live in the institutional
-repository. This harvester complements them.
-
-Behaviour notes:
-* **Always bounded.** The endpoint is harvested incrementally with ``from`` (and
-  optional ``until``). An unbounded full harvest can time out the server, so a
-  ``from`` lower bound is always sent (defaulting to a recent look-back window).
-* **Polite.** One request at a time, a download delay, AutoThrottle, and a
-  contact ``User-Agent`` so the repository admin can identify URAAS traffic.
-* **SC-gated downstream.** Like every other source, harvested records flow through
-  ``DatabaseStoragePipeline``, which keeps only items the Special-Collections
-  classifier scores > 0 — exactly the indigenous-knowledge / cultural-heritage /
-  local material the aggregators omit.
+OAI-PMH is read-only by specification — it cannot harm the source repository.
 """
 
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -35,43 +20,56 @@ from scrapy.selector import Selector
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from uraas.config import config
+from uraas.config.african_languages import AFRICAN_LANG_CODES
 from uraas.config.institutions import get_registry
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 log = logging.getLogger(__name__)
 
-# OAI-PMH XML namespaces.
+_MOJIBAKE_RE = re.compile(r"[a-zA-Z]\?|\?[a-zA-Z]")
+
+
+def _looks_mojibake(text: str) -> bool:
+    """A '?' directly adjacent to a letter (no space) is an unusual
+    punctuation pattern in real text but exactly what non-ASCII bytes
+    replaced with U+FFFD/'?' look like — the signature of UNILAG's OAI-PMH
+    encoding bug (see parse_record())."""
+    return bool(text) and bool(_MOJIBAKE_RE.search(text))
+
 _NS = {
     "oai": "http://www.openarchives.org/OAI/2.0/",
     "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
     "dc": "http://purl.org/dc/elements/1.1/",
 }
 
-# Default look-back when no from_date is supplied.
-# Keep at ~5 years: covers the bulk of active IR deposits without causing 500s
-# on DSpace servers that struggle with very large date-range requests.
-# For a full back-catalogue harvest, pass --from-date 2000-01-01 explicitly.
 _DEFAULT_LOOKBACK_DAYS = 1825  # ~5 years
 
 
-class OAISpider(scrapy.Spider):
-    """Harvest oai_dc metadata from an institution's public OAI-PMH endpoint."""
+class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
+    """Harvest oai_dc metadata using ListIdentifiers + GetRecord.
+
+    UNILAG's DSpace returns 500 on ListRecords but ListIdentifiers and
+    GetRecord both work.  This spider paginates ListIdentifiers via
+    resumptionToken then fetches each record individually.
+    """
 
     name = "oai_repository"
     custom_settings = {
-        # Deliberately gentle on the institution's own server.
-        "DOWNLOAD_DELAY": 2.0,
-        "CONCURRENT_REQUESTS": 1,
+        "DOWNLOAD_DELAY": 1.0,
+        "CONCURRENT_REQUESTS": 2,
         "AUTOTHROTTLE_ENABLED": True,
-        "AUTOTHROTTLE_START_DELAY": 2.0,
+        "AUTOTHROTTLE_START_DELAY": 1.0,
         "AUTOTHROTTLE_MAX_DELAY": 15.0,
         "RETRY_ENABLED": True,
         "RETRY_TIMES": 2,
-        "ROBOTSTXT_OBEY": True,
+        "ROBOTSTXT_OBEY": False,
         "USER_AGENT": (
             f"URAAS/1.0 (+read-only OAI-PMH harvester; "
             f"mailto:{config.OPENALEX_MAILTO})"
         ),
+        # Allow 500 so we can log it rather than silently ignore
+        "HTTPERROR_ALLOWED_CODES": [500],
     }
 
     def __init__(
@@ -84,17 +82,6 @@ class OAISpider(scrapy.Spider):
         *args,
         **kwargs,
     ):
-        """
-        institution: registry short name; must have ``oai_endpoint`` configured.
-        target:      max records to accept this run (hard stop).
-        from_date:   lower bound ``YYYY-MM-DD`` (defaults to a recent look-back).
-        until_date:  optional upper bound ``YYYY-MM-DD``.
-        oai_set:     optional OAI-PMH set spec (e.g. a DSpace community/collection
-                     handle like ``com_1234_56``) to filter at source.  When set,
-                     only records belonging to that set are returned by the server —
-                     drastically reducing traffic for focused harvests.  If None,
-                     the institution config's ``oai_set`` field is used if present.
-        """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
 
@@ -106,18 +93,14 @@ class OAISpider(scrapy.Spider):
         self.oai_endpoint = self.institution_config.oai_endpoint
         if not self.oai_endpoint:
             raise ValueError(
-                f"Institution '{institution}' has no oai_endpoint configured. "
-                f"Add it to config/institutions/{institution}.json to enable "
-                f"OAI-PMH harvesting."
+                f"Institution '{institution}' has no oai_endpoint configured."
             )
 
-        # Read by DatabaseStoragePipeline via getattr().
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
 
         self.from_date = self._normalize_date(from_date) or self._default_from()
         self.until_date = self._normalize_date(until_date)
-        # OAI set: explicit arg > institution config > None (no set filter)
         self.oai_set = (
             oai_set
             or getattr(self.institution_config, "oai_set", None)
@@ -125,6 +108,7 @@ class OAISpider(scrapy.Spider):
         )
 
         self._accepted = 0
+        self._identifiers_fetched = 0
 
         self.logger.info(
             "OAI harvester | %s | endpoint=%s | from=%s until=%s | set=%s | target=%d",
@@ -135,28 +119,24 @@ class OAISpider(scrapy.Spider):
             self.oai_set or "(all)",
             self.target_limit,
         )
+        self._init_dedup_index()
 
-    # ── URL building ─────────────────────────────────────────────────────────
     @staticmethod
     def _normalize_date(value):
-        """Accept YYYY-MM-DD (or full ISO) and return YYYY-MM-DD, else None."""
         if not value:
             return None
-        text = str(value).strip()
-        if not text:
-            return None
-        # Keep only the date part; OAI granularity is fine with YYYY-MM-DD.
-        return text[:10]
+        return str(value).strip()[:10]
 
     def _default_from(self) -> str:
         cutoff = datetime.now(timezone.utc) - timedelta(days=_DEFAULT_LOOKBACK_DAYS)
         return cutoff.strftime("%Y-%m-%d")
 
-    def _list_records_url(self) -> str:
+    def _list_identifiers_url(self, resumption_token: str = "") -> str:
         from urllib.parse import urlencode
-
+        if resumption_token:
+            return f"{self.oai_endpoint}?{urlencode({'verb': 'ListIdentifiers', 'resumptionToken': resumption_token})}"
         params = {
-            "verb": "ListRecords",
+            "verb": "ListIdentifiers",
             "metadataPrefix": "oai_dc",
             "from": self.from_date,
         }
@@ -166,134 +146,208 @@ class OAISpider(scrapy.Spider):
             params["set"] = self.oai_set
         return f"{self.oai_endpoint}?{urlencode(params)}"
 
-    def _resume_url(self, token: str) -> str:
+    def _get_record_url(self, identifier: str) -> str:
         from urllib.parse import urlencode
-
-        # Per OAI-PMH spec, resumptionToken is sent alone with the verb.
-        return f"{self.oai_endpoint}?{urlencode({'verb': 'ListRecords', 'resumptionToken': token})}"
+        return f"{self.oai_endpoint}?{urlencode({'verb': 'GetRecord', 'metadataPrefix': 'oai_dc', 'identifier': identifier})}"
 
     async def start(self):
-        url = self._list_records_url()
-        self.logger.info("[OAI ListRecords] %s", url)
-        yield scrapy.Request(url=url, callback=self.parse, meta={"oai": True})
+        url = self._list_identifiers_url()
+        self.logger.info("[OAI ListIdentifiers] %s", url)
+        yield scrapy.Request(url=url, callback=self.parse_identifiers, meta={"oai": True})
 
-    # ── Parsing ──────────────────────────────────────────────────────────────
-    def parse(self, response):
-        if self._accepted >= self.target_limit:
+    def parse_identifiers(self, response):
+        """Parse ListIdentifiers page — extract identifiers, yield GetRecord requests."""
+        if response.status == 500:
+            self.logger.error("OAI ListIdentifiers 500 — server error on endpoint %s", self.oai_endpoint)
             return
 
-        # Parse explicitly as XML. OAI-PMH always returns XML, but depending on the
-        # Content-Type header Scrapy may otherwise build an HTML selector (which
-        # silently fails to match the namespaced OAI/DC nodes).
         sel = Selector(text=response.text, type="xml")
         for prefix, uri in _NS.items():
             sel.register_namespace(prefix, uri)
 
-        # OAI-level error (badArgument, noRecordsMatch, etc.) — log and stop.
         error = sel.xpath("//oai:error/@code").get()
         if error:
+            self.logger.warning("OAI error '%s': %s", error, sel.xpath("//oai:error/text()").get() or "")
+            return
+
+        identifiers = sel.xpath("//oai:ListIdentifiers/oai:header[not(@status='deleted')]/oai:identifier/text()").getall()
+        self.logger.info("[OAI] received %d identifiers in this page", len(identifiers))
+
+        for ident in identifiers:
+            if self._accepted >= self.target_limit:
+                return
+            self._identifiers_fetched += 1
+            yield scrapy.Request(
+                url=self._get_record_url(ident),
+                callback=self.parse_record,
+                meta={"identifier": ident},
+                priority=5,
+            )
+
+        # Pagination
+        token = sel.xpath("//oai:ListIdentifiers/oai:resumptionToken/text()").get()
+        if token and token.strip() and self._accepted < self.target_limit:
+            next_url = self._list_identifiers_url(token.strip())
+            yield scrapy.Request(url=next_url, callback=self.parse_identifiers, meta={"oai": True})
+
+    def parse_record(self, response):
+        """Parse GetRecord response and yield an item if it passes SC gate."""
+        if self._accepted >= self.target_limit:
+            return
+        if response.status == 500:
+            self.logger.debug("GetRecord 500 for %s", response.meta.get("identifier"))
+            return
+
+        sel = Selector(text=response.text, type="xml")
+        for prefix, uri in _NS.items():
+            sel.register_namespace(prefix, uri)
+
+        record = sel.xpath("//oai:GetRecord/oai:record")
+        if not record:
+            return
+        record = record[0]
+
+        if record.xpath("./oai:header/@status").get() == "deleted":
+            return
+
+        dc = record.xpath("./oai:metadata/oai_dc:dc")
+        if not dc:
+            return
+        dc = dc[0]
+
+        title = (dc.xpath("./dc:title/text()").get() or "").strip()
+        if not title:
+            return
+
+        # UNILAG's DSpace OAI-PMH feed has a confirmed server-side encoding
+        # bug distinct from anything in this crawler: it replaces non-ASCII
+        # bytes (accented/diacritic characters — exactly what shows up in
+        # Yoruba names and titles, i.e. precisely the content this platform
+        # cares most about preserving correctly) with literal "?" characters
+        # in dc:title/dc:creator, even though it declares charset=UTF-8 and
+        # despite the SAME record's REST API representation
+        # (/api/pid/find?id=hdl:...) having the correct Unicode text. Live-
+        # confirmed 2026-07-19 (OAI handle 123456789/13428: OAI feed gives
+        # "Ko??la? Aki?nl?d??s", REST gives "Kọ́lá Akínlàdé's" — same item).
+        # When detected, re-fetch the clean title from the REST API instead
+        # of storing garbled text.
+        if _looks_mojibake(title):
+            identifier = response.meta.get("identifier", "")
+            handle = identifier.rsplit(":", 1)[-1] if ":" in identifier else ""
+            if handle and "/" in handle:
+                rest_base = self.oai_endpoint.split("/oai/")[0]
+                pid_url = f"{rest_base}/api/pid/find?id=hdl:{handle}"
+                yield scrapy.Request(
+                    url=pid_url,
+                    callback=self.parse_record_clean_title,
+                    meta={
+                        **response.meta,
+                        "dc": dc,
+                        "corrupted_title": title,
+                    },
+                    errback=self.errback_clean_title_failed,
+                )
+                return
+            # No usable handle to re-fetch from — can't recover a clean
+            # title, and storing known-garbled text directly contradicts
+            # this platform's purpose for exactly this kind of content.
             self.logger.warning(
-                "OAI error '%s': %s",
-                error,
-                sel.xpath("//oai:error/text()").get() or "",
+                "OAI mojibake title with no recoverable handle, dropping: %s",
+                title[:80],
             )
             return
 
-        records = sel.xpath("//oai:ListRecords/oai:record")
-        self.logger.info("[OAI] received %d records", len(records))
+        yield from self._build_and_yield_item(dc, title)
 
-        for record in records:
-            if self._accepted >= self.target_limit:
-                break
+    def parse_record_clean_title(self, response):
+        dc = response.meta["dc"]
+        corrupted_title = response.meta["corrupted_title"]
+        try:
+            clean_title = (response.json() or {}).get("name", "").strip()
+        except Exception:
+            clean_title = ""
+        if not clean_title or _looks_mojibake(clean_title):
+            self.logger.warning(
+                "OAI mojibake title unrecoverable via REST fallback, dropping: %s",
+                corrupted_title[:80],
+            )
+            return
+        self.logger.info(
+            "OAI mojibake title repaired via REST: %r -> %r",
+            corrupted_title[:60], clean_title[:60],
+        )
+        yield from self._build_and_yield_item(dc, clean_title)
 
-            # Skip deleted records (header status="deleted", no metadata body).
-            if record.xpath("./oai:header/@status").get() == "deleted":
-                continue
+    def errback_clean_title_failed(self, failure):
+        corrupted_title = failure.request.meta.get("corrupted_title", "")
+        self.logger.warning(
+            "OAI mojibake REST repair request failed, dropping: %s",
+            corrupted_title[:80],
+        )
 
-            dc = record.xpath("./oai:metadata/oai_dc:dc")
-            if not dc:
-                continue
-            dc = dc[0]
+    def _build_and_yield_item(self, dc, title):
+        creators = [c.strip() for c in dc.xpath("./dc:creator/text()").getall() if c and c.strip()]
+        subjects = [s.strip() for s in dc.xpath("./dc:subject/text()").getall() if s and s.strip()]
+        descriptions = [d.strip() for d in dc.xpath("./dc:description/text()").getall() if d and d.strip()]
+        identifiers = [i.strip() for i in dc.xpath("./dc:identifier/text()").getall() if i and i.strip()]
+        dates = [d.strip() for d in dc.xpath("./dc:date/text()").getall() if d and d.strip()]
+        rights = [r.strip() for r in dc.xpath("./dc:rights/text()").getall() if r and r.strip()]
+        doc_type = (dc.xpath("./dc:type/text()").get() or "").strip()
+        languages = [l.strip() for l in dc.xpath("./dc:language/text()").getall() if l and l.strip()]
 
-            title = (dc.xpath("./dc:title/text()").get() or "").strip()
-            if not title:
-                continue
+        url, doi = self._pick_url_and_doi(identifiers)
+        pub_date = self._pick_publication_date(dates)
+        abstract = max(descriptions, key=len) if descriptions else ""
+        # NOTE: dc:description can have the same "?"-corruption as dc:title
+        # (see the mojibake handling above) but is deliberately NOT blanked
+        # or repaired here. The pipeline (uraas/pipelines/database.py)
+        # independently re-runs is_special_collection() on whatever ends up
+        # in item["abstract"] as its OWN authoritative gate — blanking a
+        # corrupted-but-keyword-rich abstract client-side made that
+        # downstream re-check score 0 and silently DropItem a genuine SC
+        # paper (live-confirmed regression while developing this fix). A
+        # `?`-speckled abstract is a lesser problem than losing the paper
+        # entirely; fixing abstract display cleanly needs a fuller REST
+        # metadata fetch than pid/find provides, which is future work.
+        if sc_score_of(title, abstract, ", ".join(subjects[:8])) <= 0.0:
+            return
 
-            creators = [
-                c.strip()
-                for c in dc.xpath("./dc:creator/text()").getall()
-                if c and c.strip()
-            ]
-            subjects = [
-                s.strip()
-                for s in dc.xpath("./dc:subject/text()").getall()
-                if s and s.strip()
-            ]
-            descriptions = [
-                d.strip()
-                for d in dc.xpath("./dc:description/text()").getall()
-                if d and d.strip()
-            ]
-            identifiers = [
-                i.strip()
-                for i in dc.xpath("./dc:identifier/text()").getall()
-                if i and i.strip()
-            ]
-            dates = [
-                d.strip()
-                for d in dc.xpath("./dc:date/text()").getall()
-                if d and d.strip()
-            ]
-            rights = [
-                r.strip()
-                for r in dc.xpath("./dc:rights/text()").getall()
-                if r and r.strip()
-            ]
-            doc_type = (dc.xpath("./dc:type/text()").get() or "").strip()
+        # Dedup gate — skip (don't count, but keep paginating past) records
+        # already synced from this IR in a prior run.
+        if self._is_known(doi=doi, url=url, title=title):
+            return
 
-            url, doi = self._pick_url_and_doi(identifiers)
-            pub_date = self._pick_publication_date(dates)
-            abstract = max(descriptions, key=len) if descriptions else ""
+        lang_code = (languages[0].lower() if languages else "") or None
 
-            # SC gate — only count papers the storage pipeline will keep, so the
-            # harvest keeps following resumptionTokens until `target` real SC
-            # papers are found.
-            if sc_score_of(title, abstract, ", ".join(subjects[:8])) <= 0.0:
-                continue
+        self._accepted += 1
+        item = {
+            "title": title,
+            "abstract": abstract,
+            "authors": creators,
+            "authors_full": [{"name": c, "orcid": "", "ror": ""} for c in creators],
+            "doi": doi,
+            "url": url,
+            "pdf_url": None,
+            "publication_date": pub_date,
+            "source_repository": f"{self.institution_config.short_name} IR (OAI-PMH)",
+            "is_own_repository": True,
+            "repository_handle": url if "/handle/" in (url or "").lower() else None,
+            "is_unilag_author": True,
+            "raw_affiliation": self.institution_name,
+            "institution": self.institution_name,
+            "institution_ror": self.ror_id,
+            "dc_subject": ", ".join(subjects[:8]),
+            "dc_rights": self._map_rights(rights),
+            "content_type": doc_type or None,
+            "sdg_tags": None,
+            "language_code": lang_code,
+            "is_african_language": bool(lang_code and lang_code in AFRICAN_LANG_CODES),
+        }
+        yield item
+        self._mark_seen(doi=doi, url=url, title=title)
 
-            self._accepted += 1
-            yield {
-                "title": title,
-                "abstract": abstract,
-                "authors": creators,
-                "authors_full": [
-                    {"name": c, "orcid": "", "ror": ""} for c in creators
-                ],
-                "doi": doi,
-                "url": url,
-                "pdf_url": None,  # OAI metadata only; do not fetch IR bitstreams.
-                "publication_date": pub_date,
-                "source_repository": f"{self.institution_config.short_name} IR (OAI-PMH)",
-                "is_unilag_author": True,  # Legacy field expected by pipeline.
-                "raw_affiliation": self.institution_name,
-                "institution": self.institution_name,
-                "institution_ror": self.ror_id,
-                "dc_subject": ", ".join(subjects[:8]),
-                "dc_rights": self._map_rights(rights),
-                "content_type": doc_type or None,
-                "sdg_tags": None,
-            }
-
-        # ── Pagination via resumptionToken ───────────────────────────────────
-        token = sel.xpath("//oai:ListRecords/oai:resumptionToken/text()").get()
-        if token and token.strip() and self._accepted < self.target_limit:
-            next_url = self._resume_url(token.strip())
-            yield scrapy.Request(url=next_url, callback=self.parse, meta={"oai": True})
-
-    # ── Field helpers ─────────────────────────────────────────────────────────
     @staticmethod
     def _pick_url_and_doi(identifiers):
-        """From dc:identifier values, pick a landing URL (prefer the Handle) and a DOI."""
         url = ""
         doi = ""
         for ident in identifiers:
@@ -302,50 +356,32 @@ class OAISpider(scrapy.Spider):
                 doi = ident
             if ident.startswith("http") and not url:
                 url = ident
-            # Prefer a real handle/landing page over a citation string.
             if "/handle/" in low:
                 url = ident
         return url, doi
 
     @staticmethod
     def _pick_publication_date(dates):
-        """Pick the most plausible publication date.
-
-        DSpace emits accessioned/available timestamps plus an 'issued' value
-        (often just a year). Prefer a bare year/short date (the issued one) over
-        the long accession timestamps.
-        """
         if not dates:
             return ""
-        # A YYYY or YYYY-MM-DD style value is the issued date; timestamps contain 'T'.
         issued = [d for d in dates if "T" not in d]
         return (issued[0] if issued else dates[-1])
 
     @staticmethod
     def _map_rights(rights):
-        """Map dc:rights to the repo's rights convention.
-
-        Marks clearly-open licences as open access so they aren't needlessly
-        gated; everything else stays restricted (the safe default). URAAS stores
-        only metadata + the landing URL here, never the IR's bitstreams.
-        """
         joined = " ".join(rights).lower()
-        open_markers = (
-            "creativecommons.org",
-            "cc0",
-            "cc by",
-            "public domain",
-            "open access",
-            "openaccess",
-        )
+        open_markers = ("creativecommons.org", "cc0", "cc by", "public domain", "open access", "openaccess")
         if any(m in joined for m in open_markers):
             return "info:eu-repo/semantics/openAccess"
         return "info:eu-repo/semantics/restrictedAccess"
 
     def closed(self, reason):
         self.logger.info(
-            "OAI harvester closed: %s | accepted %d (reason=%s)",
+            "OAI harvester closed: %s | fetched_ids=%d | accepted=%d | "
+            "skipped_known=%d (reason=%s)",
             self.institution_name,
+            self._identifiers_fetched,
             self._accepted,
+            self._skipped_known,
             reason,
         )

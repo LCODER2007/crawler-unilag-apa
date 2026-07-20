@@ -23,14 +23,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _S2_BASE = "https://api.semanticscholar.org/graph/v1/paper/search"
 _FIELDS = "title,abstract,authors,year,externalIds,openAccessPdf,fieldsOfStudy,venue"
 _LIMIT = 100
 
 
-class SemanticScholarSpider(scrapy.Spider):
+class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "semantic_scholar"
     custom_settings = {
         # S2 free tier: 100 req / 5 min per IP (~1 req/3 sec sustained).
@@ -83,6 +84,7 @@ class SemanticScholarSpider(scrapy.Spider):
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
         self._accepted = 0
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
 
         self.logger.info(
             "S2 spider | %s | boost_special=%s | sc_only=%s | target=%d",
@@ -91,6 +93,7 @@ class SemanticScholarSpider(scrapy.Spider):
             self.sc_only,
             self.target_limit,
         )
+        self._init_dedup_index()
 
     def _build_url(self, query: str, offset: int = 0) -> str:
         import urllib.parse
@@ -116,12 +119,24 @@ class SemanticScholarSpider(scrapy.Spider):
             for pat in self.institution_config.affiliation_patterns
         )
 
+    def _headers(self) -> dict:
+        # config.S2_API_KEY existed but was never actually sent — this spider
+        # built requests with no headers at all. Live-tested 2026-07-18: a
+        # burst at this spider's own configured 6s delay got HTTP 429 on 4/5
+        # sequential requests, with the 429 body reading "apply for a key for
+        # higher rate limits" — the one available lever that would help was
+        # unused. S2's docs specify the `x-api-key` header for this.
+        if config.S2_API_KEY:
+            return {"x-api-key": config.S2_API_KEY}
+        return {}
+
     async def start(self):
         if not self.sc_only:
             url = self._build_url(self.institution_name)
             yield scrapy.Request(
                 url=url,
                 callback=self.parse,
+                headers=self._headers(),
                 meta={"wave": "general", "query": self.institution_name, "offset": 0},
             )
 
@@ -139,6 +154,7 @@ class SemanticScholarSpider(scrapy.Spider):
                 yield scrapy.Request(
                     url=url,
                     callback=self.parse,
+                    headers=self._headers(),
                     meta={"wave": f"sc:{seed}", "query": query, "offset": 0},
                     priority=10,
                 )
@@ -148,7 +164,7 @@ class SemanticScholarSpider(scrapy.Spider):
             self.logger.warning("S2 rate-limited (429) — request will be retried by Scrapy")
             return
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
 
         data = response.json()
         papers = data.get("data", [])
@@ -207,8 +223,13 @@ class SemanticScholarSpider(scrapy.Spider):
             if sc_score_of(title, abstract, dc_subject) <= 0.0:
                 continue
 
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB.
+            if self._is_known(doi=doi, url=url_val, title=title):
+                continue
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title,
                 "abstract": abstract,
                 "authors": authors,
@@ -223,25 +244,29 @@ class SemanticScholarSpider(scrapy.Spider):
                 "institution_ror": self.ror_id,
                 "dc_subject": dc_subject,
             }
+            yield item
+            self._mark_seen(doi=doi, url=url_val, title=title)
 
         # Offset-based pagination
         total = data.get("total", 0)
         offset = response.meta.get("offset", 0) + _LIMIT
-        if offset < min(total, 500) and self._accepted < self.target_limit:
+        if offset < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
             query = response.meta["query"]
             wave = response.meta["wave"]
             next_url = self._build_url(query, offset)
             yield scrapy.Request(
                 url=next_url,
                 callback=self.parse,
+                headers=self._headers(),
                 meta={"wave": wave, "query": query, "offset": offset},
             )
 
     def closed(self, reason):
         self.logger.info(
-            "S2 spider closed | %s | accepted=%d | reason=%s",
+            "S2 spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
             self.institution_name,
             self._accepted,
+            self._skipped_known,
             reason,
         )
         if self._accepted == 0:

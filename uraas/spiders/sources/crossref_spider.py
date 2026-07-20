@@ -9,10 +9,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 
-class CrossrefSpider(scrapy.Spider):
+class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "crossref_multi"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.0,
@@ -23,7 +24,7 @@ class CrossrefSpider(scrapy.Spider):
         ),
     }
 
-    SELECT_FIELDS = "DOI,title,abstract,author,issued,URL,link"
+    SELECT_FIELDS = "DOI,title,abstract,author,issued,URL,link,funder"
 
     def __init__(
         self,
@@ -59,11 +60,13 @@ class CrossrefSpider(scrapy.Spider):
         self.ror_id = self.institution_config.ror
         self._accepted = 0
         self._rejected_aff = 0
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
 
         self.logger.info(f"Initialized Crossref spider for {self.institution_name}")
         self.logger.info(
             f"ROR ID: {self.ror_id}  | boost_special={self.boost_special} | sc_only={self.sc_only} | target={self.target_limit}"
         )
+        self._init_dedup_index()
 
     def _build_url(self, *, query: str = "", offset: int = 0) -> str:
         import urllib.parse
@@ -102,7 +105,7 @@ class CrossrefSpider(scrapy.Spider):
 
     def parse(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
 
         data = response.json()
         items = data.get("message", {}).get("items", [])
@@ -148,6 +151,12 @@ class CrossrefSpider(scrapy.Spider):
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB, so repeat crawls make real progress instead
+            # of re-filling target with the same deterministic top results.
+            if self._is_known(doi=doi, url=url, title=title):
+                continue
+
             # Try to find a PDF link in the 'link' array if open access
             pdf_url = None
             for link in work.get("link", []):
@@ -155,8 +164,23 @@ class CrossrefSpider(scrapy.Spider):
                     pdf_url = link.get("URL")
                     break
 
+            # Crossref funder data uses Funder Registry DOIs (10.13039/...),
+            # not ROR — no ror field to map, unlike OpenAlex.
+            funders = []
+            for f in work.get("funder", []) or []:
+                name = f.get("name", "")
+                if not name:
+                    continue
+                awards = [a for a in (f.get("award") or []) if a]
+                funders.append({
+                    "name": name,
+                    "ror": None,
+                    "award_id": ", ".join(awards) if awards else None,
+                    "funder_doi": f.get("DOI") or None,
+                })
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title,
                 "authors": authors,
                 "abstract": abstract,
@@ -168,13 +192,16 @@ class CrossrefSpider(scrapy.Spider):
                 "raw_affiliation": " | ".join(raw_affs) if raw_affs else self.institution_name,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                "funders": funders,
             }
+            yield item
+            self._mark_seen(doi=doi, url=url, title=title)
 
         # Deep pagination — stop when target reached or no more results.
         offset = response.meta.get("offset", 0) + 50
         if (
             items
-            and offset < 500
+            and offset < self.max_results_scanned
             and self._accepted < self.target_limit
         ):
             wave = response.meta.get("wave", "ror")
@@ -189,5 +216,6 @@ class CrossrefSpider(scrapy.Spider):
     def closed(self, reason):
         self.logger.info(
             f"Crossref spider closed | {self.institution_name} | "
-            f"accepted={self._accepted} | rejected_aff={self._rejected_aff} | reason={reason}"
+            f"accepted={self._accepted} | rejected_aff={self._rejected_aff} | "
+            f"skipped_known={self._skipped_known} | reason={reason}"
         )

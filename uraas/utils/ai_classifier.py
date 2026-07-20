@@ -325,6 +325,22 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "indigenous soil conservation",
         "indigenous metallurgy",
         "traditional pottery",
+        "divination",
+        "ifa divination",
+        "herbalist",
+        "native doctor",
+        "traditional authority",
+        "traditional governance",
+        "traditional rulers",
+        "sacred forest",
+        "indigenous spirituality",
+        "traditional birth attendant",
+        "indigenous conservation",
+        "traditional irrigation",
+        "bush medicine",
+        "plant medicine",
+        "spirit possession",
+        "ritual healing",
     ],
     "African Literature": [
         "postcolonial literature",
@@ -357,6 +373,26 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "black aesthetics",
         "african theatre",
         "contemporary african writing",
+        "nollywood",
+        "nigerian cinema",
+        "african cinema",
+        "yoruba film",
+        "igbo film",
+        "african film",
+        "theatre arts",
+        "performing arts",
+        "amos tutuola",
+        "ben okri",
+        "chimamanda adichie",
+        "femi osofisan",
+        "j p clark",
+        "cyprian ekwensi",
+        "buchi emecheta",
+        "niyi osundare",
+        "tunde kelani",
+        "african video film",
+        "nigerian poetry",
+        "african popular culture",
     ],
     "Cultural Heritage": [
         "cultural heritage",
@@ -389,6 +425,25 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "sacred groves",
         "rock art preservation",
         "indigenous textiles",
+        "masquerade",
+        "egungun",
+        "eyo festival",
+        "durbar festival",
+        "traditional festival",
+        "cultural festival",
+        "osun-osogbo",
+        "benin bronze",
+        "ife bronze",
+        "nigerian art",
+        "traditional institution",
+        "chieftaincy",
+        "obafemi awolowo",
+        "lagos heritage",
+        "festival culture",
+        "traditional titling",
+        "nnamdi azikiwe",
+        "indigenous architecture",
+        "compound house",
     ],
     "Ethnic Languages & Groups": [
         "ethnic group",
@@ -438,6 +493,24 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "yoruba cosmology",
         "igbo metaphysics",
         "swahili coast",
+        "efik",
+        "ibibio",
+        "tiv people",
+        "ijaw",
+        "urhobo",
+        "isoko",
+        "itsekiri",
+        "kalabari",
+        "nupe",
+        "kanuri",
+        "edo people",
+        "pidgin english",
+        "nigerian pidgin",
+        "creole language",
+        "bini language",
+        "ogoni",
+        "fulbe",
+        "shuwa arab",
     ],
     "Postcolonial Studies": [
         "postcolonialism",
@@ -463,6 +536,20 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "colonial violence",
         "anti-colonial resistance",
         "decolonial turn",
+        "colonial nigeria",
+        "nigerian independence",
+        "biafra",
+        "nigerian civil war",
+        "indirect rule",
+        "amalgamation 1914",
+        "lugard",
+        "structural adjustment",
+        "nigerian nationalism",
+        "colonial administration",
+        "british colonialism",
+        "colonial economy",
+        "first republic",
+        "military rule",
     ],
     "Pan-African Studies": [
         "pan-africanism",
@@ -485,6 +572,17 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "panafrican",
         "african economic community",
         "agenda 2063",
+        "lagos plan of action",
+        "abuja treaty",
+        "nepad",
+        "kwame nkrumah",
+        "julius nyerere",
+        "african liberation",
+        "nkrumahism",
+        "africa must unite",
+        "african statesmen",
+        "obafemi awolowo",
+        "african economic nationalism",
     ],
     "African Philosophy": [
         "ubuntu",
@@ -503,6 +601,18 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "negritude philosophy",
         "ubuntu ethics",
         "african communitarianism",
+        "ifa philosophy",
+        "yoruba metaphysics",
+        "oduduwa",
+        "orunmila",
+        "ogboni",
+        "maat",
+        "african personhood",
+        "communitarian ethics",
+        "african moral theory",
+        "afrocentrism",
+        "yoruba religion",
+        "ifism",
     ],
     "Ethnomusicology": [
         "ethnomusicology",
@@ -522,6 +632,26 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
         "mbira music",
         "djembe drumming",
         "traditional chants",
+        "afrobeat",
+        "fela kuti",
+        "fela anikulapo",
+        "juju music",
+        "fuji music",
+        "apala music",
+        "talking drum",
+        "dundun",
+        "sakara music",
+        "waka music",
+        "yoruba music",
+        "igbo music",
+        "hausa music",
+        "yoruba drama music",
+        "afropop",
+        "afrojuju",
+        "african popular music",
+        "king sunny ade",
+        "ebenezer obey",
+        "sir victor uwaifo",
     ],
 }
 
@@ -1071,6 +1201,39 @@ def _clean_text(text: str) -> str:
     return text
 
 
+_DISPLAY_WHITESPACE_RE = re.compile(r"[ \t\f\v]+")
+_DISPLAY_BLANK_LINES_RE = re.compile(r"\n\s*\n+")
+
+
+def sanitize_text(text: Optional[str]) -> Optional[str]:
+    """Display-safe cleanup for title/abstract text pulled from source APIs.
+
+    Several sources (Crossref, PubMed/Europe PMC, CORE, DataCite, OpenAIRE)
+    return abstracts — and occasionally titles — as raw JATS/HTML XML
+    (``<jats:p>``, ``<jats:italic>``, ``<bold>``...) or double-HTML-encoded
+    entities (``&amp;lt;i&amp;gt;``). Unlike `_clean_text` (which strips all
+    non-alphabetic characters for keyword scoring), this preserves digits,
+    punctuation, and unicode so real text isn't mangled — it only removes
+    markup noise. Returns None for empty/whitespace-only input so callers can
+    store NULL instead of an empty string.
+    """
+    if not text:
+        return None
+    # Decode HTML entities; twice, since some sources double-encode
+    # (e.g. "&amp;lt;i&amp;gt;" -> "&lt;i&gt;" -> "<i>").
+    cleaned = html.unescape(html.unescape(text))
+    # Strip HTML/XML tags (covers <jats:p>, <jats:italic>, <bold>, <sec>, ...)
+    cleaned = _HTML_TAG_RE.sub(" ", cleaned)
+    # Strip any bare jats:xxx tokens that survive outside angle brackets
+    cleaned = _JATS_TAG_RE.sub(" ", cleaned)
+    # Collapse blank lines left behind by stripped block-level tags, then
+    # normalise remaining runs of spaces/tabs (keep single newlines).
+    cleaned = _DISPLAY_BLANK_LINES_RE.sub("\n", cleaned)
+    cleaned = _DISPLAY_WHITESPACE_RE.sub(" ", cleaned)
+    cleaned = "\n".join(line.strip() for line in cleaned.split("\n")).strip()
+    return cleaned or None
+
+
 def _is_valid_word(word: str) -> bool:
     """Return True if the word is a meaningful academic term."""
     if len(word) < 4:
@@ -1171,46 +1334,6 @@ def classify_sdgs(title: str, abstract: str, threshold: int = 1) -> List[Dict]:
 
     results.sort(key=lambda x: -x["score"])
     return results
-
-
-def classify_special_collections(
-    title: str, abstract: str, dc_subject: str = ""
-) -> List[Dict]:
-    """
-    Classify a paper into special collections categories.
-    Returns list of {category, score, matched_keywords}.
-    """
-    text = _clean_text(f"{title or ''} {abstract or ''} {dc_subject or ''}").lower()
-    if not text.strip():
-        return []
-
-    results = []
-    for category, keywords in SPECIAL_COLLECTIONS.items():
-        score, matched = _keyword_score(text, keywords)
-        if score >= 1:
-            results.append(
-                {
-                    "category": category,
-                    "score": score * 3,
-                    "matched_keywords": matched[:6],
-                }
-            )
-
-    results.sort(key=lambda x: -x["score"])
-    return results
-
-
-def sc_score_of(title: str, abstract: str, dc_subject: str = "") -> float:
-    """Special-Collections score for a paper, identical to the gate the
-    storage pipeline applies before saving.
-
-    The pipeline keeps an item iff this score is > 0 (see
-    uraas/pipelines/database.py). Spiders call this to count ONLY genuine SC
-    papers toward their crawl target — otherwise the target fills up with
-    papers the pipeline later drops, and the crawl halts early.
-    """
-    hits = classify_special_collections(title or "", abstract or "", dc_subject or "")
-    return float(sum(h["score"] for h in hits))
 
 
 def extract_keywords(

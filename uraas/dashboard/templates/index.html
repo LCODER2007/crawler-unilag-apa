@@ -80,6 +80,10 @@
         <svg id="icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         <svg id="icon-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       </button>
+      <a href="/logout" class="btn-ghost flex items-center gap-1.5 text-sm font-medium" title="Sign out" style="color:var(--danger,#ef4444)">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        Sign out
+      </a>
     </div>
   </header>
 
@@ -727,6 +731,54 @@
       </div>
     </div>
 </div><!-- end main container -->
+
+<!-- Discreet admin footer -->
+<div id="admin-footer" class="hidden text-center py-4" style="opacity:0.35">
+  <button onclick="clearHalfAndRecrawl()" class="text-xs" style="color:var(--text-muted);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px" title="Admin: clear oldest 50% of papers and start fresh crawl">
+    ⚙ reset &amp; recrawl
+  </button>
+</div>
+
+<!-- Confirm modal for clear+recrawl -->
+<div id="clear-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--modal-bg);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:380px;width:90%;text-align:center">
+    <p class="font-semibold mb-2" style="color:var(--text)">Reset &amp; Recrawl</p>
+    <p class="text-sm mb-5" style="color:var(--text-muted)">This will delete the oldest 50% of papers from the database and start a fresh crawl. Continue?</p>
+    <div class="flex gap-3 justify-center">
+      <button onclick="document.getElementById('clear-modal').style.display='none'" class="btn-ghost text-sm">Cancel</button>
+      <button id="clear-confirm-btn" onclick="doConfirmClear()" class="text-sm px-4 py-2 rounded-lg font-semibold" style="background:var(--accent);color:#fff">Yes, reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Show admin footer only when logged in as admin (check session role)
+fetch('/api/auth/role').then(r=>r.ok?r.json():null).then(d=>{
+  if(d && d.role==='admin') document.getElementById('admin-footer').classList.remove('hidden');
+}).catch(()=>{});
+
+function clearHalfAndRecrawl(){
+  document.getElementById('clear-modal').style.display='flex';
+}
+function doConfirmClear(){
+  const btn=document.getElementById('clear-confirm-btn');
+  btn.disabled=true; btn.textContent='Working…';
+  fetch('/api/admin/clear-half-recrawl',{method:'POST',headers:{'Content-Type':'application/json'}})
+    .then(r=>r.json())
+    .then(d=>{
+      document.getElementById('clear-modal').style.display='none';
+      btn.disabled=false; btn.textContent='Yes, reset';
+      showToast(d.data
+        ? `Cleared ${d.data.deleted} papers. Recrawl ${d.data.crawl_started?'started':'queued'}.`
+        : (d.error||'Done'), d.error?'error':'success');
+    })
+    .catch(e=>{
+      btn.disabled=false; btn.textContent='Yes, reset';
+      showToast('Request failed: '+e,'error');
+    });
+}
+</script>
+
 <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version('js/app.js') }}"></script>
 </body>
 </html>

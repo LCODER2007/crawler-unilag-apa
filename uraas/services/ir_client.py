@@ -147,7 +147,11 @@ class DSpaceClient:
     def get_facet(self, facet: str, size: int = 20) -> list[dict]:
         """Return facet buckets from the discovery layer (§7.2).
 
-        facet: one of dateIssued, author, subject, itemtype …
+        facet: one of dateIssued, author, subject, has_content_in_original_bundle,
+        entityType, access_status — the actual configured list on this
+        instance (confirmed live 2026-07-19 via GET .../api/discover/facets,
+        no dsoType filter). "itemtype" is NOT valid here (400) despite
+        appearing in some DSpace docs/examples.
         Returns list of {"label": str, "count": int}.
         """
         try:
@@ -238,7 +242,16 @@ class DSpaceClient:
         """Composite live stats tile for the dashboard (§7.3)."""
         total = self.get_total_items()
         by_year = self.get_facet("dateIssued", size=30)
-        by_type = self.get_facet("itemtype", size=20)
+        # "itemtype" isn't a real facet on this instance (confirmed live
+        # 2026-07-19: 400 Bad Request — GET .../api/discover/facets returns
+        # the actual configured list: author, subject, dateIssued,
+        # has_content_in_original_bundle, entityType, access_status).
+        # "entityType" IS valid but returns zero values here (this instance
+        # doesn't populate DSpace entity types), so by_type silently came
+        # back empty either way. "subject" is the one facet that actually
+        # gives a meaningful category breakdown (SOCIAL SCIENCES, MEDICINE,
+        # NATURAL SCIENCES, ...) on the live server.
+        by_type = self.get_facet("subject", size=20)
         return {
             "total_items": total,
             "by_year": by_year,
@@ -380,9 +393,25 @@ class DSpaceClient:
         self._refresh_csrf(rv)
         if rv.ok:
             errors = rv.json().get("errors", [])
-            blocking = [e for e in errors if "filerequired" in e.get("message", "")]
-            if blocking:
-                # This collection requires a file; we have no PDF → abort cleanly.
+            if errors:
+                # DSpace surfaces every blocking validation problem here
+                # (missing/invalid required fields per the TARGET
+                # COLLECTION's own input-form config, not just a missing
+                # file) — previously only the missing-file case was checked
+                # for, so any other validation error (e.g. a collection
+                # requiring a field our generic Dublin Core patch doesn't
+                # set) fell through to step 5's blind POST, which then 422s
+                # with the real reason never looked at or logged (confirmed
+                # live 2026-07-19 — a deposit failed with just "422 Client
+                # Error", no detail, because raise_for_status() never reads
+                # the response body). Treat ANY validation error as
+                # blocking and log exactly what DSpace is objecting to, so
+                # a rejection is actually diagnosable instead of a bare
+                # HTTP status code.
+                logger.warning(
+                    "Workspace item %s has %d validation error(s), aborting before workflow submit: %s",
+                    ws_id, len(errors), errors,
+                )
                 self._s.delete(
                     f"{self.base}/api/submission/workspaceitems/{ws_id}",
                     headers=self._write_headers(),
@@ -390,7 +419,7 @@ class DSpaceClient:
                 )
                 return {
                     "status": "error",
-                    "message": "Collection requires a PDF file; no local file available for this item",
+                    "message": f"Collection metadata validation failed: {errors}",
                 }
 
         # 5. Submit to workflow → archived ────────────────────────────────────
@@ -401,6 +430,11 @@ class DSpaceClient:
             timeout=_TIMEOUT,
         )
         self._refresh_csrf(r3)
+        if not r3.ok:
+            logger.warning(
+                "Workflow submission failed for ws %s: %s %s",
+                ws_id, r3.status_code, r3.text[:1500],
+            )
         r3.raise_for_status()
 
         dspace_id = r3.json().get("id") or r3.json().get("uuid", "")

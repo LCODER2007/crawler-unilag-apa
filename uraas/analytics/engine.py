@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import desc, extract, func, or_
 from sqlalchemy.orm import aliased, joinedload
 
+from uraas.config.african_languages import AFRICAN_LANG_CODES
 from uraas.config.institutions import get_registry
 from uraas.database import (
     Author,
@@ -43,34 +44,6 @@ from uraas.utils.analytics_cache import analytics_cache
 from uraas.utils.unilag_classifier import classifier
 
 logger = logging.getLogger(__name__)
-
-# African language codes (kept here for Linguistic Diversity Index)
-AFRICAN_LANG_CODES = {
-    "yo": "Yoruba",
-    "ig": "Igbo",
-    "ha": "Hausa",
-    "sw": "Swahili",
-    "am": "Amharic",
-    "so": "Somali",
-    "rw": "Kinyarwanda",
-    "sn": "Shona",
-    "zu": "Zulu",
-    "xh": "Xhosa",
-    "af": "Afrikaans",
-    "st": "Sesotho",
-    "tn": "Setswana",
-    "ts": "Tsonga",
-    "ss": "Swati",
-    "ve": "Venda",
-    "nr": "Ndebele",
-    "ff": "Fula",
-    "wo": "Wolof",
-    "bm": "Bambara",
-    "ln": "Lingala",
-    "kg": "Kongo",
-    "lua": "Luba",
-    "om": "Oromo",
-}
 
 # Content type weights for TK Vitality Score
 TK_WEIGHTS = {

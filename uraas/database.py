@@ -91,6 +91,12 @@ class Community(Base):
     institution = Column(String(255))  # parent institution name
     ror = Column(String(128))  # Institution ROR for multi-tenant comparison
 
+    # ── Unit type + self-minted PID ──────────────────────────────────────────
+    # unit_type: "faculty" (default) | "ace" (Africa Centre of Excellence)
+    unit_type = Column(String(30), default="faculty")
+    pmd = Column(String(128))  # self-minted persistent ID (see ark_generator); unique index below
+    pmd_assigned_at = Column(DateTime)
+
     collections = relationship("Collection", back_populates="community")
 
 
@@ -124,6 +130,7 @@ class Author(Base):
     # PID integrations
     orcid = Column(String(64))  # e.g. 0000-0002-1825-0097
     ror = Column(String(128))  # institutional ROR
+    isni = Column(String(20))  # e.g. 0000 0001 2103 2683
 
     items = relationship("Item", secondary=item_authors, back_populates="authors")
 
@@ -188,7 +195,10 @@ class Item(Base):
     # AI-extracted keywords (comma-separated)
     ai_keywords = Column(Text)
 
-    # Special Collections weighting (computed by classify_special_collections).
+    # Special Collections weighting (computed by
+    # uraas.services.sc_engine.is_special_collection() — NOT
+    # uraas.utils.ai_classifier.classify_special_collections, an older
+    # unguarded keyword-hit-count gate no longer wired to ingestion).
     # score = sum of (matched_keywords * 3) across all SC categories; 0 = not SC.
     # categories = comma-separated category names with hits, e.g. "Indigenous Knowledge,Cultural Heritage".
     special_collection_score = Column(Float, default=0.0, index=True)
@@ -212,9 +222,22 @@ class Item(Base):
     cited_by_count = Column(Integer, default=0)
     african_citation_share = Column(Float)  # 0-100; NULL = not yet computed
 
+    # ── Funders (OpenAlex funders/awards, Crossref funder) ───────────────────
+    # JSON [{"name": str, "ror": str|None, "award_id": str|None}, ...].
+    # Feeds DOCiD publish's funders[i][name/other_name/type/country/ror_id]
+    # FormData fields (see uraas/services/docid_client.py) once real
+    # credentials exist. NULL/empty means no funder data was found for this
+    # item, not "not yet checked" — every spider that supports extraction
+    # always sets the field (possibly to "[]").
+    funders = Column(Text)
+
     # ── ARK persistent identifier (Archival Resource Key) ────────────────────
     ark = Column(String(128))  # e.g. "ark:/99999/u1x7kq2m9b4cz" (unique index below)
     ark_assigned_at = Column(DateTime)
+
+    # Which PID scheme is authoritative for this item: "ark" (we minted one) or
+    # "handle" (harvested from our own IR, which already assigns a Handle).
+    pid_source = Column(String(20))
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -342,7 +365,9 @@ Index("ix_items_language", Item.language_code)
 Index("ix_items_content_type", Item.content_type)
 Index("ix_items_created_at", Item.created_at)
 Index("ix_authors_orcid", Author.orcid)
+Index("ix_authors_isni", Author.isni)
 Index("ux_items_ark", Item.ark, unique=True)
+Index("ux_communities_pmd", Community.pmd, unique=True)
 Index(
     "ix_item_aff_item_country",
     ItemAffiliation.item_id,
@@ -368,3 +393,49 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine, checkfirst=True)
+
+
+def sync_schema_columns():
+    """Add any column declared on an ORM model but missing from the actual
+    database table.
+
+    create_all() only creates whole tables that don't exist yet — it never
+    alters an existing table, so a database that predates some column
+    (e.g. a persistent volume surviving across deploys) is silently left on
+    its old schema forever, and the first query touching that column
+    crashes. Confirmed live 2026-07-19: an HF Space failed to start
+    entirely because its persistent DB predated Community.unit_type, and a
+    synthetic even-older test schema also turned up a second, completely
+    undocumented gap (Community.ror) with no dedicated migration script at
+    all — one-column-at-a-time migration scripts don't scale to catching
+    every possible drift. This is generic instead: it walks every declared
+    ORM column and ALTERs in whatever the live table is missing, so it
+    self-heals regardless of which columns happen to be absent or when they
+    were added to the models.
+    """
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    added = 0
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # brand new table — create_all() already made it correctly
+            existing_cols = {c["name"] for c in insp.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in existing_cols:
+                    continue
+                try:
+                    ddl_type = column.type.compile(dialect=engine.dialect)
+                except Exception as e:
+                    print(f"  [WARN] cannot compile DDL type for {table.name}.{column.name}: {e}")
+                    continue
+                stmt = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl_type}"
+                try:
+                    conn.execute(text(stmt))
+                    print(f"  -> {stmt}")
+                    added += 1
+                except Exception as e:
+                    print(f"  [WARN] {stmt} failed: {e}")
+    print(f"  schema sync: {added} missing column(s) added" if added else "  schema sync: already in sync")

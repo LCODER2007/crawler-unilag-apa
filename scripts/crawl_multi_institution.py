@@ -39,7 +39,7 @@ def main():
         default="openalex",
         choices=["openalex", "crossref", "arxiv", "orcid", "oai",
                  "semantic_scholar", "europepmc", "core", "pubmed",
-                 "openaire", "doaj", "ajol", "all"],
+                 "openaire", "doaj", "ajol", "datacite", "isni", "all"],
         help=(
             "Spider to use for crawling. "
             "'all' fans out across every web source (openalex + crossref + "
@@ -128,12 +128,16 @@ def main():
         "openaire":        "uraas.spiders.sources.openaire_spider.OpenAIRESpider",
         "doaj":            "uraas.spiders.sources.doaj_spider.DOAJSpider",
         "ajol":            "uraas.spiders.sources.ajol_spider.AJOLSpider",
+        "datacite":        "uraas.spiders.sources.datacite_spider.DataCiteSpider",
+        "isni":            "uraas.spiders.sources.isni_spider.ISNISpider",
     }
 
-    # "all" = every web-discovery spider (excludes "oai" which reads FROM the IR)
+    # "all" = every web-discovery spider (excludes "oai" which reads FROM the IR,
+    # and "isni" which is an identity-enrichment spider, not a paper/dataset source)
     ALL_WEB_SPIDERS = [
         "openalex", "crossref", "semantic_scholar", "europepmc",
         "core", "pubmed", "openaire", "doaj", "ajol", "arxiv", "orcid",
+        "datacite",
     ]
 
     if args.spider == "all":
@@ -203,6 +207,10 @@ def main():
                     from_date=args.from_date,
                     until_date=args.until_date,
                 )
+            elif sname == "isni":
+                # Identity-enrichment spider: no target/boost_special/sc_only —
+                # it writes directly to Author.isni and yields no pipeline items.
+                process.crawl(scls, institution=inst)
             else:
                 process.crawl(
                     scls,

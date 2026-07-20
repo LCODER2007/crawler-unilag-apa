@@ -186,15 +186,67 @@ class FacultyDirectorySpider(scrapy.Spider):
 
         os.makedirs(os.path.dirname(STAFF_CACHE), exist_ok=True)
 
-        # Save flat name list (backwards compat)
-        unique_names = sorted(set(self.staff_names))
-        with open(STAFF_CACHE, "w", encoding="utf-8") as f:
-            json.dump(unique_names, f, indent=2, ensure_ascii=False)
+        # MERGE into the existing rich staff file, never overwrite it.
+        #
+        # STAFF_CACHE (data/unilag_staff.json) is the file institutions/*.json
+        # actually points `staff_file` at, and scripts/harvest_staff_openalex.py
+        # populates it with rich records ({name, orcid, openalex_id, ...}) that
+        # uraas/spiders/sources/orcid_spider.py depends on for its entire staff
+        # roster. This spider used to unconditionally overwrite that same path
+        # with a bare JSON array of name strings — any re-run would silently
+        # destroy every harvested ORCID/openalex_id, breaking the ORCID spider
+        # with no error (staff_with_orcid would just quietly become empty).
+        existing_records = []
+        if os.path.exists(STAFF_CACHE):
+            try:
+                with open(STAFF_CACHE, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                if isinstance(raw, list) and raw and isinstance(raw[0], dict):
+                    existing_records = raw
+                elif isinstance(raw, list):
+                    # Legacy flat-name-list format — nothing rich to preserve.
+                    existing_records = [{"name": n} for n in raw if isinstance(n, str)]
+            except Exception as e:
+                self.logger.warning(f"Could not read existing {STAFF_CACHE}: {e}")
 
-        # Save detailed records
+        by_name = {
+            (r.get("name") or "").strip().lower(): r
+            for r in existing_records
+            if r.get("name")
+        }
+
+        filled = added = 0
+        for scraped in self.staff_records:
+            key = scraped["name"].strip().lower()
+            existing = by_name.get(key)
+            if existing:
+                if not existing.get("department") and scraped.get("department"):
+                    existing["department"] = scraped["department"]
+                    filled += 1
+                if not existing.get("faculty") and scraped.get("faculty"):
+                    existing["faculty"] = scraped["faculty"]
+                    filled += 1
+            else:
+                by_name[key] = {
+                    "name": scraped["name"],
+                    "orcid": None,
+                    "department": scraped.get("department"),
+                    "faculty": scraped.get("faculty"),
+                    "openalex_id": None,
+                    "paper_count": 0,
+                }
+                added += 1
+
+        merged = list(by_name.values())
+        with open(STAFF_CACHE, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+
+        # Save this run's raw scrape for audit/reference (unaffected by the merge).
         with open(DETAILED_CACHE, "w", encoding="utf-8") as f:
             json.dump(self.staff_records, f, indent=2, ensure_ascii=False)
 
         self.logger.warning(
-            f"Saved {len(unique_names)} staff names + {len(self.staff_records)} detailed records"
+            f"Scraped {len(self.staff_records)} records | merged into {STAFF_CACHE}: "
+            f"{filled} dept/faculty fields filled, {added} new name-only records added, "
+            f"{len(merged)} total (ORCID/openalex_id on existing records preserved)"
         )

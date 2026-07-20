@@ -5,8 +5,25 @@ CORE aggregates content from thousands of institutional repositories and OA jour
 globally, including many African university repositories. For URAAS it surfaces grey
 literature and theses that are not yet indexed by OpenAlex or Crossref.
 
-Requires a free CORE API key: https://core.ac.uk/api-keys/register
-Set CORE_API_KEY in .env. Without a key the spider logs a warning and exits.
+A free CORE API key (https://core.ac.uk/api-keys/register, set CORE_API_KEY
+in .env) raises the rate limit, but live-tested 2026-07-18: the /v3/search/
+works endpoint returns full 200 OK results with no Authorization header at
+all (only an invalid/garbage key gets 401) — so this now runs keyless with a
+lower throughput ceiling rather than refusing to run at all.
+
+Precision note: CORE's `q=` search does NOT do phrase/AND matching the way
+`"A" "B"` quoting implies for most search engines — live-verified the quoted
+query `"University of Lagos"` returns totalHits=4,482,856 (300x MORE than
+the unquoted `University of Lagos`, 14,834), and a completely made-up quoted
+phrase returns a comparable multi-million count — quoting provides ~zero
+restriction, and CORE's author objects carry no affiliation field at all to
+verify against client-side. Since there's no reliable way to confirm a
+result is actually institution-affiliated, this spider requires the
+institution name to literally appear in the title/abstract text (same
+belt-and-suspenders fallback semantic_scholar_spider.py uses for the same
+reason) — a real but bounded false-positive risk (a paper merely mentioning
+the institution, not authored there), preferable to accepting everything
+unconditionally.
 """
 
 import os
@@ -20,12 +37,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _CORE_BASE = "https://api.core.ac.uk/v3/search/works"
 
 
-class CORESpider(scrapy.Spider):
+class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "core"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.0,
@@ -43,8 +61,8 @@ class CORESpider(scrapy.Spider):
         self.api_key = getattr(config, "CORE_API_KEY", "") or os.environ.get("CORE_API_KEY", "")
         if not self.api_key:
             self.logger.warning(
-                "CORE_API_KEY not set — CORE spider will not run. "
-                "Get a free key at https://core.ac.uk/api-keys/register"
+                "CORE_API_KEY not set — running keyless (lower rate limit). "
+                "Get a free key at https://core.ac.uk/api-keys/register for higher throughput."
             )
 
         registry = get_registry()
@@ -54,18 +72,28 @@ class CORESpider(scrapy.Spider):
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
         self._accepted = 0
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
+        self._affiliation_patterns = self.institution_config.affiliation_patterns or [self.institution_name]
+        self._init_dedup_index()
 
     def _headers(self):
-        return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def _build_url(self, query: str, offset: int = 0) -> str:
         params = {"q": query, "limit": 100, "offset": offset}
         return f"{_CORE_BASE}?{urlencode(params)}"
 
-    async def start(self):
-        if not self.api_key:
-            return
+    def _text_affiliation_match(self, title: str, abstract: str) -> bool:
+        """CORE's author objects carry no affiliation field, and the `q=`
+        query itself doesn't reliably restrict to the institution (see
+        module docstring) — this is the only verification available."""
+        combined = f"{title} {abstract}".lower()
+        return any(p.lower() in combined for p in self._affiliation_patterns)
 
+    async def start(self):
         if not self.sc_only:
             url = self._build_url(f'"{self.institution_name}"')
             yield scrapy.Request(url=url, headers=self._headers(), callback=self.parse,
@@ -80,7 +108,7 @@ class CORESpider(scrapy.Spider):
 
     def parse(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
         data = response.json()
         results = data.get("results", [])
         wave = response.meta.get("wave", "general")
@@ -100,24 +128,43 @@ class CORESpider(scrapy.Spider):
             pdf_url = r.get("downloadUrl") or None
             doc_type = r.get("documentType") or ""
 
+            # Affiliation gate — see module docstring: CORE's query doesn't
+            # reliably restrict to the institution and there's no author
+            # affiliation field to check, so text-match is all we have.
+            if not self._text_affiliation_match(title, abstract):
+                continue
+
             # SC gate — only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB.
+            if self._is_known(doi=doi, url=url_val, title=title):
+                continue
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title, "abstract": abstract, "authors": authors, "doi": doi,
                 "url": url_val, "pdf_url": pdf_url, "publication_date": str(pub_year),
                 "source_repository": "CORE", "is_unilag_author": True,
                 "raw_affiliation": self.institution_name, "institution": self.institution_name,
                 "institution_ror": self.ror_id, "content_type": doc_type,
             }
+            yield item
+            self._mark_seen(doi=doi, url=url_val, title=title)
 
         offset = response.meta.get("offset", 0) + 100
         total = data.get("totalHits", 0)
-        if offset < min(total, 500) and self._accepted < self.target_limit:
+        if offset < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
             query = response.meta["query"]
             next_url = self._build_url(query, offset)
             yield scrapy.Request(url=next_url, headers=self._headers(), callback=self.parse,
                                  meta={"wave": wave, "query": query, "offset": offset})
+
+    def closed(self, reason):
+        self.logger.info(
+            "CORE spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
+            self.institution_name, self._accepted, self._skipped_known, reason,
+        )

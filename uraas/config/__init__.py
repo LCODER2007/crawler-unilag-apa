@@ -28,6 +28,18 @@ class Config:
     RATE_LIMIT_DELAY = float(os.getenv("RATE_LIMIT_DELAY", "2.0"))
     MAX_DEPTH = int(os.getenv("MAX_DEPTH", "10"))
     CONCURRENT_REQUESTS = int(os.getenv("CONCURRENT_REQUESTS", "16"))
+    # Per-wave/query pagination ceiling. Now that spiders skip (rather than
+    # count) already-known duplicates toward `target`, they need headroom to
+    # search deeper into a source once the shallow window is exhausted — this
+    # replaces several spiders' old hardcoded `min(total, 500)` caps.
+    MAX_RESULTS_SCANNED = int(os.getenv("MAX_RESULTS_SCANNED", "2000"))
+    # Test/dry-run safety valve: when set, the storage pipeline skips IR
+    # auto-deposit entirely regardless of DSPACE_USERNAME/PASSWORD being
+    # configured. Intended for session-scoped use during test crawls
+    # ($env:URAAS_DISABLE_IR_DEPOSIT = "1"), never written to .env.
+    DISABLE_IR_DEPOSIT = os.getenv("URAAS_DISABLE_IR_DEPOSIT", "false").lower() in {
+        "1", "true", "yes", "on",
+    }
 
     # Dashboard
     DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8080"))
@@ -105,6 +117,27 @@ class Config:
     DSPACE_API_URL = os.getenv("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server").rstrip("/")
     DSPACE_USERNAME = os.getenv("DSPACE_USERNAME", "")
     DSPACE_PASSWORD = os.getenv("DSPACE_PASSWORD", "")
+    # Target DSpace collection UUID for automatic crawl-time deposits.
+    # Leave blank to skip auto-deposit; set to a collection UUID to enable it.
+    DSPACE_COLLECTION_UUID = os.getenv("DSPACE_COLLECTION_UUID", "")
+
+    # ── Africa PID Alliance DOCiD™ platform (docid.africapidalliance.org) ────
+    # Real registration API — distinct from uraas.utils.docid_generator, which
+    # is a purely local placeholder hash used until real credentials exist.
+    # The base URL below (https://docid.africapidalliance.org/api) was
+    # confirmed live 2026-07-19 by reading the platform's own public
+    # frontend source (github.com/Africa-PID-Alliance/DOCiD) — it's a
+    # same-origin Next.js proxy to the real Flask backend, not a secret, so
+    # it's defaulted here; only DOCID_EMAIL/DOCID_PASSWORD need supplying.
+    # docs/api-reference.html on that domain describes a different, older
+    # /api/v1/* JSON-body shape that doesn't match what's actually deployed
+    # (real /publish is multipart/form-data at plain /api/publications/publish)
+    # — see uraas/services/docid_client.py's module docstring for the full
+    # empirically-verified schema. Leave EMAIL/PASSWORD blank to keep
+    # registration disabled (falls back to the local placeholder generator).
+    DOCID_API_URL = os.getenv("DOCID_API_URL", "").rstrip("/")
+    DOCID_EMAIL = os.getenv("DOCID_EMAIL", "")
+    DOCID_PASSWORD = os.getenv("DOCID_PASSWORD", "")
 
     # ── SMTP for batch approval emails ────────────────────────────────────────
     SMTP_HOST = os.getenv("SMTP_HOST", "")

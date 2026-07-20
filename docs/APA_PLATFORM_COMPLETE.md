@@ -20,10 +20,10 @@
    - 20+ African languages supported
    - Decolonization metrics
 
-4. **Patent Velocity Tracker** - IMPLEMENTED
-   - Innovation lifecycle analysis
-   - Paper-to-patent timeline
-   - Fast movers identification
+4. **Patent Velocity Tracker** - ROADMAP, NOT IMPLEMENTED
+   - No patent data source is integrated anywhere in the codebase
+   - `Item.patent_id`/`patent_date` are unused schema columns
+   - Comparator reports patent_rate honestly as "no data," not a fabricated 0%
 
 5. **Collaboration Network** - IMPLEMENTED
    - Inter-institutional partnerships
@@ -92,9 +92,11 @@ Returns: Professional senate report
 ```
 GET /api/analytics/tk-vitality-score
 GET /api/analytics/linguistic-diversity-index
-GET /api/analytics/patent-velocity
-GET /api/analytics/docid-coverage
 ```
+
+`patent-velocity` and `docid-coverage` are documented above/elsewhere but are **not** registered
+Flask routes in `uraas/dashboard/app.py` — patent-velocity is confirmed roadmap (see below);
+docid-coverage's status was not verified in this pass.
 
 ## Database Schema
 
@@ -192,9 +194,9 @@ Create CSV with ROR column and import using migration script.
 
 **Strategic Value**: Measures decolonization of knowledge
 
-### 3. Patent Velocity
+### 3. Patent Velocity — 🚧 roadmap, not implemented
 
-**Formula**: Average(Patent date - Publication date)
+**Formula**: Average(Patent date - Publication date) — no data source integrated to compute this yet.
 
 **Interpretation**:
 - < 1 year: Fast movers (rapid innovation)
@@ -346,7 +348,7 @@ curl http://localhost:8080/api/analytics/tk-vitality-score
 - [x] Comparator engine backend
 - [x] TK Vitality Score
 - [x] Linguistic Diversity Index
-- [x] Patent Velocity Tracker
+- [ ] Patent Velocity Tracker (roadmap — no data source integrated)
 - [x] Senate report generation (JSON)
 - [x] API endpoints
 - [ ] Comparator UI integrated

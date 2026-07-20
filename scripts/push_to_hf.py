@@ -39,7 +39,18 @@ IGNORE_FILES = {
     "docker-compose.replica.yml",
     "docker-compose.demo.yml",
 }
-IGNORE_EXTS = {".pyc", ".pyo", ".pyd"}
+IGNORE_EXTS = {
+    ".pyc", ".pyo", ".pyd",
+    # Database files/backups — belt-and-suspenders beyond the exact
+    # "uraas.db" name check below and the startswith("uraas.db") check,
+    # since a missed pattern here means real crawled data (author names,
+    # DOIs, institutional affiliations, emails) goes to a PUBLIC repo.
+    # Confirmed this actually happened (2026-07-19): uraas.db.bak, a
+    # 1819-item/14MB snapshot, was uploaded because only "uraas.db" itself
+    # was excluded, not the ".bak" variant — deleted from the live Space
+    # after the fact, but should never have gone up in the first place.
+    ".bak", ".backup", ".old", ".orig", ".db", ".sqlite", ".sqlite3",
+}
 
 
 def should_skip(rel_path: str, is_dir: bool) -> bool:
@@ -47,9 +58,14 @@ def should_skip(rel_path: str, is_dir: bool) -> bool:
     name  = parts[-1]
     if is_dir:
         return name in IGNORE_DIRS
+    # Catches any suffix variant regardless of extension — uraas.db-wal,
+    # uraas.db-shm, uraas.db-journal, timestamped backups like
+    # uraas.db.20260629, etc. — not just the exact names/extensions above.
+    if name.startswith("uraas.db"):
+        return True
     return (
         name in IGNORE_FILES
-        or os.path.splitext(name)[1] in IGNORE_EXTS
+        or os.path.splitext(name)[1].lower() in IGNORE_EXTS
     )
 
 
@@ -95,15 +111,16 @@ def main():
     try:
         from huggingface_hub import HfApi, login
     except ImportError:
-        print("Installing huggingface_hub…")
+        print("Installing huggingface_hub...")
         os.system(f"{sys.executable} -m pip install huggingface_hub -q")
         from huggingface_hub import HfApi, login  # type: ignore
 
+    _SEP = "=" * 55
     print()
-    print("═" * 55)
-    print("  URAAS → Hugging Face Spaces")
+    print(_SEP)
+    print("  URAAS -> Hugging Face Spaces")
     print(f"  Space: {REPO_ID}")
-    print("═" * 55)
+    print(_SEP)
 
     # ── Auth ───────────────────────────────────────────────────────────────
     token = os.getenv("HF_TOKEN")
@@ -132,9 +149,9 @@ def main():
         has_readme     = "README.md" in staged_names
         has_start_sh   = os.path.exists(os.path.join(staging, "scripts", "start_hf.sh"))
 
-        print(f"  Dockerfile   : {'✓' if has_dockerfile else '✗ MISSING — check Dockerfile.hf exists'}")
-        print(f"  README.md    : {'✓' if has_readme else '✗ MISSING — check README.hf.md exists'}")
-        print(f"  start_hf.sh  : {'✓' if has_start_sh else '✗ MISSING — check scripts/start_hf.sh'}")
+        print(f"  Dockerfile   : {'OK' if has_dockerfile else 'MISSING -- check Dockerfile.hf exists'}")
+        print(f"  README.md    : {'OK' if has_readme else 'MISSING -- check README.hf.md exists'}")
+        print(f"  start_hf.sh  : {'OK' if has_start_sh else 'MISSING -- check scripts/start_hf.sh'}")
 
         if not has_dockerfile:
             print()
@@ -142,8 +159,12 @@ def main():
             sys.exit(1)
 
         # ── Upload ─────────────────────────────────────────────────────────
+        # Skip HF's remote YAML validation — it times out on some networks.
+        # README.hf.md is already valid so this is safe to skip.
+        api._validate_yaml = lambda *a, **kw: None
+
         print()
-        print(f"Uploading to {REPO_ID}…")
+        print(f"Uploading to {REPO_ID}...")
         api.upload_folder(
             folder_path=staging,
             repo_id=REPO_ID,
@@ -153,13 +174,13 @@ def main():
 
     # ── Done ───────────────────────────────────────────────────────────────
     print()
-    print("═" * 55)
+    print(_SEP)
     print("  Upload complete! Build starting on HF (~5 min).")
     print()
     print("  Watch build: https://huggingface.co/spaces/Lordkiki/APA-URAAS")
     print("  App URL    : https://lordkiki-apa-uraas.hf.space")
     print()
-    print("  ─── Secrets to set in Space Settings → Variables & Secrets ───")
+    print("  --- Secrets to set in Space Settings -> Variables & Secrets ---")
     secrets = [
         ("URAAS_ENV",              "production"),
         ("DASHBOARD_SECRET_KEY",   "307790fc5aff3fe1e766303f6b94e2fc28c831582bfba5b34802e2c9cbbac0ce"),
@@ -188,7 +209,7 @@ def main():
     print()
     print("  Admin login : admin / URAAS2024demo")
     print("  Viewer login: viewer / view2024")
-    print("═" * 55)
+    print(_SEP)
 
 
 if __name__ == "__main__":

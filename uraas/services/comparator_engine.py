@@ -3,6 +3,7 @@ Multi-Institution Comparator Engine
 Core feature of APA Intelligence Platform - allows comparing multiple African universities
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -31,14 +32,32 @@ class InstitutionProfile:
     def calculate_metrics(self, session):
         """Calculate all metrics for this institution"""
 
-        # Basic counts
+        # Basic counts — Item.ror is reliably set by every spider at ingest
+        # time, but falls back to a name match for any legacy row where it
+        # isn't (e.g. pre-ROR-tagging data, or a future data-quality drift),
+        # rather than silently showing 0 papers for an institution that
+        # genuinely has data under a matched institution name.
         items = session.query(Item).filter(Item.ror == self.ror_id).all()
+        ror_filter = Item.ror == self.ror_id
+        if not items and self.name:
+            items = (
+                session.query(Item)
+                .filter(Item.institution.ilike(f"%{self.name}%"))
+                .all()
+            )
+            if items:
+                logging.getLogger(__name__).info(
+                    "Comparator: ROR match empty for %s (%s), fell back to "
+                    "institution-name match (%d papers)",
+                    self.name, self.ror_id, len(items),
+                )
+                ror_filter = Item.institution.ilike(f"%{self.name}%")
         self.metrics["total_papers"] = len(items)
         self.metrics["total_authors"] = (
             session.query(func.count(distinct(Author.id)))
             .select_from(Author)
             .join(Author.items)
-            .filter(Item.ror == self.ror_id)
+            .filter(ror_filter)
             .scalar()
         ) or 0
 
@@ -195,15 +214,25 @@ class ComparatorEngine:
 
         insights = []
 
+        # Patent data has no source integration anywhere in this codebase —
+        # Item.patent_id is never populated by any spider or pipeline stage
+        # (deferred to roadmap; see docs/APA_PLATFORM_COMPLETE.md). A
+        # patent_rate of 0 therefore means "no data," not "no patents" — treat
+        # it as an unmeasured metric, not a genuine leader/gap finding, so we
+        # don't manufacture a misleading strategic insight from an always-zero
+        # denominator.
+        has_patent_data = any(p.metrics.get("patents", 0) > 0 for p in profiles)
+
         # Find leader in each category
         categories = {
             "total_papers": "Research Volume Leader",
             "oa_rate": "Open Access Champion",
             "tk_rate": "Indigenous Knowledge Preservation Leader",
-            "patent_rate": "Innovation Commercialization Leader",
             "african_lang_rate": "Linguistic Diversity Champion",
             "growth_rate": "Fastest Growing Institution",
         }
+        if has_patent_data:
+            categories["patent_rate"] = "Innovation Commercialization Leader"
 
         for metric, title in categories.items():
             leader = max(profiles, key=lambda p: p.metrics.get(metric, 0))
@@ -229,7 +258,7 @@ class ComparatorEngine:
                     }
                 )
 
-            if profile.metrics.get("patent_rate", 0) < 2:
+            if has_patent_data and profile.metrics.get("patent_rate", 0) < 2:
                 insights.append(
                     {
                         "category": "Opportunity",
@@ -238,6 +267,18 @@ class ComparatorEngine:
                         "metric": "patent_rate",
                     }
                 )
+
+        if not has_patent_data:
+            insights.append(
+                {
+                    "category": "Data Gap",
+                    "institution": None,
+                    "message": "Patent Velocity is on the roadmap but not yet implemented — "
+                    "no patent data source is integrated, so patent_rate is unmeasured "
+                    "(not zero) for every institution.",
+                    "metric": "patent_rate",
+                }
+            )
 
         return insights
 

@@ -6,7 +6,7 @@
 
 ### Multi-Institution Comparator Engine
 - Compare 2-10 African institutions simultaneously
-- Strategic metrics: TK Vitality, Linguistic Diversity, Patent Velocity
+- Strategic metrics: TK Vitality, Linguistic Diversity (Patent Velocity: roadmap, see below)
 - Rankings across research volume, OA adoption, innovation commercialization
 - Senate report generation (JSON, CSV, PDF)
 - Collaboration mesh visualization
@@ -14,7 +14,7 @@
 ### Novel African-Focused Metrics
 - **TK Vitality Score**: Indigenous knowledge preservation tracking
 - **Linguistic Diversity Index**: African language research output measurement
-- **Patent Velocity Tracker**: Innovation commercialization timeline analysis
+- **Patent Velocity Tracker**: 🚧 Roadmap — no patent data source integrated yet
 - **DocID Coverage**: Africa PID Alliance identifier adoption rate
 
 ### Research Intelligence
@@ -224,19 +224,14 @@ Tracks research outputs in African languages.
 
 **API Endpoint**: `GET /api/analytics/linguistic-diversity-index`
 
-### Patent Velocity Tracker
+### Patent Velocity Tracker — 🚧 Roadmap, not implemented
 
-Analyzes innovation commercialization timelines.
-
-**Formula**: Average(Patent date - Publication date)
-
-**Interpretation**:
-- < 1 year: Fast movers (rapid innovation)
-- 1-2 years: Standard pipeline
-- 2-5 years: Slow (opportunity for improvement)
-- > 5 years: Very slow (IP management issues)
-
-**API Endpoint**: `GET /api/analytics/patent-velocity`
+Would analyze innovation commercialization timelines (patent date − publication date), but
+**no patent data source is integrated anywhere in this codebase.** `Item.patent_id`/`patent_date`
+exist as schema columns with no spider, API client, or backfill script that ever populates them.
+The comparator's `patent_rate` metric reports this honestly as "no data" rather than a fabricated
+0%. There is no `/api/analytics/patent-velocity` endpoint — that line below was aspirational, not
+built.
 
 ### DocID Coverage
 

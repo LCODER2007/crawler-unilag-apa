@@ -288,6 +288,21 @@ def score_text(title: str, abstract: str, dc_subject: str = "") -> Tuple[float, 
     return (score, ",".join(categories) if is_sc else "")
 
 
+def sc_score_of(title: str, abstract: str, dc_subject: str = "") -> float:
+    """Special-Collections score for a paper, identical to the gate the
+    storage pipeline applies before saving (see uraas/pipelines/database.py).
+
+    Spiders call this to count ONLY genuine SC papers toward their crawl
+    target — otherwise the target fills up with papers the pipeline later
+    drops, and the crawl halts early. Backed by ``is_special_collection``'s
+    guarded 4-gate logic (ambiguous-token guard, STEM exclusion, context
+    corroboration) — NOT the unguarded keyword-hit-count classifier in
+    uraas.utils.ai_classifier, which every spider used prior to this fix.
+    """
+    _, score, _ = is_special_collection(title or "", abstract or "", dc_subject or "")
+    return score
+
+
 if __name__ == "__main__":
     # Tiny smoke check
     samples = [

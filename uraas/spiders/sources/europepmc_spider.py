@@ -21,13 +21,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from uraas.config import config
 from uraas.config.institutions import get_registry
 from uraas.config.special_collections import SC_SEED_KEYWORDS
-from uraas.utils.ai_classifier import sc_score_of
+from uraas.services.sc_engine import sc_score_of
+from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _EPMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 _PAGE_SIZE = 100
 
 
-class EuropePMCSpider(scrapy.Spider):
+class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
     name = "europepmc"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.0,
@@ -67,6 +68,7 @@ class EuropePMCSpider(scrapy.Spider):
         self.institution_name = self.institution_config.name
         self.ror_id = self.institution_config.ror
         self._accepted = 0
+        self.max_results_scanned = config.MAX_RESULTS_SCANNED
 
         # Use primary affiliation patterns to widen EPMC search
         self._affiliation_patterns = self.institution_config.affiliation_patterns or [self.institution_name]
@@ -77,6 +79,7 @@ class EuropePMCSpider(scrapy.Spider):
             self.boost_special,
             self.target_limit,
         )
+        self._init_dedup_index()
 
     def _build_url(self, query: str, cursor_mark: str = "*") -> str:
         params = {
@@ -89,9 +92,18 @@ class EuropePMCSpider(scrapy.Spider):
         return f"{_EPMC_BASE}?{urlencode(params)}"
 
     def _affil_query(self, seed: str = "") -> str:
-        # EPMC affiliation filter — OR across all known institution name patterns
+        # EPMC affiliation filter — OR across all known institution name patterns.
+        # Each clause MUST be individually parenthesized: EPMC's query parser
+        # does NOT treat `AFFILIATION:"A" OR AFFILIATION:"B"` as a boolean
+        # union — it silently collapses toward the last clause's own (much
+        # smaller) hit count instead of unioning them. Live-verified: the
+        # unparenthesized 3-clause UNILAG query returned hitCount=2 vs. 120
+        # for the single clause `AFFILIATION:"University of Lagos"` alone
+        # (which the union must be >= per the OR semantics) — a >98% recall
+        # loss, reproduced identically on a second institution (UCT: 282
+        # instead of 1020). Wrapping each clause individually fixes it.
         affil_parts = " OR ".join(
-            f'AFFILIATION:"{p}"' for p in self._affiliation_patterns[:3]
+            f'(AFFILIATION:"{p}")' for p in self._affiliation_patterns[:3]
         )
         affil = f"({affil_parts})"
         if seed:
@@ -104,7 +116,12 @@ class EuropePMCSpider(scrapy.Spider):
             yield scrapy.Request(
                 url=url,
                 callback=self.parse,
-                meta={"wave": "general", "query": self._affil_query(), "cursor": "*"},
+                meta={
+                    "wave": "general",
+                    "query": self._affil_query(),
+                    "cursor": "*",
+                    "scanned_this_wave": 0,
+                },
             )
 
         if self.boost_special:
@@ -123,13 +140,18 @@ class EuropePMCSpider(scrapy.Spider):
                 yield scrapy.Request(
                     url=url,
                     callback=self.parse,
-                    meta={"wave": f"sc:{seed}", "query": query, "cursor": "*"},
+                    meta={
+                        "wave": f"sc:{seed}",
+                        "query": query,
+                        "cursor": "*",
+                        "scanned_this_wave": 0,
+                    },
                     priority=10,
                 )
 
     def parse(self, response):
         if self._accepted >= self.target_limit:
-            return
+            self._stop_if_target_reached()
 
         data = response.json()
         results = data.get("resultList", {}).get("result", [])
@@ -173,8 +195,13 @@ class EuropePMCSpider(scrapy.Spider):
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
+            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # already in the DB.
+            if self._is_known(doi=doi, url=url_val, title=title):
+                continue
+
             self._accepted += 1
-            yield {
+            item = {
                 "title": title,
                 "abstract": abstract,
                 "authors": authors,
@@ -189,6 +216,8 @@ class EuropePMCSpider(scrapy.Spider):
                 "institution_ror": self.ror_id,
                 "content_type": doc_type,
             }
+            yield item
+            self._mark_seen(doi=doi, url=url_val, title=title)
 
         # Cursor-based pagination
         next_cursor = data.get("nextCursorMark")
@@ -211,8 +240,9 @@ class EuropePMCSpider(scrapy.Spider):
 
     def closed(self, reason):
         self.logger.info(
-            "EuropePMC spider closed | %s | accepted=%d | reason=%s",
+            "EuropePMC spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
             self.institution_name,
             self._accepted,
+            self._skipped_known,
             reason,
         )
