@@ -43,6 +43,7 @@ class InstitutionConfig:
         # records from that collection are returned, reducing network overhead.
         self.oai_set = (crawler_settings or {}).get("oai_set") or None
         self._raw_staff: List[Any] = self._load_staff_raw()
+        self._staff_name_lookup: Optional[Dict[str, Dict]] = None
 
     def _resolve_staff_file(self) -> str:
         if os.path.isabs(self.staff_file):
@@ -131,6 +132,44 @@ class InstitutionConfig:
             return False
         affiliation_lower = affiliation_text.lower()
         return any(p.lower() in affiliation_lower for p in self.affiliation_patterns)
+
+    @property
+    def staff_name_lookup(self) -> Dict[str, Dict]:
+        """Normalized-name -> staff record, built once and cached (11,854
+        records for UNILAG as of the 2026-07-20 harvest — rebuilding this
+        per paper would be wasteful).
+
+        Used to cross-check authors from sources that carry no real
+        per-author affiliation data at all (arXiv, Semantic Scholar, CORE,
+        OpenAIRE) against our actual verified staff roster — a materially
+        stronger signal than "the institution's name appears somewhere in
+        the title/abstract", which can't tell a paper genuinely authored at
+        the institution apart from one merely written about it (the
+        confirmed false-positive class: a scientometric study titled "Two
+        Decades of Research at the University of Lagos" would pass a text
+        match despite having zero UNILAG-affiliated authors).
+        """
+        if self._staff_name_lookup is None:
+            lookup: Dict[str, Dict] = {}
+            for r in self.staff_records:
+                name = (r.get("name") or "").strip().lower()
+                if name:
+                    lookup[name] = r
+            self._staff_name_lookup = lookup
+        return self._staff_name_lookup
+
+    def matches_staff_roster(self, author_names: List[str]) -> bool:
+        """True if any given author name exactly matches a known staff
+        member (normalized, case-insensitive). Deliberately exact-match
+        only, not fuzzy — a missed match just falls through to a weaker
+        signal (recall cost), while a fuzzy false match would silently
+        misattribute a paper (a precision cost), which is the worse of the
+        two mistakes here."""
+        lookup = self.staff_name_lookup
+        for name in author_names:
+            if (name or "").strip().lower() in lookup:
+                return True
+        return False
 
     def verify_ror_in_authorships(self, authorships: List[Dict]) -> bool:
         """

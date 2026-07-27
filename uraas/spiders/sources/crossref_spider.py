@@ -87,7 +87,11 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
         # Wave 1 — plain affiliation query
         if not self.sc_only:
             url = self._build_url()
-            self.logger.info(f"[ROR wave] {url}")
+            # DEBUG not INFO — with 300+ SC seed waves, logging every raw
+            # query URL at INFO level floods the dashboard's live feed
+            # (which runs at LOG_LEVEL=INFO) with unreadable noise; still
+            # available for real debugging via LOG_LEVEL=DEBUG.
+            self.logger.debug(f"[ROR wave] {url}")
             yield scrapy.Request(
                 url=url, callback=self.parse, meta={"wave": "ror", "query": "", "offset": 0}
             )
@@ -96,7 +100,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
         if self.boost_special:
             for seed in SC_SEED_KEYWORDS:
                 url = self._build_url(query=seed)
-                self.logger.info(f"[SC wave seed={seed!r}] {url}")
+                self.logger.debug(f"[SC wave seed={seed!r}] {url}")
                 yield scrapy.Request(
                     url=url,
                     callback=self.parse,

@@ -134,7 +134,11 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
         # Wave 1 — general ROR-only crawl (skipped in sc_only mode)
         if not self.sc_only:
             url = self._build_url(filters=f"institutions.ror:{self.ror_short}")
-            self.logger.info(f"[ROR wave] {url}")
+            # DEBUG not INFO — with 300+ SC seed waves, logging every raw
+            # query URL at INFO level floods the dashboard's live feed
+            # (which runs at LOG_LEVEL=INFO) with unreadable noise; still
+            # available for real debugging via LOG_LEVEL=DEBUG.
+            self.logger.debug(f"[ROR wave] {url}")
             yield scrapy.Request(
                 url=url,
                 callback=self.parse,
@@ -156,7 +160,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     f"title_and_abstract.search:{seed_q}"
                 )
                 url = self._build_url(filters=filters)
-                self.logger.info(f"[SC wave seed={seed!r}] {url}")
+                self.logger.debug(f"[SC wave seed={seed!r}] {url}")
                 yield scrapy.Request(
                     url=url,
                     callback=self.parse,

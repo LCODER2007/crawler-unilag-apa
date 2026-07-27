@@ -1,11 +1,14 @@
 """Register items with the REAL Africa PID Alliance DOCiD(TM) platform.
 
-Unlike scripts/backfill_pids.py (which mints a purely local placeholder hash
-and never talks to any server), this hits the actual docid.africapidalliance.org
-registration API via uraas.services.docid_client.DocIDClient. Requires
-DOCID_EMAIL / DOCID_PASSWORD in .env (the base URL is defaulted to the real,
-confirmed public API — see .env.example). Until credentials are set this
-exits cleanly with an explanation instead of doing anything.
+This is the ONLY thing that's allowed to set Item.docid to a real value.
+uraas.utils.docid_generator (a purely local SHA-256 placeholder hash that
+never talks to any server) must never be wired into the crawl pipeline or
+any auto-run path — DocIDs are minted by DOCiD itself, not by us. This
+script hits the actual docid.africapidalliance.org registration API via
+uraas.services.docid_client.DocIDClient. Requires DOCID_EMAIL / DOCID_PASSWORD
+in .env (the base URL is defaulted to the real, confirmed public API — see
+.env.example). Until credentials are set this exits cleanly with an
+explanation instead of doing anything.
 
 WARNING: each item registered here calls the real /cordoi/assign-doi/
 container-id + /publications/publish endpoints, which create real,
@@ -13,10 +16,8 @@ permanent, publicly-visible records on the live Africa PID Alliance
 platform — always run with --limit against a small batch first, and without
 --apply (the default) to see what would happen before committing to it.
 
-Finds items in the local DB that don't have a *real* DOCiD yet — including
-ones that only have the local placeholder from backfill_pids.py, which is
-not a real registration — and registers them, storing whatever identifier
-the platform assigns back onto Item.docid.
+Finds items in the local DB that don't have a *real* DOCiD yet and registers
+them, storing whatever identifier the platform assigns back onto Item.docid.
 
 Usage:
     python scripts/register_docid.py                # DRY RUN

@@ -26,7 +26,6 @@ log = logging.getLogger(__name__)
 
 OPENALEX_BASE = "https://api.openalex.org"
 MAILTO = "uraas-bot@research.edu.ng"
-MAX_AUTHORS = 500  # cap per institution to avoid very long runs
 DELAY = 0.5  # seconds between requests (polite)
 
 
@@ -55,25 +54,47 @@ def _get(url: str, retries: int = 3) -> dict:
 
 def harvest_institution(inst_config, dry_run: bool = False) -> list:
     """
-    Harvest staff by looking at recent works from the institution on OpenAlex.
-    Extracts unique authors from the authorships array.
-    Returns list of rich staff dicts: {name, orcid, department, faculty, openalex_id, paper_count}
-    """
-    ror_url = inst_config.ror
-    inst_name = inst_config.name
-    log.info(f"Harvesting staff for {inst_name} (ROR: {ror_url}) …")
+    Harvest researchers via OpenAlex's direct /authors endpoint, filtered by
+    `last_known_institutions.ror` (an author's most recent known
+    affiliation — the closest OpenAlex signal to "current staff").
 
-    unique_staff = {}
+    This replaced an approach that derived unique authors indirectly from a
+    500-author-capped, 50-page scan of individual WORKS — which, for a
+    university the size of UNILAG, was capturing under 5% of its real
+    author population. Live-checked 2026-07-20: `affiliations.institution.
+    ror:05rk03822` (ever affiliated) = 16,557 authors;
+    `last_known_institutions.ror:05rk03822` (current/most-recent) = 11,854.
+    Neither number is a perfect "official current academic staff count" —
+    OpenAlex has no such registry, and this authorship-derived figure
+    necessarily includes some postgraduate students and historically-
+    affiliated researchers alongside genuine current staff — but it's the
+    most complete data-driven approximation available, and is what
+    downstream ORCID-employment verification (see orcid_spider.py) is
+    designed to further refine per-paper, not something to solve by
+    capping the roster small.
+
+    Returns list of rich staff dicts:
+        {name, orcid, department, faculty, openalex_id, paper_count}
+    (department/faculty are always None here — filled in by
+    scripts/merge_staff_department_data.py and preserved across re-harvests
+    by save_staff()'s merge-by-ORCID/name logic.)
+    """
+    inst_name = inst_config.name
+    log.info(f"Harvesting authors for {inst_name} (ROR: {inst_config.ror}) via /authors API...")
+
+    staff = []
     cursor = "*"
     page = 0
-    max_pages = 50  # Limit to 50 pages (10k works max) to avoid running forever
 
-    while len(unique_staff) < MAX_AUTHORS and page < max_pages:
-        # We query the works endpoint using the exact ROR url
+    while True:
+        # Unlike institutions.ror (used elsewhere in this codebase, e.g.
+        # openalex_spider.py), last_known_institutions.ror requires the FULL
+        # "https://ror.org/..." form — the bare short ID silently matches
+        # zero authors instead of erroring. Confirmed live 2026-07-20.
         url = (
-            f"{OPENALEX_BASE}/works"
-            f"?filter=institutions.ror:{urllib.parse.quote(ror_url)}"
-            f"&select=authorships"
+            f"{OPENALEX_BASE}/authors"
+            f"?filter=last_known_institutions.ror:{urllib.parse.quote(inst_config.ror)}"
+            f"&select=id,display_name,orcid,works_count"
             f"&per-page=200"
             f"&cursor={urllib.parse.quote(cursor)}"
             f"&mailto={MAILTO}"
@@ -86,66 +107,32 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
         if not results:
             break
 
-        for work in results:
-            for authorship in work.get("authorships", []):
-                # Ensure the author is affiliated with our target institution for this work
-                is_affiliated = False
-                for inst in authorship.get("institutions", []):
-                    if inst.get("ror") == ror_url:
-                        is_affiliated = True
-                        break
+        for author in results:
+            name = (author.get("display_name") or "").strip()
+            if not name:
+                continue
+            orcid_url = author.get("orcid") or ""
+            orcid = orcid_url.replace("https://orcid.org/", "") if orcid_url else None
+            aid = (author.get("id") or "").replace("https://openalex.org/", "")
+            staff.append({
+                "name": name,
+                "orcid": orcid,
+                "department": None,
+                "faculty": None,
+                "openalex_id": aid,
+                "paper_count": author.get("works_count", 0),
+            })
 
-                if not is_affiliated:
-                    continue
-
-                author = authorship.get("author", {})
-                aid = author.get("id")
-                if not aid or aid in unique_staff:
-                    if aid in unique_staff:
-                        unique_staff[aid]["paper_count"] += 1
-                    continue
-
-                name = author.get("display_name", "").strip()
-                if not name:
-                    continue
-
-                orcid_url = author.get("orcid", "")
-                orcid = (
-                    orcid_url.replace("https://orcid.org/", "") if orcid_url else None
-                )
-
-                # We can't get concepts easily from works authorships without extra queries,
-                # so we will leave faculty and department empty for now.
-
-                unique_staff[aid] = {
-                    "name": name,
-                    "orcid": orcid,
-                    "department": None,
-                    "faculty": None,
-                    "openalex_id": aid.replace("https://openalex.org/", ""),
-                    "paper_count": 1,
-                }
-
-                if len(unique_staff) >= MAX_AUTHORS:
-                    break
-
-            if len(unique_staff) >= MAX_AUTHORS:
-                break
-
-        log.info(
-            f"  Page {page+1}: Processed {len(results)} works | Unique staff so far: {len(unique_staff)}"
-        )
         page += 1
+        log.info(f"  Page {page}: +{len(results)} authors | total so far: {len(staff)}")
         time.sleep(DELAY)
 
-        meta = data.get("meta", {})
-        cursor = meta.get("next_cursor")
+        cursor = data.get("meta", {}).get("next_cursor")
         if not cursor:
             break
 
-    staff_list = list(unique_staff.values())
-    log.info(f"  Harvested {len(staff_list)} staff for {inst_name}")
-    return staff_list
+    log.info(f"  Harvested {len(staff)} authors for {inst_name}")
+    return staff
 
 
 def _map_concept_to_faculty(concept: str, faculties: list) -> str:
@@ -226,20 +213,48 @@ def get_orcid_details(orcid: str) -> dict:
 
 
 def save_staff(inst_config, staff: list, dry_run: bool = False):
-    """Save staff list to data/{short_name_lower}_staff.json"""
+    """Save staff list to data/{short_name_lower}_staff.json.
+
+    Merges onto any existing file by ORCID (falling back to normalized name)
+    instead of overwriting outright — a re-harvest must not wipe
+    department/faculty data already populated by
+    scripts/merge_staff_department_data.py or discovered live via ORCID
+    /employments lookups in orcid_spider.py.
+    """
     short = inst_config.short_name.lower()
-    # Resolve base directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out_path = os.path.join(base_dir, "data", f"{short}_staff.json")
 
+    existing_by_orcid, existing_by_name = {}, {}
+    if os.path.exists(out_path):
+        try:
+            with open(out_path, "r", encoding="utf-8") as f:
+                for rec in json.load(f):
+                    if rec.get("orcid"):
+                        existing_by_orcid[rec["orcid"]] = rec
+                    if rec.get("name"):
+                        existing_by_name[rec["name"].strip().lower()] = rec
+        except Exception as e:
+            log.warning(f"Could not read existing {out_path} for merge: {e}")
+
+    merged = []
+    for rec in staff:
+        prior = existing_by_orcid.get(rec.get("orcid")) or existing_by_name.get(
+            rec["name"].strip().lower()
+        )
+        if prior:
+            rec["department"] = rec.get("department") or prior.get("department")
+            rec["faculty"] = rec.get("faculty") or prior.get("faculty")
+        merged.append(rec)
+
     if dry_run:
-        log.info(f"[DRY-RUN] Would save {len(staff)} staff records to {out_path}")
+        log.info(f"[DRY-RUN] Would save {len(merged)} staff records to {out_path}")
         return
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(staff, f, indent=2, ensure_ascii=False)
-    log.info(f"Saved {len(staff)} staff records → {out_path}")
+        json.dump(merged, f, indent=2, ensure_ascii=False)
+    log.info(f"Saved {len(merged)} staff records → {out_path}")
 
 
 def main():

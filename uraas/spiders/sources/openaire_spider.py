@@ -135,7 +135,13 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             year = str(r.get("publicationYear") or r.get("publicationDate") or "")[:4]
             url_val = f"https://doi.org/{doi}" if doi else ""
 
-            if not self._text_affiliation_match(title, abstract):
+            # Cross-check author names against the verified staff roster
+            # first — a materially stronger, independent signal than a
+            # title/abstract text mention — falling back to the text match
+            # for genuine staff not yet in our harvested roster.
+            if not self.institution_config.matches_staff_roster(
+                authors
+            ) and not self._text_affiliation_match(title, abstract):
                 continue
 
             if sc_score_of(title, abstract) <= 0.0:

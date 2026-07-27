@@ -174,16 +174,69 @@ def _auto_backfill_citation_share():
         session.close()
 
 
+_LOG_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+# Scrapy's own startup banner (version dict, enabled-extensions/middlewares/
+# pipelines listings, "Overridden settings" dump) and Python's deprecation
+# warnings are real, expected, harmless internals with zero value to someone
+# watching a crawl — they're multi-line pprint() dumps that add nothing but
+# noise to the live feed. Filtering them out here also fixes a real bug: the
+# frontend colors any forwarded line containing "error" red regardless of
+# meaning, and Scrapy's own middleware class names (e.g.
+# "HttpErrorMiddleware" in the "Enabled spider middlewares" dump) were
+# tripping that with zero connection to an actual problem.
+_LIVE_FEED_NOISE_MARKERS = (
+    "] INFO: Scrapy ",
+    "] INFO: Versions:",
+    "scrapy.addons] INFO: Enabled addons:",
+    "] INFO: Enabled extensions:",
+    "] INFO: Enabled downloader middlewares:",
+    "] INFO: Enabled spider middlewares:",
+    "] INFO: Enabled item pipelines:",
+    "] INFO: Overridden settings:",
+    "py.warnings] WARNING:",
+)
+
+
+class _LiveFeedFilter:
+    """Stateful line filter shared by every subprocess-output-to-terminal_output
+    monitor (crawl runs, test harvests) — see _LIVE_FEED_NOISE_MARKERS."""
+
+    def __init__(self):
+        self.suppressing = False
+
+    def should_forward(self, line_decoded: str) -> bool:
+        if not line_decoded:
+            self.suppressing = False
+            return False
+        if any(marker in line_decoded for marker in _LIVE_FEED_NOISE_MARKERS):
+            self.suppressing = True
+            return False
+        if self.suppressing:
+            # Continuation lines of a suppressed multi-line dump (a
+            # pprint'd dict/list, or a warning's source-line echo) have no
+            # leading timestamp — the block ends at the next real
+            # timestamped log line or one of our own known markers.
+            if not (
+                _LOG_TIMESTAMP_RE.match(line_decoded)
+                or line_decoded.startswith(("[INIT]", "[VALID]", "[ERR]", "URAAS_DOWNLOAD:", "="))
+            ):
+                return False
+            self.suppressing = False
+        return True
+
+
 def crawler_monitor(process):
     global crawler_process
+    live_filter = _LiveFeedFilter()
     try:
         for line in iter(process.stdout.readline, b""):
             with crawler_lock:
                 if crawler_process is None or crawler_process != process:
                     break
             line_decoded = line.decode("utf-8", errors="replace").strip()
-            if not line_decoded:
+            if not live_filter.should_forward(line_decoded):
                 continue
+
             if line_decoded.startswith("[INIT]"):
                 socketio.emit(
                     "crawl_status", {"status": "initializing", "message": line_decoded}
@@ -2980,9 +3033,10 @@ def ir_test_harvest():
         )
         # Stream output via existing SocketIO terminal
         def _monitor():
+            live_filter = _LiveFeedFilter()
             for line in iter(process.stdout.readline, b""):
                 line_text = line.decode("utf-8", errors="replace").strip()
-                if line_text:
+                if live_filter.should_forward(line_text):
                     socketio.emit("terminal_output", {"line": line_text})
             process.wait()
             socketio.emit("terminal_output", {"line": "[TEST HARVEST] Complete."})

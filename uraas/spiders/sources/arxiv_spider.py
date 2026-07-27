@@ -172,13 +172,6 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # UNILAG query), but when present it's real per-author data, so
             # gate on it the same way openalex_spider.py's Gate 3 does: only
             # reject when structured data exists AND contradicts the query.
-            # This can't catch the "paper ABOUT the institution, not FROM it"
-            # case (e.g. a scientometric study of UNILAG) when affiliation
-            # data is absent — arXiv's `all:` query already guarantees the
-            # institution name appears in title/abstract/authors/comments,
-            # so a title/abstract text-match gate would be a redundant no-op
-            # here, unlike core_spider.py/openaire_spider.py where the query
-            # itself provides no such guarantee.
             affiliations = [
                 aff.text.strip()
                 for a in entry.findall("atom:author", _NS)
@@ -188,6 +181,22 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
             raw_affiliation = "; ".join(affiliations) or self.institution_name
             if affiliations and not self.institution_config.matches_affiliation(
                 raw_affiliation
+            ):
+                continue
+
+            # When no structured affiliation data exists at all (the common
+            # case), arXiv's `all:` query only guarantees the institution
+            # name appears SOMEWHERE in title/abstract/authors/comments —
+            # not that any author is actually affiliated there. That can't
+            # distinguish a paper genuinely authored at the institution from
+            # one merely written ABOUT it (confirmed live: a scientometric
+            # study titled "Two Decades of Research at the University of
+            # Lagos" passed this exact query with zero UNILAG authors).
+            # Cross-checking author names against the verified staff roster
+            # closes that gap — require a roster match when there's no
+            # structured affiliation to fall back on.
+            if not affiliations and not self.institution_config.matches_staff_roster(
+                authors
             ):
                 continue
 

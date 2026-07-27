@@ -211,9 +211,17 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     fields.append(f)
             dc_subject = ", ".join(fields[:6])
 
-            # S2 doesn't return author affiliations in basic search — verify
-            # that the institution name appears somewhere in the paper data.
-            if not self._institution_match(title, abstract, venue):
+            # S2 doesn't return author affiliations in basic search at all.
+            # A text mention of the institution can't distinguish a paper
+            # genuinely authored there from one merely written about it —
+            # cross-checking author names against the verified staff roster
+            # is a materially stronger, independent signal; only fall back
+            # to the weaker text match when no author matches the roster
+            # (e.g. a genuine UNILAG researcher not yet in our harvested
+            # roster), so recall isn't sacrificed outright for precision.
+            if not self.institution_config.matches_staff_roster(
+                authors
+            ) and not self._institution_match(title, abstract, venue):
                 rejected_aff += 1
                 self.logger.debug(f"S2 aff FAIL: {title[:60]}")
                 continue

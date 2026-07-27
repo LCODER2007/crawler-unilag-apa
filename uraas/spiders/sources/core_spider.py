@@ -124,14 +124,27 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             authors = [a.get("name", "") for a in (r.get("authors") or []) if a.get("name")]
             abstract = (r.get("abstract") or "").strip()
             pub_year = r.get("yearPublished") or ""
-            url_val = r.get("sourceFulltextUrls", [None])[0] or (f"https://doi.org/{doi}" if doi else "")
+            # `.get("sourceFulltextUrls", [None])` only falls back to [None]
+            # when the KEY is missing — when CORE returns the key present
+            # but as an empty list (common), .get() returns that empty list
+            # and [0] raises IndexError, crashing the whole parse() callback
+            # for the response (confirmed live 2026-07-19/20: killed CORE
+            # mid-crawl, losing every remaining item + the pagination
+            # continuation for that response). `or` handles both cases.
+            url_val = (r.get("sourceFulltextUrls") or [None])[0] or (f"https://doi.org/{doi}" if doi else "")
             pdf_url = r.get("downloadUrl") or None
             doc_type = r.get("documentType") or ""
 
             # Affiliation gate — see module docstring: CORE's query doesn't
             # reliably restrict to the institution and there's no author
-            # affiliation field to check, so text-match is all we have.
-            if not self._text_affiliation_match(title, abstract):
+            # affiliation field to check. Cross-check author names against
+            # the verified staff roster first (a much stronger, independent
+            # signal than title/abstract text mentioning the institution),
+            # falling back to the text match for genuine staff not yet in
+            # our harvested roster.
+            if not self.institution_config.matches_staff_roster(
+                authors
+            ) and not self._text_affiliation_match(title, abstract):
                 continue
 
             # SC gate — only count papers the storage pipeline will keep, so the

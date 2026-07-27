@@ -83,6 +83,22 @@ AMBIGUOUS_TOKENS: Set[str] = {
     "bambara",
     "setswana",
     "sesotho",
+    # Generic academic phrases, not ethnonyms — but listed as keywords in the
+    # "Ethnic Languages & Groups" taxonomy, and just as prone to false
+    # positives: "ethnic group(s)" is routine vocabulary in ANY demographic/
+    # epidemiological/genetics paper studying multiple populations (GWAS
+    # studies, syndrome-across-populations papers, etc.), with zero
+    # connection to cultural/indigenous studies. Confirmed live 2026-07-20:
+    # two purely biomedical-genetics UNILAG papers ("A multi-ethnic genome-
+    # wide association study...", "22q11.2 deletion syndrome in diverse
+    # populations") were wrongly classified Special Collections on this
+    # alone — worse, since "ethnic group(s)" was ALSO listed in SC_CONTEXT
+    # below, it was self-corroborating (the same phrase supplying both the
+    # keyword hit AND the "context" that's supposed to be independent
+    # confirmation) — see the SC_CONTEXT comment.
+    "ethnic group",
+    "ethnic groups",
+    "ethnic language",
 }
 
 # Strong-category keywords that are themselves ambiguous: they appear as research
@@ -110,12 +126,19 @@ SC_CONTEXT = re.compile(
     r"\b(culture|cultural|language|languages|linguistic|linguistics|"
     r"oral tradition|oral literature|folklore|folktale|folk tale|"
     r"traditional knowledge|indigenous knowledge|heritage|naming|"
-    r"proverb|proverbs|ethnic group|ethnic groups|kingdom|"
+    r"proverb|proverbs|kingdom|"
     r"colonial rule|postcolonial|precolonial|indigenous|ancestral|"
     r"ritual|cosmology|worldview|mythology|customs|"
     r"griot|drumming|ethnomusicolog)\b",
     re.IGNORECASE,
 )
+# "ethnic group"/"ethnic groups" deliberately excluded from this list — it's
+# also a matchable AMBIGUOUS_TOKENS keyword in the "Ethnic Languages &
+# Groups" taxonomy, and having it here too let it self-corroborate (the
+# ambiguous-token guard's "has_context" check would see the *same* phrase
+# that triggered the guard in the first place, not independent confirming
+# context). See the AMBIGUOUS_TOKENS comment for the concrete false-positive
+# this caused.
 
 # STEM / medical / engineering exclusion. Reused from the tiered logic that
 # already exists in the dashboard's language endpoint (app.py). A paper that
@@ -224,11 +247,20 @@ def is_special_collection(
         return (False, 0.0, [])
 
     categories = [c for c, _, _ in qualifying]
-    # A "qualifying phrase" is any multi-word matched keyword from a strong OR a
-    # support category — multi-word ethnonym phrases (e.g. "yoruba cosmology",
-    # "swahili coast") are specific enough to stand on their own.
+    # A "qualifying phrase" is a multi-word matched keyword from a STRONG
+    # category only — e.g. "yoruba cosmology" (African Philosophy), "swahili
+    # coast" (Ethnic Languages & Groups... wait, no: multi-word phrases from
+    # SUPPORT categories must NOT independently qualify a paper, or the
+    # documented "support categories corroborate but cannot solely qualify"
+    # rule is meaningless (any support-category phrase with a space in it
+    # would silently bypass that rule). Confirmed live 2026-07-20 this was
+    # happening: "ethnic group" (2 words, support-only category) alone was
+    # qualifying purely biomedical-genetics papers as Special Collections.
+    # Genuine multi-word ethnonym phrases (e.g. "yoruba cosmology") aren't
+    # lost by this — they still qualify via has_context_support below, since
+    # they're also backed by an independent SC_CONTEXT word ("cosmology").
     has_qualifying_phrase = any(
-        _is_multiword(kw) for _, _, matched in qualifying for kw in matched
+        _is_multiword(kw) for _, _, matched in strong_hits for kw in matched
     )
     # A bare ethnonym that survived Gate 2 (i.e. context present) qualifies the
     # paper on its own — distinguishes "Igbo Culture" from "SS2".

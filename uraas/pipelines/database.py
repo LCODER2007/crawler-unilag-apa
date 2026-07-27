@@ -13,7 +13,6 @@ from uraas.database import Author, Collection, Community, File, Item, SessionLoc
 from uraas.services.sc_engine import category_breakdown, is_special_collection
 from uraas.utils.ai_classifier import extract_keywords, sanitize_text
 from uraas.utils.analytics_cache import analytics_cache
-from uraas.utils.ark_generator import ark_generator
 from uraas.utils.pdf_downloader import pdf_downloader
 from uraas.utils.unilag_classifier import classifier
 
@@ -478,23 +477,27 @@ class DatabaseStoragePipeline:
             self.session.add(doc)
             self.session.flush()  # Get doc.id
 
-            # PID assignment: items already carrying a repository-native Handle
-            # (harvested from our own IR via OAI-PMH) use that Handle as the PID
-            # of record rather than minting a redundant ARK.
+            # PID assignment — record only identifiers a real authority
+            # actually assigned; never fabricate one locally. Items already
+            # carrying a repository-native Handle (harvested from our own IR
+            # via OAI-PMH) use that Handle. An ARK is stored only when the
+            # source item itself supplied one (i.e. we found the paper BY an
+            # ARK, or a source's metadata already carries a real ARK it was
+            # registered under elsewhere) — no source currently does this,
+            # so doc.ark will be NULL for most items until one does; that's
+            # correct, not a bug. DocID is likewise never minted here — only
+            # uraas.services.docid_client.DocIDClient (a real API call to the
+            # Africa PID Alliance platform) ever sets Item.docid.
             is_own_ir_record = bool(item.get("is_own_repository")) and bool(
                 item.get("repository_handle")
             )
             if is_own_ir_record:
                 doc.pid_source = "handle"
-            else:
-                try:
-                    from datetime import datetime as _dt
-                    ark_seed = doi or item_url or str(doc.id)
-                    doc.ark = ark_generator.mint(ark_seed)
-                    doc.ark_assigned_at = _dt.utcnow()
-                    doc.pid_source = "ark"
-                except Exception as e:
-                    spider.logger.warning(f"ARK mint failed for item {doc.id}: {e}")
+            elif item.get("ark"):
+                from datetime import datetime as _dt
+                doc.ark = item["ark"]
+                doc.ark_assigned_at = _dt.utcnow()
+                doc.pid_source = "ark"
 
             # Map classified collections
             try:
