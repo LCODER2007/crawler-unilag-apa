@@ -123,16 +123,39 @@ def main():
     print(_SEP)
 
     # ── Auth ───────────────────────────────────────────────────────────────
+    # Live-verified 2026-08-04: with no HF_TOKEN env var, this used to always
+    # call login() with no token, which prompts interactively for one — in
+    # any non-interactive shell (CI, a background task, this script run
+    # without a TTY) that blocks forever waiting for input that can never
+    # arrive, even when a valid token is already cached from a previous
+    # `huggingface-cli login` on the same machine. Try the cached credential
+    # first; only fall back to an interactive prompt when actually attached
+    # to a terminal.
     token = os.getenv("HF_TOKEN")
     if token:
         login(token=token, add_to_git_credential=True)
         print("  Logged in via HF_TOKEN env var.")
     else:
-        print()
-        print("  Paste your HF write token below.")
-        print("  (Get one at: https://huggingface.co/settings/tokens)")
-        print()
-        login(add_to_git_credential=True)
+        from huggingface_hub import HfFolder
+        cached = HfFolder.get_token()
+        if cached:
+            try:
+                HfApi().whoami(token=cached)
+                print("  Logged in via cached HF credential.")
+            except Exception:
+                cached = None
+        if not cached:
+            if not sys.stdin.isatty():
+                print()
+                print("  No HF_TOKEN env var, no cached credential, and no terminal to prompt on.")
+                print("  Set HF_TOKEN=hf_... and re-run, e.g.:")
+                print(f"    HF_TOKEN=hf_... python {os.path.basename(__file__)}")
+                sys.exit(1)
+            print()
+            print("  Paste your HF write token below.")
+            print("  (Get one at: https://huggingface.co/settings/tokens)")
+            print()
+            login(add_to_git_credential=True)
 
     api = HfApi()
 
