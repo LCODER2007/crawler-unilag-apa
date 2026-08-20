@@ -156,7 +156,8 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
             affil_text = " ".join(
                 (a.get("affiliation") or "") for a in bib.get("author", [])
             ).lower()
-            if inst_lower not in affil_text and inst_lower not in title.lower() and inst_lower not in abstract.lower():
+            affil_strong = inst_lower in affil_text
+            if not affil_strong and inst_lower not in title.lower() and inst_lower not in abstract.lower():
                 continue
 
             doi = ""
@@ -206,6 +207,11 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "raw_affiliation": self.institution_name,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                # "strong" only when DOAJ's own structured author.affiliation
+                # field named the institution — a bare title/abstract mention
+                # can't distinguish a paper authored there from one merely
+                # written about it/someone there.
+                "affiliation_confidence": "strong" if affil_strong else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

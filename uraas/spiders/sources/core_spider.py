@@ -142,9 +142,8 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             # signal than title/abstract text mentioning the institution),
             # falling back to the text match for genuine staff not yet in
             # our harvested roster.
-            if not self.institution_config.matches_staff_roster(
-                authors
-            ) and not self._text_affiliation_match(title, abstract):
+            roster_ok = self.institution_config.matches_staff_roster(authors)
+            if not roster_ok and not self._text_affiliation_match(title, abstract):
                 continue
 
             # SC gate — only count papers the storage pipeline will keep, so the
@@ -164,6 +163,11 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "source_repository": "CORE", "is_unilag_author": True,
                 "raw_affiliation": self.institution_name, "institution": self.institution_name,
                 "institution_ror": self.ror_id, "content_type": doc_type,
+                # "strong" only via the staff-roster cross-check — the
+                # title/abstract text fallback can't distinguish
+                # authored-there from written-about (CORE has no author
+                # affiliation field at all to check instead).
+                "affiliation_confidence": "strong" if roster_ok else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

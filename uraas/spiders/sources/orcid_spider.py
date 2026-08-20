@@ -259,6 +259,10 @@ class ORCIDSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     "institution_ror": self.ror_id,
                     "department": department,
                     "faculty": faculty,
+                    # Every accepted item passed this spider's own employment
+                    # cross-check against the institution's official ORCID
+                    # employment record — the strongest signal available.
+                    "affiliation_confidence": "strong",
                 }
                 yield item
                 self._mark_seen(doi=doi, url=url, title=title)

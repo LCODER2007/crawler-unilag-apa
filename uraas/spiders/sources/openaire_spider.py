@@ -139,9 +139,8 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             # first — a materially stronger, independent signal than a
             # title/abstract text mention — falling back to the text match
             # for genuine staff not yet in our harvested roster.
-            if not self.institution_config.matches_staff_roster(
-                authors
-            ) and not self._text_affiliation_match(title, abstract):
+            roster_ok = self.institution_config.matches_staff_roster(authors)
+            if not roster_ok and not self._text_affiliation_match(title, abstract):
                 continue
 
             if sc_score_of(title, abstract) <= 0.0:
@@ -159,6 +158,9 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "source_repository": "OpenAIRE", "is_unilag_author": True,
                 "raw_affiliation": self.institution_name, "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                # "strong" only via the staff-roster cross-check — OpenAIRE
+                # carries no author affiliation field to check instead.
+                "affiliation_confidence": "strong" if roster_ok else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

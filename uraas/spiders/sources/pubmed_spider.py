@@ -165,6 +165,10 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "source_repository": "PubMed", "is_unilag_author": True,
                 "raw_affiliation": self.institution_name, "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                # The esearch query itself is scoped to PubMed's structured
+                # [Affiliation] field (see _affil_term) — not a free-text
+                # guess, so every accepted item is a strong match.
+                "affiliation_confidence": "strong",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

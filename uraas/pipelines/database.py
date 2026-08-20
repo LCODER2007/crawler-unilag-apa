@@ -100,6 +100,16 @@ class DatabaseStoragePipeline:
         _fill("openalex_id", item.get("openalex_id"))
         _fill("sdg_tags", item.get("sdg_tags"))
         _fill("language_code", item.get("language_code"))
+        # Upgrade only weak->strong (or NULL->either), never overwrite an
+        # existing "strong" verdict with a "weak" one from a lesser source
+        # re-finding the same paper.
+        new_conf = item.get("affiliation_confidence")
+        if new_conf == "strong" and existing.affiliation_confidence != "strong":
+            existing.affiliation_confidence = "strong"
+            changed = True
+        elif new_conf and not existing.affiliation_confidence:
+            existing.affiliation_confidence = new_conf
+            changed = True
         if item.get("is_african_language") and not existing.is_african_language:
             existing.is_african_language = True
             changed = True
@@ -423,6 +433,7 @@ class DatabaseStoragePipeline:
                 # Special Collections weighting
                 special_collection_score=sc_score,
                 special_collection_categories=sc_categories,
+                affiliation_confidence=item.get("affiliation_confidence"),
             )
 
             # Log to stdout for dashboard terminal

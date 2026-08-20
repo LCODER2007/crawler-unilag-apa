@@ -1203,6 +1203,14 @@ def _clean_text(text: str) -> str:
 
 _DISPLAY_WHITESPACE_RE = re.compile(r"[ \t\f\v]+")
 _DISPLAY_BLANK_LINES_RE = re.compile(r"\n\s*\n+")
+# Invisible formatting characters that leak through from PDF text extraction
+# (soft hyphen at hyphenation break points, zero-width space/joiners, BOM) —
+# confirmed live 2026-07-28: a DOAJ-sourced abstract carried a literal U+00AD
+# mid-word ("Thi\xadong'o"). These have no display purpose in a plain-text
+# field and only ever appear as extraction artifacts here. Written as
+# explicit \u escapes rather than literal characters so the codepoints stay
+# unambiguous to future readers/editors.
+_INVISIBLE_CHARS_RE = re.compile("[­​‌‍﻿]")
 
 
 def sanitize_text(text: Optional[str]) -> Optional[str]:
@@ -1228,6 +1236,7 @@ def sanitize_text(text: Optional[str]) -> Optional[str]:
     cleaned = _JATS_TAG_RE.sub(" ", cleaned)
     # Collapse blank lines left behind by stripped block-level tags, then
     # normalise remaining runs of spaces/tabs (keep single newlines).
+    cleaned = _INVISIBLE_CHARS_RE.sub("", cleaned)
     cleaned = _DISPLAY_BLANK_LINES_RE.sub("\n", cleaned)
     cleaned = _DISPLAY_WHITESPACE_RE.sub(" ", cleaned)
     cleaned = "\n".join(line.strip() for line in cleaned.split("\n")).strip()

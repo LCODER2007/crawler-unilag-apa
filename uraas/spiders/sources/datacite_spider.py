@@ -241,6 +241,11 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "raw_affiliation": " | ".join(raw_affs) if raw_affs else self.institution_name,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                # "strong" only when a structured creators.affiliation entry
+                # was actually present and verified — the title/abstract
+                # fallback (rare, see above) can't distinguish authored-there
+                # from written-about.
+                "affiliation_confidence": "strong" if raw_affs else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url, title=title)

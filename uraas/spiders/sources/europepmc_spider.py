@@ -215,6 +215,10 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "content_type": doc_type,
+                # The query itself is scoped to EPMC's structured
+                # AFFILIATION: field (see _affil_query) — not a free-text
+                # guess, so every accepted item is a strong match.
+                "affiliation_confidence": "strong",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

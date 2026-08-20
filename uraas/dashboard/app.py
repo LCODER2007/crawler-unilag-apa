@@ -174,6 +174,47 @@ def _auto_backfill_citation_share():
         session.close()
 
 
+def _auto_register_docid():
+    """Background: register newly-crawled Special Collections items with the
+    real Africa PID Alliance DOCiD platform after each crawl. Runs
+    scripts/register_docid.py as a subprocess (reusing its tested
+    login/publish flow rather than duplicating it) and streams its output
+    into the live terminal feed so a user watching a crawl can see it happen
+    — these are real, permanent, publicly-visible records, not something
+    that should happen silently.
+
+    Capped at --limit 5 per crawl on purpose: a single crawl finding dozens
+    of Special Collections items should not mass-create dozens of live
+    public records in one uncontrolled burst. The script itself already
+    restricts candidates to affiliation_confidence == "strong" and no-op's
+    cleanly (prints "[DISABLED]", exits 0) when DOCID_EMAIL/DOCID_PASSWORD
+    aren't configured.
+    """
+    import sys as _sys
+
+    script = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "scripts",
+        "register_docid.py",
+    )
+    try:
+        proc = subprocess.Popen(
+            [_sys.executable, script, "--apply", "--limit", "5"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        for line in iter(proc.stdout.readline, b""):
+            text = line.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            socketio.emit("terminal_output", {"line": f"[DOCID] {text}"})
+        proc.wait()
+        if proc.returncode != 0:
+            logger.warning(f"[auto-docid] register_docid.py exited {proc.returncode}")
+    except Exception as exc:
+        logger.error(f"[auto-docid] DOCID auto-registration failed: {exc}")
+
+
 _LOG_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 # Scrapy's own startup banner (version dict, enabled-extensions/middlewares/
 # pipelines listings, "Overridden settings" dump) and Python's deprecation
@@ -268,6 +309,11 @@ def crawler_monitor(process):
         # Auto-populate african_citation_share for any SC items missing it.
         # Runs in a daemon thread so the crawl status response returns immediately.
         threading.Thread(target=_auto_backfill_citation_share, daemon=True).start()
+        # Auto-register newly-found strong-affiliation Special Collections
+        # items with the real DOCiD platform. Runs as its own subprocess
+        # with its own DB session, independent of the citation-share
+        # backfill thread above — no shared state to race over.
+        threading.Thread(target=_auto_register_docid, daemon=True).start()
 
 
 @app.context_processor

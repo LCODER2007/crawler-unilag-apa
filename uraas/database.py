@@ -167,6 +167,15 @@ class Item(Base):
     docid = Column(String(128), unique=True, index=True)  # 20.500.14351/[hash]
     docid_assigned_at = Column(DateTime)
 
+    # How confidently this item's institutional affiliation was verified at
+    # crawl time — "strong" (ROR match, verified employer/employment record,
+    # or a structured author-affiliation field literally naming the
+    # institution) vs "weak" (only a title/abstract text mention, which
+    # can't tell a paper authored AT the institution from one merely written
+    # ABOUT it/someone there — see scripts/register_docid.py). Gates
+    # automatic DOCID registration; per-source logic lives in each spider.
+    affiliation_confidence = Column(String(10), index=True)  # "strong" | "weak" | NULL (legacy rows)
+
     # ── APA-specific fields ───────────────────────────────────────────────────
     # Institution ROR for multi-tenant comparison
     ror = Column(String(128), index=True)  # e.g. https://ror.org/03qcnxw14

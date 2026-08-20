@@ -197,6 +197,11 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "funders": funders,
+                # "strong" only when Crossref actually returned a structured
+                # author.affiliation string that was verified — when it's
+                # empty the item is accepted on the query.affiliation server
+                # search alone, which is relevance-ranked, not a guarantee.
+                "affiliation_confidence": "strong" if raw_affs else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url, title=title)

@@ -48,10 +48,12 @@ frontend/src/app/assign-docid/page.jsx's `submitData.append(...)` calls.
 
 import json
 import logging
+import uuid
 
 import requests
 
 from uraas.config import config
+from uraas.utils.ai_classifier import sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -195,10 +197,20 @@ class DocIDClient:
         it as part of an actual publish flow, never for exploration."""
         if not self.access_token:
             self.login()
+        # As of 2026-07-28 the endpoint rejects requests with 400 "A valid
+        # Idempotency-Key header (8-128 characters) is required" — added on
+        # their end since the original schema discovery (not documented
+        # anywhere public). A fresh UUID per call is correct here: this is a
+        # genuinely new registration each time, not a retry of a prior one.
+        # Live-verified 2026-07-28: this endpoint is slow enough to exceed
+        # the default 20s timeout under normal conditions (not an outage) —
+        # give it real headroom rather than treating a slow-but-healthy
+        # response as a failure.
         r = self._s.post(
             f"{self.base}/cordoi/assign-doi/container-id",
             json={"title": title, "description": description},
-            timeout=_TIMEOUT,
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            timeout=60,
         )
         r.raise_for_status()
         data = r.json()
@@ -229,11 +241,31 @@ class DocIDClient:
                 "No user_id available from login — cannot attribute this publication to an account"
             )
 
-        title = item.title or ""
-        description = item.abstract or ""
+        # Belt-and-suspenders: the ingest pipeline (uraas/pipelines/database.py)
+        # already sanitizes title/abstract on the way in, but rows written
+        # before that fix existed (or via any future path that bypasses it)
+        # can still carry raw JATS/HTML markup ("<jats:p>...") — confirmed
+        # live 2026-07-28 when an unsanitized Crossref abstract was sent
+        # straight through to a real published record. Never send raw text
+        # to this permanent, public, third-party registry.
+        title = sanitize_text(item.title) or item.title or ""
+        description = sanitize_text(item.abstract) or item.abstract or ""
         docid = self.assign_docid(title, description)
 
-        resource_type_id = self._resolve_resource_type_id("Manuscripts")
+        # The real resource-type catalog (confirmed live 2026-07-28) has
+        # dedicated categories for two of our own SC categories —
+        # "Indigeneous Knowledge" [sic] and "Cultural Heritage" — use those
+        # when the item was actually classified into them instead of the
+        # generic "Manuscripts" fallback; every other SC category (African
+        # Literature, Postcolonial Studies, etc.) has no dedicated bucket on
+        # their end and is genuinely journal-article-shaped anyway.
+        sc_categories = (item.special_collection_categories or "").lower()
+        if "indigenous knowledge" in sc_categories:
+            resource_type_id = self._resolve_resource_type_id("Indigeneous Knowledge")
+        elif "cultural heritage" in sc_categories:
+            resource_type_id = self._resolve_resource_type_id("Cultural Heritage")
+        else:
+            resource_type_id = self._resolve_resource_type_id("Manuscripts")
         author_role_id = self._resolve_creator_role_id("Author")
 
         fields: list[tuple[str, str]] = [
@@ -293,14 +325,14 @@ class DocIDClient:
         r = self._s.post(
             f"{self.base}/publications/publish",
             files=multipart_fields,
-            timeout=_TIMEOUT,
+            timeout=60,
         )
         if r.status_code == 401:
             self.login()
             r = self._s.post(
                 f"{self.base}/publications/publish",
                 files=multipart_fields,
-                timeout=_TIMEOUT,
+                timeout=60,
             )
         r.raise_for_status()
         result = r.json()

@@ -224,6 +224,10 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "raw_affiliation": raw_affiliation,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
+                # Every accepted item passed either the structured
+                # arxiv:affiliation check or (when that's absent) the staff
+                # roster cross-check above — never a bare text mention.
+                "affiliation_confidence": "strong",
             }
             yield item
             self._mark_seen(doi=doi, url=arxiv_id, title=title)

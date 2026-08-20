@@ -361,6 +361,10 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "language_code": lang_code,
                 "is_african_language": bool(lang_code and lang_code in AFRICAN_LANG_CODES),
                 "funders": funders,
+                # Every accepted item passed the server-side ROR filter (Gate
+                # 1) at minimum — OpenAlex's own curated institution-linkage
+                # database, the strongest affiliation signal available here.
+                "affiliation_confidence": "strong",
             }
             yield item
             self._mark_seen(doi=doi, url=url, title=title)

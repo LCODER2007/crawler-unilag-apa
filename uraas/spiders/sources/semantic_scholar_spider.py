@@ -219,9 +219,8 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # to the weaker text match when no author matches the roster
             # (e.g. a genuine UNILAG researcher not yet in our harvested
             # roster), so recall isn't sacrificed outright for precision.
-            if not self.institution_config.matches_staff_roster(
-                authors
-            ) and not self._institution_match(title, abstract, venue):
+            roster_ok = self.institution_config.matches_staff_roster(authors)
+            if not roster_ok and not self._institution_match(title, abstract, venue):
                 rejected_aff += 1
                 self.logger.debug(f"S2 aff FAIL: {title[:60]}")
                 continue
@@ -251,6 +250,10 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "dc_subject": dc_subject,
+                # "strong" only via the staff-roster cross-check — the
+                # title/abstract/venue text fallback can't distinguish
+                # authored-there from written-about.
+                "affiliation_confidence": "strong" if roster_ok else "weak",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

@@ -266,7 +266,8 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
         ).lower()
 
         # Only yield if the affiliation matches our institution
-        matches = any(term in affil_text for term in self._affil_terms)
+        affil_strong = any(term in affil_text for term in self._affil_terms)
+        matches = affil_strong
         if not matches:
             # If abstract/body text mentions the institution, still accept
             page_text = response.text.lower()
@@ -300,6 +301,10 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             "raw_affiliation": affil_text[:500] or self.institution_name,
             "institution": self.institution_name,
             "institution_ror": self.ror_id,
+            # "strong" only when AJOL's own structured affiliation
+            # field/meta tag named the institution — the whole-page-text
+            # fallback can't distinguish authored-there from written-about.
+            "affiliation_confidence": "strong" if affil_strong else "weak",
         }
         yield item
         self._mark_seen(doi=doi, url=item_url, title=title)
