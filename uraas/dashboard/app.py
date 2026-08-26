@@ -1,11 +1,15 @@
 import csv
+import hashlib
 import io
 import json
 import logging
 import os
 import re
+import secrets
 import subprocess
 import threading
+import time
+from datetime import datetime
 
 from flask import (
     Flask,
@@ -25,6 +29,7 @@ from sqlalchemy.orm import selectinload
 from uraas.analytics.engine import analytics
 from uraas.config import config
 from uraas.database import (
+    ApiKey,
     Author,
     Collection,
     Community,
@@ -109,7 +114,70 @@ ADMIN_ENDPOINTS = {
     "citations_velocity_csv",
     "staff_directory",
     "clear_half_and_recrawl",
+    "admin_list_api_keys",
+    "admin_create_api_key",
+    "admin_revoke_api_key",
 }
+
+# Read-only data endpoints external partners (e.g. Africa PID Alliance /
+# DOCiD) may reach with a server-to-server API key instead of a browser
+# session — see uraas.dashboard.app._check_api_key and
+# scripts/manage_api_keys.py. Deliberately a small, explicit allowlist: a
+# valid key never grants anything outside it, including ADMIN_ENDPOINTS —
+# partner keys are read-only by construction, not just by convention.
+PARTNER_ENDPOINTS = {
+    "get_stats",
+    "papers_tree",
+    "get_paper",
+    "download_paper",
+    "export_single_bibtex",
+    "special_collections",
+    "special_collections_overview",
+    "get_university_registry",
+    "institution_info",
+}
+
+# Simple in-memory sliding-window limiter for API-key traffic, separate from
+# the IP-keyed `limiter` above (a partner integration calls from a small,
+# fixed set of IPs the per-IP limiter wasn't designed to distinguish from
+# abuse). Process-local only — fine for a handful of trusted partner keys on
+# a single dashboard instance; would need a shared store (e.g. Redis) behind
+# multiple worker processes.
+_API_KEY_RATE_LIMIT = 120  # requests per rolling 60s window, per key
+_api_key_hits: dict[str, list] = {}
+
+
+def _check_api_key():
+    """Validate the X-API-Key header against uraas.database.ApiKey.
+
+    Returns (True, partner_name) if valid, unrevoked, in-quota, and the
+    caller updates ApiKey.last_used_at as a side effect. Returns
+    (False, (response, status)) otherwise, ready to return directly from
+    the before_request hook.
+    """
+    raw_key = request.headers.get("X-API-Key")
+    if not raw_key:
+        return False, None
+
+    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    session_db = SessionLocal()
+    try:
+        row = session_db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
+        if not row or row.revoked:
+            return False, (jsonify({"status": "error", "message": "Invalid or revoked API key"}), 401)
+
+        now = time.time()
+        hits = [t for t in _api_key_hits.get(key_hash, []) if now - t < 60]
+        if len(hits) >= _API_KEY_RATE_LIMIT:
+            return False, (jsonify({"status": "error", "message": "Rate limit exceeded"}), 429)
+        hits.append(now)
+        _api_key_hits[key_hash] = hits
+
+        row.last_used_at = datetime.utcnow()
+        session_db.commit()
+        return True, row.name
+    finally:
+        session_db.close()
 
 
 @app.before_request
@@ -118,6 +186,18 @@ def _enforce_authentication():
     # Unknown endpoint (404s) and explicit public routes pass through.
     if endpoint is None or endpoint in PUBLIC_ENDPOINTS:
         return None
+
+    if request.headers.get("X-API-Key"):
+        # Check the allowlist before touching the DB/rate-limit counter at
+        # all — an API key is never a path to an endpoint outside
+        # PARTNER_ENDPOINTS, so there's nothing to gain by validating first.
+        if endpoint not in PARTNER_ENDPOINTS:
+            return jsonify({"status": "error", "message": "This endpoint is not available via API key"}), 403
+        ok, result = _check_api_key()
+        if not ok:
+            return result
+        return None  # valid partner key, allowlisted endpoint
+
     role = current_role()
     if not role:
         if request.path.startswith("/api/"):
@@ -1825,6 +1905,79 @@ def clear_half_and_recrawl():
         {"deleted": len(old_ids), "remaining": remaining, "crawl_started": crawl_started},
         narrative=f"Cleared {len(old_ids)} older papers. Fresh crawl {'started' if crawl_started else 'already running'}.",
     )
+
+
+@app.route("/api/admin/api-keys", methods=["GET"])
+def admin_list_api_keys():
+    """List partner API keys (admin only). Never returns full key values —
+    only the prefix stored at creation, same as scripts/manage_api_keys.py."""
+    session_db = SessionLocal()
+    try:
+        rows = session_db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
+        return api_ok({
+            "keys": [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "prefix": r.key_prefix,
+                    "scope": r.scope,
+                    "revoked": r.revoked,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
+                }
+                for r in rows
+            ]
+        })
+    finally:
+        session_db.close()
+
+
+@app.route("/api/admin/api-keys", methods=["POST"])
+def admin_create_api_key():
+    """Issue a new partner API key (admin only). The plaintext value is
+    returned exactly once, in this response — only its hash is persisted, so
+    it can never be retrieved again after this call."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return api_error("name is required", status=400)
+
+    raw = "uraas_live_" + secrets.token_urlsafe(32)
+    session_db = SessionLocal()
+    try:
+        row = ApiKey(
+            name=name,
+            key_hash=hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            key_prefix=raw[:20],
+            scope="read",
+            created_by=session.get("user"),
+        )
+        session_db.add(row)
+        session_db.commit()
+        return api_ok({
+            "id": row.id,
+            "name": row.name,
+            "prefix": row.key_prefix,
+            "key": raw,
+        }, narrative="Save this key now — it will not be shown again.")
+    finally:
+        session_db.close()
+
+
+@app.route("/api/admin/api-keys/<int:key_id>/revoke", methods=["POST"])
+def admin_revoke_api_key(key_id):
+    """Revoke a partner API key (admin only)."""
+    session_db = SessionLocal()
+    try:
+        row = session_db.query(ApiKey).filter(ApiKey.id == key_id).first()
+        if not row:
+            return api_error("Key not found", status=404)
+        row.revoked = True
+        row.revoked_at = datetime.utcnow()
+        session_db.commit()
+        return api_ok({"id": row.id, "revoked": True})
+    finally:
+        session_db.close()
 
 
 @app.route("/api/author/<int:author_id>/metrics")

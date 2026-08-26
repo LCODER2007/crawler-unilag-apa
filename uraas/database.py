@@ -368,6 +368,30 @@ class DepositBatch(Base):
     deposit_log = Column(Text, default="[]")
 
 
+class ApiKey(Base):
+    """Server-to-server credential for external partners (e.g. Africa PID
+    Alliance / DOCiD) reading URAAS data programmatically — distinct from the
+    dashboard's session-cookie login, which only suits a human in a browser.
+
+    The plaintext key is shown exactly once at creation time (see
+    scripts/manage_api_keys.py) and never stored — only its SHA-256 hash is
+    persisted, so a stolen database dump can't be used to authenticate.
+    """
+
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)  # partner label, e.g. "Africa PID Alliance / DOCiD"
+    key_hash = Column(String(64), unique=True, index=True, nullable=False)  # sha256 hex digest
+    key_prefix = Column(String(12), nullable=False)  # first chars only, for display/audit
+    scope = Column(String(20), default="read", nullable=False)  # "read" is the only scope for now — never admin
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String(100))  # admin session username that issued it
+    last_used_at = Column(DateTime)
+    revoked = Column(Boolean, default=False, nullable=False)
+    revoked_at = Column(DateTime)
+
+
 # ── Indexes for query performance ─────────────────────────────────────────────
 # ix_items_docid is auto-created by index=True on Item.docid — no duplicate needed
 Index("ix_items_language", Item.language_code)
