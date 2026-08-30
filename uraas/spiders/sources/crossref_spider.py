@@ -93,7 +93,9 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # available for real debugging via LOG_LEVEL=DEBUG.
             self.logger.debug(f"[ROR wave] {url}")
             yield scrapy.Request(
-                url=url, callback=self.parse, meta={"wave": "ror", "query": "", "offset": 0}
+                url=url,
+                callback=self.parse,
+                meta={"wave": "ror", "query": "", "offset": 0},
             )
 
         # Wave 2 — one fan-out request per SC seed phrase, AND-ed with affiliation.
@@ -176,12 +178,14 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 if not name:
                     continue
                 awards = [a for a in (f.get("award") or []) if a]
-                funders.append({
-                    "name": name,
-                    "ror": None,
-                    "award_id": ", ".join(awards) if awards else None,
-                    "funder_doi": f.get("DOI") or None,
-                })
+                funders.append(
+                    {
+                        "name": name,
+                        "ror": None,
+                        "award_id": ", ".join(awards) if awards else None,
+                        "funder_doi": f.get("DOI") or None,
+                    }
+                )
 
             self._accepted += 1
             item = {
@@ -193,7 +197,9 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "pdf_url": pdf_url,
                 "source_repository": "Crossref",
                 "is_unilag_author": True,
-                "raw_affiliation": " | ".join(raw_affs) if raw_affs else self.institution_name,
+                "raw_affiliation": (
+                    " | ".join(raw_affs) if raw_affs else self.institution_name
+                ),
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "funders": funders,

@@ -43,7 +43,9 @@ from uraas.config.institutions import get_registry
 from uraas.database import Author, SessionLocal
 
 _ISNI_RE = re.compile(r"<isniUnformatted>\s*(\d{15}[\dXx])\s*</isniUnformatted>")
-_NUM_RECORDS_RE = re.compile(r"<(?:\w+:)?numberOfRecords>\s*(\d+)\s*</(?:\w+:)?numberOfRecords>")
+_NUM_RECORDS_RE = re.compile(
+    r"<(?:\w+:)?numberOfRecords>\s*(\d+)\s*</(?:\w+:)?numberOfRecords>"
+)
 
 
 class ISNISpider(scrapy.Spider):
@@ -75,7 +77,9 @@ class ISNISpider(scrapy.Spider):
             self.logger.warning(f"No staff records found for {self.institution_name}")
             return
 
-        self.logger.info(f"Looking up ISNI for {len(staff)} staff at {self.institution_name}")
+        self.logger.info(
+            f"Looking up ISNI for {len(staff)} staff at {self.institution_name}"
+        )
         for staff_member in staff:
             name = staff_member.get("name")
             if not name:

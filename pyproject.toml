@@ -1,0 +1,9 @@
+[tool.black]
+extend-exclude = '''
+/(
+  scratch
+)/
+'''
+
+[tool.mypy]
+exclude = ["scratch/"]

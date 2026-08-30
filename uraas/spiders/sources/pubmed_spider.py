@@ -26,14 +26,20 @@ from uraas.services.sc_engine import sc_score_of
 from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-_EFETCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-_BATCH   = 100
+_EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+_BATCH = 100
 
 # Seeds specifically relevant to ethnobotany / traditional medicine SC category
 _PUBMED_SEEDS = [
-    "ethnobotany", "traditional medicine", "medicinal plants",
-    "indigenous knowledge", "traditional healing", "folk medicine",
-    "ethnopharmacology", "phytomedicine", "herbal medicine",
+    "ethnobotany",
+    "traditional medicine",
+    "medicinal plants",
+    "indigenous knowledge",
+    "traditional healing",
+    "folk medicine",
+    "ethnopharmacology",
+    "phytomedicine",
+    "herbal medicine",
     "traditional ecological knowledge",
 ]
 
@@ -49,7 +55,9 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def __init__(self, institution="unilag", target=50, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
-        self.api_key = getattr(config, "NCBI_API_KEY", "") or os.environ.get("NCBI_API_KEY", "")
+        self.api_key = getattr(config, "NCBI_API_KEY", "") or os.environ.get(
+            "NCBI_API_KEY", ""
+        )
 
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -67,9 +75,13 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def _esearch_url(self, seed: str, retstart: int = 0) -> str:
         term = f'{self._affil_term()} AND "{seed}"[Title/Abstract]'
         params = {
-            "db": "pubmed", "term": term, "retmax": _BATCH,
-            "retstart": retstart, "retmode": "json",
-            "tool": "URAAS", "email": config.OPENALEX_MAILTO,
+            "db": "pubmed",
+            "term": term,
+            "retmax": _BATCH,
+            "retstart": retstart,
+            "retmode": "json",
+            "tool": "URAAS",
+            "email": config.OPENALEX_MAILTO,
         }
         if self.api_key:
             params["api_key"] = self.api_key
@@ -77,8 +89,12 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def _efetch_url(self, ids: list) -> str:
         params = {
-            "db": "pubmed", "id": ",".join(ids), "rettype": "abstract",
-            "retmode": "xml", "tool": "URAAS", "email": config.OPENALEX_MAILTO,
+            "db": "pubmed",
+            "id": ",".join(ids),
+            "rettype": "abstract",
+            "retmode": "xml",
+            "tool": "URAAS",
+            "email": config.OPENALEX_MAILTO,
         }
         if self.api_key:
             params["api_key"] = self.api_key
@@ -89,8 +105,9 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
             if self._accepted >= self.target_limit:
                 break
             url = self._esearch_url(seed)
-            yield scrapy.Request(url=url, callback=self.parse_search,
-                                 meta={"seed": seed, "retstart": 0})
+            yield scrapy.Request(
+                url=url, callback=self.parse_search, meta={"seed": seed, "retstart": 0}
+            )
 
     def parse_search(self, response):
         if self._accepted >= self.target_limit:
@@ -101,26 +118,35 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
             return
         seed = response.meta["seed"]
         fetch_url = self._efetch_url(ids)
-        yield scrapy.Request(url=fetch_url, callback=self.parse_fetch, meta={"seed": seed})
+        yield scrapy.Request(
+            url=fetch_url, callback=self.parse_fetch, meta={"seed": seed}
+        )
 
         total = int(data.get("esearchresult", {}).get("count", 0))
         retstart = response.meta["retstart"] + _BATCH
-        if retstart < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            retstart < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             next_url = self._esearch_url(seed, retstart)
-            yield scrapy.Request(url=next_url, callback=self.parse_search,
-                                 meta={"seed": seed, "retstart": retstart})
+            yield scrapy.Request(
+                url=next_url,
+                callback=self.parse_search,
+                meta={"seed": seed, "retstart": retstart},
+            )
 
     def parse_fetch(self, response):
         if self._accepted >= self.target_limit:
             self._stop_if_target_reached()
         # PubMed efetch returns XML; parse with Scrapy's Selector
         from scrapy import Selector
+
         sel = Selector(text=response.text, type="xml")
 
         for art in sel.xpath("//PubmedArticle"):
             if self._accepted >= self.target_limit:
                 return
-            title = (art.xpath(".//ArticleTitle//text()").getall() or [""])
+            title = art.xpath(".//ArticleTitle//text()").getall() or [""]
             title = " ".join(title).strip()
             if not title:
                 continue
@@ -148,7 +174,8 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 continue
 
             url_val = (
-                f"https://doi.org/{doi}" if doi
+                f"https://doi.org/{doi}"
+                if doi
                 else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
             )
 
@@ -159,11 +186,17 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             self._accepted += 1
             item = {
-                "title": title, "abstract": abstract, "authors": authors, "doi": doi,
+                "title": title,
+                "abstract": abstract,
+                "authors": authors,
+                "doi": doi,
                 "url": url_val,
-                "pdf_url": None, "publication_date": str(year),
-                "source_repository": "PubMed", "is_unilag_author": True,
-                "raw_affiliation": self.institution_name, "institution": self.institution_name,
+                "pdf_url": None,
+                "publication_date": str(year),
+                "source_repository": "PubMed",
+                "is_unilag_author": True,
+                "raw_affiliation": self.institution_name,
+                "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # The esearch query itself is scoped to PubMed's structured
                 # [Affiliation] field (see _affil_term) — not a free-text
@@ -176,5 +209,8 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def closed(self, reason):
         self.logger.info(
             "PubMed spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
-            self.institution_name, self._accepted, self._skipped_known, reason,
+            self.institution_name,
+            self._accepted,
+            self._skipped_known,
+            reason,
         )

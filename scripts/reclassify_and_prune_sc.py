@@ -130,7 +130,9 @@ def prune(session, drop_ids):
 def main():
     parser = argparse.ArgumentParser(description="Re-classify & prune non-SC papers")
     parser.add_argument(
-        "--apply", action="store_true", help="Actually re-score and delete (default: dry run)"
+        "--apply",
+        action="store_true",
+        help="Actually re-score and delete (default: dry run)",
     )
     parser.add_argument(
         "--samples", type=int, default=20, help="How many borderline drops to print"
@@ -154,9 +156,16 @@ def main():
 
         # Show a sample of what would be / was dropped that previously scored > 0
         # (these are the meaningful changes to eyeball).
-        prev_sc = {
-            i for (i,) in session.query(Item.id).filter(Item.special_collection_score >= 0).all()
-        } if not args.apply else set()
+        prev_sc = (
+            {
+                i
+                for (i,) in session.query(Item.id)
+                .filter(Item.special_collection_score >= 0)
+                .all()
+            }
+            if not args.apply
+            else set()
+        )
         sample = (
             session.query(Item.title)
             .filter(Item.id.in_(drop_ids[: args.samples]))

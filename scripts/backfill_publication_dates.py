@@ -48,7 +48,9 @@ def _parse(date_str: str):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
     args = parser.parse_args()
 
     session = SessionLocal()
@@ -59,7 +61,9 @@ def main():
             .filter(Item.dc_date_issued.isnot(None))
             .all()
         )
-        print(f"Items with publication_date NULL but dc_date_issued present: {len(candidates)}")
+        print(
+            f"Items with publication_date NULL but dc_date_issued present: {len(candidates)}"
+        )
 
         fixed = unparseable = 0
         for it in candidates:

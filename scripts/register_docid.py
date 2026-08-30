@@ -45,8 +45,12 @@ from uraas.services.docid_client import DocIDClient, DocIDConnectionError
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--limit", type=int, default=None, help="Max items to register this run")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max items to register this run"
+    )
     args = parser.parse_args()
 
     try:
@@ -77,7 +81,9 @@ def main():
             .filter(Item.affiliation_confidence == "strong")
             .all()
         )
-        print(f"Special-Collections items in DB without a real DocID yet (strong affiliation only): {len(candidates)}")
+        print(
+            f"Special-Collections items in DB without a real DocID yet (strong affiliation only): {len(candidates)}"
+        )
         if args.limit:
             candidates = candidates[: args.limit]
             print(f"Limited to first {len(candidates)} for this run")

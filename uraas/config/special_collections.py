@@ -28,15 +28,16 @@ from typing import List
 from uraas.services.sc_engine import AMBIGUOUS_STRONG, AMBIGUOUS_TOKENS
 from uraas.utils.ai_classifier import SPECIAL_COLLECTIONS
 
-_ambiguous = {t.lower() for t in AMBIGUOUS_TOKENS} | {t.lower() for t in AMBIGUOUS_STRONG}
-
-_all_taxonomy_terms = {
-    kw.lower() for kws in SPECIAL_COLLECTIONS.values() for kw in kws
+_ambiguous = {t.lower() for t in AMBIGUOUS_TOKENS} | {
+    t.lower() for t in AMBIGUOUS_STRONG
 }
+
+_all_taxonomy_terms = {kw.lower() for kws in SPECIAL_COLLECTIONS.values() for kw in kws}
 
 # Every taxonomy term except the ones sc_engine itself flags as too ambiguous to
 # stand alone. Sorted for a stable, diffable seed order across runs.
 SC_SEED_KEYWORDS: List[str] = sorted(_all_taxonomy_terms - _ambiguous)
+
 
 def all_classifier_keywords() -> List[str]:
     """Full taxonomy keyword list used by the in-pipeline classifier for scoring."""

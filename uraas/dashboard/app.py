@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
@@ -22,12 +23,21 @@ from flask import (
     session,
     url_for,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_socketio import SocketIO
 from sqlalchemy import desc, extract, func, or_
 from sqlalchemy.orm import selectinload
 
 from uraas.analytics.engine import analytics
 from uraas.config import config
+from uraas.dashboard.auth import (
+    ADMIN,
+    check_credentials,
+    clamped_int,
+    current_role,
+)
+from uraas.dashboard.responses import api_error, api_ok, csv_response
 from uraas.database import (
     ApiKey,
     Author,
@@ -39,15 +49,6 @@ from uraas.database import (
     db_year,
     db_year_month,
 )
-from uraas.dashboard.auth import (
-    ADMIN,
-    check_credentials,
-    clamped_int,
-    current_role,
-)
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from uraas.dashboard.responses import api_error, api_ok, csv_response
 from uraas.production_config import ProductionConfig
 from uraas.utils.analytics_cache import analytics_cache
 
@@ -94,7 +95,14 @@ limiter = Limiter(
 #   PUBLIC_ENDPOINTS — reachable without a session (login page, health, static).
 #   ADMIN_ENDPOINTS  — require role == admin (crawler, mutations, bulk exports,
 #                      staff directory PII). Everything else needs any login.
-PUBLIC_ENDPOINTS = {"login", "logout", "health_check", "api_version", "static", "auth_role"}
+PUBLIC_ENDPOINTS = {
+    "login",
+    "logout",
+    "health_check",
+    "api_version",
+    "static",
+    "auth_role",
+}
 ADMIN_ENDPOINTS = {
     "start_crawler",
     "stop_crawler",
@@ -117,6 +125,15 @@ ADMIN_ENDPOINTS = {
     "admin_list_api_keys",
     "admin_create_api_key",
     "admin_revoke_api_key",
+    # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) —
+    # that path is checked earlier in _enforce_authentication and returns
+    # before this set is ever consulted. Listing them here only closes the
+    # session-cookie path: without this, any logged-in VIEWER (meant to be
+    # read-only) could trigger a crawl from a browser, which the API-key
+    # gate's own cooldown/scoping was never meant to be the only thing
+    # standing between a viewer session and starting a crawl.
+    "partner_crawl_start",
+    "partner_crawl_status",
 }
 
 # Read-only data endpoints external partners (e.g. Africa PID Alliance /
@@ -135,6 +152,8 @@ PARTNER_ENDPOINTS = {
     "special_collections_overview",
     "get_university_registry",
     "institution_info",
+    "partner_crawl_start",
+    "partner_crawl_status",
 }
 
 # Simple in-memory sliding-window limiter for API-key traffic, separate from
@@ -145,6 +164,14 @@ PARTNER_ENDPOINTS = {
 # multiple worker processes.
 _API_KEY_RATE_LIMIT = 120  # requests per rolling 60s window, per key
 _api_key_hits: dict[str, list] = {}
+
+# A crawl is nothing like a normal read: it fans out to a dozen third-party
+# APIs and can end in real, permanent DOCiD registrations via
+# _auto_register_docid(). The general per-key rate limit above (120/min) is
+# nowhere near strict enough for that — a separate, much longer per-key
+# cooldown applies specifically to triggering one.
+_PARTNER_CRAWL_COOLDOWN_S = 600  # 10 minutes between partner-triggered crawls, per key
+_partner_crawl_last: dict[str, float] = {}
 
 
 def _check_api_key():
@@ -164,12 +191,18 @@ def _check_api_key():
     try:
         row = session_db.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
         if not row or row.revoked:
-            return False, (jsonify({"status": "error", "message": "Invalid or revoked API key"}), 401)
+            return False, (
+                jsonify({"status": "error", "message": "Invalid or revoked API key"}),
+                401,
+            )
 
         now = time.time()
         hits = [t for t in _api_key_hits.get(key_hash, []) if now - t < 60]
         if len(hits) >= _API_KEY_RATE_LIMIT:
-            return False, (jsonify({"status": "error", "message": "Rate limit exceeded"}), 429)
+            return False, (
+                jsonify({"status": "error", "message": "Rate limit exceeded"}),
+                429,
+            )
         hits.append(now)
         _api_key_hits[key_hash] = hits
 
@@ -192,7 +225,15 @@ def _enforce_authentication():
         # all — an API key is never a path to an endpoint outside
         # PARTNER_ENDPOINTS, so there's nothing to gain by validating first.
         if endpoint not in PARTNER_ENDPOINTS:
-            return jsonify({"status": "error", "message": "This endpoint is not available via API key"}), 403
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "This endpoint is not available via API key",
+                    }
+                ),
+                403,
+            )
         ok, result = _check_api_key()
         if not ok:
             return result
@@ -201,10 +242,16 @@ def _enforce_authentication():
     role = current_role()
     if not role:
         if request.path.startswith("/api/"):
-            return jsonify({"status": "error", "message": "Authentication required"}), 401
+            return (
+                jsonify({"status": "error", "message": "Authentication required"}),
+                401,
+            )
         return redirect(url_for("login", next=request.path))
     if endpoint in ADMIN_ENDPOINTS and role != ADMIN:
-        return jsonify({"status": "error", "message": "Administrator access required"}), 403
+        return (
+            jsonify({"status": "error", "message": "Administrator access required"}),
+            403,
+        )
     return None
 
 
@@ -233,7 +280,9 @@ def _auto_backfill_citation_share():
         )
         if not items:
             return
-        logger.info(f"[auto-backfill] fetching african_citation_share for {len(items)} SC items")
+        logger.info(
+            f"[auto-backfill] fetching african_citation_share for {len(items)} SC items"
+        )
         updated = 0
         for it in items:
             share = CitationTracker.fetch_african_citation_share(it.openalex_id)
@@ -243,7 +292,9 @@ def _auto_backfill_citation_share():
             _time.sleep(1.0)
         session.commit()
         analytics_cache.invalidate_all()
-        logger.info(f"[auto-backfill] african_citation_share set for {updated}/{len(items)} items")
+        logger.info(
+            f"[auto-backfill] african_citation_share set for {updated}/{len(items)} items"
+        )
     except Exception as exc:
         logger.error(f"[auto-backfill] citation share backfill failed: {exc}")
         try:
@@ -339,7 +390,9 @@ class _LiveFeedFilter:
             # timestamped log line or one of our own known markers.
             if not (
                 _LOG_TIMESTAMP_RE.match(line_decoded)
-                or line_decoded.startswith(("[INIT]", "[VALID]", "[ERR]", "URAAS_DOWNLOAD:", "="))
+                or line_decoded.startswith(
+                    ("[INIT]", "[VALID]", "[ERR]", "URAAS_DOWNLOAD:", "=")
+                )
             ):
                 return False
             self.suppressing = False
@@ -417,7 +470,11 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute", methods=["POST"], error_message="Too many login attempts — wait 60 seconds.")
+@limiter.limit(
+    "10 per minute",
+    methods=["POST"],
+    error_message="Too many login attempts — wait 60 seconds.",
+)
 def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
@@ -432,6 +489,7 @@ def login():
             # Prevent open redirect: reject any URL with a scheme or netloc
             # (this blocks both http://evil.com AND //evil.com style redirects).
             from urllib.parse import urlparse as _urlparse
+
             _parsed = _urlparse(dest)
             if _parsed.scheme or _parsed.netloc or not dest.startswith("/"):
                 dest = url_for("index")
@@ -695,7 +753,9 @@ def download_paper(item_id):
         if not any(
             os.path.commonpath([real_path, root]) == root for root in allowed_roots
         ):
-            logger.warning("download_paper %s: path escape blocked: %s", item_id, real_path)
+            logger.warning(
+                "download_paper %s: path escape blocked: %s", item_id, real_path
+            )
             return jsonify({"error": "Access denied"}), 403
         if not os.path.exists(real_path):
             return jsonify({"error": "PDF file missing from storage"}), 404
@@ -787,7 +847,9 @@ def analytics_overview():
 
         item_ids_query = q_item.with_entities(Item.id)
 
-        q_author = session.query(Author).join(Author.items).filter(Item.id.in_(item_ids_query))
+        q_author = (
+            session.query(Author).join(Author.items).filter(Item.id.in_(item_ids_query))
+        )
         q_comm = session.query(Community).filter(
             Community.collections.any(Collection.items.any(Item.id.in_(item_ids_query)))
         )
@@ -1185,9 +1247,18 @@ def prune_non_sc():
     POST body: {"apply": true}   — actually prune
     POST body: {"apply": false}  — dry run (default), just return counts
     """
-    from uraas.database import Author, Collection, Community, SessionLocal as _SL, item_authors
-    from uraas.services.sc_engine import is_special_collection
     from sqlalchemy import text as _text
+
+    from uraas.database import (
+        Author,
+        Collection,
+        Community,
+    )
+    from uraas.database import SessionLocal as _SL
+    from uraas.database import (
+        item_authors,
+    )
+    from uraas.services.sc_engine import is_special_collection
 
     data = request.get_json() or {}
     apply = bool(data.get("apply", False))
@@ -1211,11 +1282,13 @@ def prune_non_sc():
             else:
                 drop_ids.append(it.id)
                 if len(samples) < 20:
-                    samples.append({
-                        "id": it.id,
-                        "title": (it.title or "")[:80],
-                        "institution": it.institution or "",
-                    })
+                    samples.append(
+                        {
+                            "id": it.id,
+                            "title": (it.title or "")[:80],
+                            "institution": it.institution or "",
+                        }
+                    )
 
         if apply:
             session.commit()
@@ -1223,21 +1296,25 @@ def prune_non_sc():
             session.execute(_text("PRAGMA foreign_keys=ON"))
             deleted = 0
             for i in range(0, len(drop_ids), 500):
-                chunk = drop_ids[i:i + 500]
+                chunk = drop_ids[i : i + 500]
                 for it in session.query(Item).filter(Item.id.in_(chunk)).all():
                     session.delete(it)
                     deleted += 1
                 session.commit()
 
             # Sweep stray association rows
-            session.execute(_text(
-                "DELETE FROM item_authors WHERE item_id NOT IN (SELECT id FROM items) "
-                "OR author_id NOT IN (SELECT id FROM authors)"
-            ))
-            session.execute(_text(
-                "DELETE FROM item_collections WHERE item_id NOT IN (SELECT id FROM items) "
-                "OR collection_id NOT IN (SELECT id FROM collections)"
-            ))
+            session.execute(
+                _text(
+                    "DELETE FROM item_authors WHERE item_id NOT IN (SELECT id FROM items) "
+                    "OR author_id NOT IN (SELECT id FROM authors)"
+                )
+            )
+            session.execute(
+                _text(
+                    "DELETE FROM item_collections WHERE item_id NOT IN (SELECT id FROM items) "
+                    "OR collection_id NOT IN (SELECT id FROM collections)"
+                )
+            )
             session.commit()
 
             # Orphan authors
@@ -1252,21 +1329,25 @@ def prune_non_sc():
             for c in empty_colls:
                 session.delete(c)
             session.commit()
-            empty_comms = [c for c in session.query(Community).all() if not c.collections]
+            empty_comms = [
+                c for c in session.query(Community).all() if not c.collections
+            ]
             for c in empty_comms:
                 session.delete(c)
             session.commit()
 
             analytics_cache.invalidate_all()
 
-        return jsonify({
-            "status": "success",
-            "applied": apply,
-            "total_before": total,
-            "kept_sc": len(keep_ids),
-            "pruned_non_sc": len(drop_ids),
-            "sample_dropped": samples,
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "applied": apply,
+                "total_before": total,
+                "kept_sc": len(keep_ids),
+                "pruned_non_sc": len(drop_ids),
+                "sample_dropped": samples,
+            }
+        )
     except Exception as e:
         logger.error("prune_non_sc: %s", e)
         session.rollback()
@@ -1278,29 +1359,39 @@ def prune_non_sc():
 @app.route("/api/admin/test-smtp", methods=["POST"])
 def test_smtp():
     """Send a test email to verify SMTP configuration (admin only)."""
-    from uraas.services.email_service import _is_smtp_configured
-    from uraas.config import config
     import smtplib
     from email.mime.text import MIMEText
     from email.utils import parseaddr
 
+    from uraas.config import config
+    from uraas.services.email_service import _is_smtp_configured
+
     if not _is_smtp_configured():
-        return jsonify({
-            "status": "error",
-            "message": "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in environment/secrets.",
-            "smtp_host": config.SMTP_HOST or "(not set)",
-            "smtp_user": config.SMTP_USER or "(not set)",
-        }), 400
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in environment/secrets.",
+                    "smtp_host": config.SMTP_HOST or "(not set)",
+                    "smtp_user": config.SMTP_USER or "(not set)",
+                }
+            ),
+            400,
+        )
 
     to_email = (request.get_json(silent=True) or {}).get("to", config.SMTP_USER)
     try:
-        msg = MIMEText("URAAS SMTP test — configuration is working correctly.", "plain", "utf-8")
+        msg = MIMEText(
+            "URAAS SMTP test — configuration is working correctly.", "plain", "utf-8"
+        )
         msg["Subject"] = "[URAAS] SMTP Test"
         msg["From"] = config.SMTP_FROM
         msg["To"] = to_email
         if config.SMTP_USE_TLS:
             server = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
-            server.ehlo(); server.starttls(); server.ehlo()
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
         else:
             server = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
         server.login(config.SMTP_USER, config.SMTP_PASSWORD)
@@ -1308,7 +1399,9 @@ def test_smtp():
         server.sendmail(envelope_from, [to_email], msg.as_bytes())
         server.quit()
         logger.info("SMTP test email sent to %s", to_email)
-        return jsonify({"status": "success", "message": f"Test email sent to {to_email}"})
+        return jsonify(
+            {"status": "success", "message": f"Test email sent to {to_email}"}
+        )
     except Exception as exc:
         logger.error("SMTP test failed: %s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500
@@ -1320,7 +1413,10 @@ def recompute_alignment():
 
     This is the web-UI equivalent of running scripts/backfill_alignment.py.
     Runs synchronously; expect 5-30 s for 100-200 papers."""
-    from uraas.services.alignment_engine import recompute_aggregates, score_item_alignment
+    from uraas.services.alignment_engine import (
+        recompute_aggregates,
+        score_item_alignment,
+    )
 
     session = SessionLocal()
     try:
@@ -1551,7 +1647,9 @@ def language_research():
                         "id": item.id,
                         "title": item.title,
                         "year": (
-                            item.publication_date.year if item.publication_date else None
+                            item.publication_date.year
+                            if item.publication_date
+                            else None
                         ),
                         "authors": [a.name for a in item.authors[:4]],
                         "is_oa": "openAccess" in (item.dc_rights or ""),
@@ -1587,8 +1685,6 @@ def language_research():
         )
     finally:
         session.close()
-
-
 
 
 #  Multi-Institution Comparator (APA Core Feature)
@@ -1767,6 +1863,7 @@ def get_citations(item_id):
     # but never let it overwrite a good count with zero.
     try:
         from uraas.services.citation_tracker import get_paper_citations
+
         live = get_paper_citations(item_id)
         live_count = live.pop("citation_count", 0) or 0
         base.update(live)  # citing_papers, last_updated, etc.
@@ -1779,6 +1876,7 @@ def get_citations(item_id):
     if not base.get("citation_count") and doi:
         try:
             from uraas.services.citation_tracker import CitationTracker
+
             count = CitationTracker.fetch_citations_crossref(doi)
             if not count:
                 oa = CitationTracker.fetch_citations_openalex(doi)
@@ -1861,11 +1959,15 @@ def clear_half_and_recrawl():
         total = session.query(func.count(Item.id)).scalar() or 0
         half = max(1, total // 2)
         # Delete the oldest half by primary-key order (cheapest scan)
-        old_ids = [r[0] for r in session.query(Item.id).order_by(Item.id).limit(half).all()]
+        old_ids = [
+            r[0] for r in session.query(Item.id).order_by(Item.id).limit(half).all()
+        ]
         if old_ids:
-            session.query(Item).filter(Item.id.in_(old_ids)).delete(synchronize_session=False)
+            session.query(Item).filter(Item.id.in_(old_ids)).delete(
+                synchronize_session=False
+            )
             session.commit()
-        remaining = (session.query(func.count(Item.id)).scalar() or 0)
+        remaining = session.query(func.count(Item.id)).scalar() or 0
         analytics_cache.invalidate_all()
         logger.info(f"clear-half: deleted {len(old_ids)} papers, {remaining} remain")
     except Exception as exc:
@@ -1880,20 +1982,29 @@ def clear_half_and_recrawl():
         if crawler_process is None or crawler_process.poll() is not None:
             try:
                 cmd = [
-                    sys.executable, "scripts/crawl_multi_institution.py",
-                    "--spider", "openalex",
-                    "--institutions", "unilag",
-                    "--target", "50",
+                    sys.executable,
+                    "scripts/crawl_multi_institution.py",
+                    "--spider",
+                    "openalex",
+                    "--institutions",
+                    "unilag",
+                    "--target",
+                    "50",
                 ]
                 proc = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
-                    cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    cwd=os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    ),
                 )
                 crawler_process = proc
                 import threading
-                threading.Thread(target=crawler_monitor, args=(proc,), daemon=True).start()
+
+                threading.Thread(
+                    target=crawler_monitor, args=(proc,), daemon=True
+                ).start()
                 crawl_started = True
             except Exception as exc2:
                 logger.error(f"clear-half recrawl launch failed: {exc2}")
@@ -1902,7 +2013,11 @@ def clear_half_and_recrawl():
             crawl_started = False
 
     return api_ok(
-        {"deleted": len(old_ids), "remaining": remaining, "crawl_started": crawl_started},
+        {
+            "deleted": len(old_ids),
+            "remaining": remaining,
+            "crawl_started": crawl_started,
+        },
         narrative=f"Cleared {len(old_ids)} older papers. Fresh crawl {'started' if crawl_started else 'already running'}.",
     )
 
@@ -1914,20 +2029,26 @@ def admin_list_api_keys():
     session_db = SessionLocal()
     try:
         rows = session_db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
-        return api_ok({
-            "keys": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "prefix": r.key_prefix,
-                    "scope": r.scope,
-                    "revoked": r.revoked,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
-                }
-                for r in rows
-            ]
-        })
+        return api_ok(
+            {
+                "keys": [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "prefix": r.key_prefix,
+                        "scope": r.scope,
+                        "revoked": r.revoked,
+                        "created_at": (
+                            r.created_at.isoformat() if r.created_at else None
+                        ),
+                        "last_used_at": (
+                            r.last_used_at.isoformat() if r.last_used_at else None
+                        ),
+                    }
+                    for r in rows
+                ]
+            }
+        )
     finally:
         session_db.close()
 
@@ -1954,12 +2075,15 @@ def admin_create_api_key():
         )
         session_db.add(row)
         session_db.commit()
-        return api_ok({
-            "id": row.id,
-            "name": row.name,
-            "prefix": row.key_prefix,
-            "key": raw,
-        }, narrative="Save this key now — it will not be shown again.")
+        return api_ok(
+            {
+                "id": row.id,
+                "name": row.name,
+                "prefix": row.key_prefix,
+                "key": raw,
+            },
+            narrative="Save this key now — it will not be shown again.",
+        )
     finally:
         session_db.close()
 
@@ -2504,22 +2628,28 @@ def institution_info():
 
     institution = request.args.get("institution", "").strip().lower() or None
     if not institution:
-        return api_ok({"country_code": None, "country_name": None, "institution_name": None})
+        return api_ok(
+            {"country_code": None, "country_name": None, "institution_name": None}
+        )
 
     registry = get_registry()
     inst_cfg = registry.get(institution)
     if not inst_cfg:
-        return api_ok({"country_code": None, "country_name": None, "institution_name": None})
+        return api_ok(
+            {"country_code": None, "country_name": None, "institution_name": None}
+        )
 
     country_name = getattr(inst_cfg, "country", None) or ""
     name_to_iso2 = {v.lower(): k for k, v in COUNTRY_NAMES.items()}
     country_code = name_to_iso2.get(country_name.lower())
 
-    return api_ok({
-        "country_code": country_code,
-        "country_name": country_name,
-        "institution_name": inst_cfg.name,
-    })
+    return api_ok(
+        {
+            "country_code": country_code,
+            "country_name": country_name,
+            "institution_name": inst_cfg.name,
+        }
+    )
 
 
 @app.route("/api/collaboration/countries")
@@ -2779,19 +2909,35 @@ def export_bibtex():
 # `config_attr` is the attribute on `config` that holds the key (empty string
 # when missing). Sources with config_attr=None need no key.
 CRAWLER_SOURCES = [
-    {"id": "openalex",         "label": "OpenAlex (Default — 250M+ papers)",        "config_attr": None},
-    {"id": "all",              "label": "All Sources (Maximum Coverage)",           "config_attr": None},
-    {"id": "crossref",         "label": "Crossref (DOI Registry)",                  "config_attr": None},
-    {"id": "semantic_scholar", "label": "Semantic Scholar (AI-indexed)",            "config_attr": None},
-    {"id": "doaj",             "label": "DOAJ (African Open Access Journals)",      "config_attr": None},
-    {"id": "ajol",             "label": "AJOL (African Journals Online)",           "config_attr": None},
-    {"id": "europepmc",        "label": "EuropePMC (Biomedical)",                   "config_attr": None},
-    {"id": "core",             "label": "CORE (Global OA Repositories)",            "config_attr": "CORE_API_KEY"},
-    {"id": "pubmed",           "label": "PubMed (Ethnobotany / Trad. Medicine)",    "config_attr": None},
-    {"id": "openaire",         "label": "OpenAIRE (EU/African Networks)",           "config_attr": None},
-    {"id": "arxiv",            "label": "arXiv (STEM Preprints)",                   "config_attr": None},
-    {"id": "orcid",            "label": "ORCID (Author Registry)",                  "config_attr": None},
-    {"id": "oai",              "label": "OAI-PMH (Institutional Repository)",       "config_attr": None},
+    {
+        "id": "openalex",
+        "label": "OpenAlex (Default — 250M+ papers)",
+        "config_attr": None,
+    },
+    {"id": "all", "label": "All Sources (Maximum Coverage)", "config_attr": None},
+    {"id": "crossref", "label": "Crossref (DOI Registry)", "config_attr": None},
+    {
+        "id": "semantic_scholar",
+        "label": "Semantic Scholar (AI-indexed)",
+        "config_attr": None,
+    },
+    {"id": "doaj", "label": "DOAJ (African Open Access Journals)", "config_attr": None},
+    {"id": "ajol", "label": "AJOL (African Journals Online)", "config_attr": None},
+    {"id": "europepmc", "label": "EuropePMC (Biomedical)", "config_attr": None},
+    {
+        "id": "core",
+        "label": "CORE (Global OA Repositories)",
+        "config_attr": "CORE_API_KEY",
+    },
+    {
+        "id": "pubmed",
+        "label": "PubMed (Ethnobotany / Trad. Medicine)",
+        "config_attr": None,
+    },
+    {"id": "openaire", "label": "OpenAIRE (EU/African Networks)", "config_attr": None},
+    {"id": "arxiv", "label": "arXiv (STEM Preprints)", "config_attr": None},
+    {"id": "orcid", "label": "ORCID (Author Registry)", "config_attr": None},
+    {"id": "oai", "label": "OAI-PMH (Institutional Repository)", "config_attr": None},
 ]
 
 
@@ -2838,35 +2984,68 @@ def start_crawler():
         # Validate institution against registry before passing to subprocess.
         if institution != "all":
             from uraas.config.institutions import get_registry as _get_reg
+
             _reg = _get_reg()
             if not _reg.get(institution):
-                return jsonify({"status": "error", "message": f"Unknown institution: {institution}"}), 400
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "message": f"Unknown institution: {institution}",
+                        }
+                    ),
+                    400,
+                )
         # Default ON — heavy bias toward Special Collections in every crawl.
         boost_special = bool(data.get("boost_special", True))
         sc_only = bool(data.get("sc_only", False))
         # Optional spider selection (allowlisted). "oai" = read-only harvest of
         # the institution's own repository (theses/grey literature).
         spider = data.get("spider", "openalex")
-        _allowed_spiders = ("openalex", "crossref", "arxiv", "orcid", "oai",
-                            "semantic_scholar", "europepmc", "core", "pubmed",
-                            "openaire", "doaj", "ajol", "all")
+        _allowed_spiders = (
+            "openalex",
+            "crossref",
+            "arxiv",
+            "orcid",
+            "oai",
+            "semantic_scholar",
+            "europepmc",
+            "core",
+            "pubmed",
+            "openaire",
+            "doaj",
+            "ajol",
+            "all",
+        )
         if spider not in _allowed_spiders:
-            return jsonify({"status": "error", "message": f"Unknown spider: {spider}"}), 400
+            return (
+                jsonify({"status": "error", "message": f"Unknown spider: {spider}"}),
+                400,
+            )
         # Reject sources whose required API key isn't configured (the UI greys
         # these out, but enforce server-side too so the crawl can't be triggered
         # via a direct API call).
         _src = next((s for s in CRAWLER_SOURCES if s["id"] == spider), None)
         if _src and not _source_available(_src):
-            return jsonify({
-                "status": "error",
-                "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
+                    }
+                ),
+                400,
+            )
         # OAI date window — accept only a safe YYYY-MM-DD shape; ignore anything else.
         _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         from_date = data.get("from_date")
         until_date = data.get("until_date")
-        from_date = from_date if (from_date and _date_re.match(str(from_date))) else None
-        until_date = until_date if (until_date and _date_re.match(str(until_date))) else None
+        from_date = (
+            from_date if (from_date and _date_re.match(str(from_date))) else None
+        )
+        until_date = (
+            until_date if (until_date and _date_re.match(str(until_date))) else None
+        )
         try:
             # Derive project root and script path
             project_root = os.path.dirname(
@@ -2946,6 +3125,137 @@ def crawler_status():
     return jsonify({"status": "running" if running else "idle"})
 
 
+@app.route("/api/partner/crawl/start", methods=["POST"])
+def partner_crawl_start():
+    """Let a partner (API key) trigger a UNILAG crawl for their own use —
+    deliberately a much narrower capability than the admin /api/crawler/start:
+    institution is always "unilag" (a key can't point the crawler anywhere
+    else), target is capped far lower, and each key can only trigger one
+    crawl per _PARTNER_CRAWL_COOLDOWN_S. A crawl fans out to a dozen
+    third-party APIs and can end in real DOCiD registrations — nothing
+    partner-triggered should be as unrestrained as the admin path.
+
+    Shares crawler_process/crawler_lock/crawler_monitor with the admin
+    trigger, so a partner crawl and an admin crawl can't run concurrently
+    either way — whichever started first just holds the lock.
+    """
+    global crawler_process
+
+    key_hash = hashlib.sha256(
+        request.headers.get("X-API-Key", "").encode("utf-8")
+    ).hexdigest()
+    now = time.time()
+    last = _partner_crawl_last.get(key_hash)
+    if last and now - last < _PARTNER_CRAWL_COOLDOWN_S:
+        wait = int(_PARTNER_CRAWL_COOLDOWN_S - (now - last))
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"Crawl cooldown active — try again in {wait}s",
+                }
+            ),
+            429,
+        )
+
+    with crawler_lock:
+        if crawler_process and crawler_process.poll() is None:
+            return (
+                jsonify({"status": "error", "message": "A crawl is already running"}),
+                400,
+            )
+
+        data = request.get_json(silent=True) or {}
+        target = min(max(int(data.get("target", 20)), 1), 50)
+        spider = data.get("spider", "openalex")
+        _allowed_spiders = (
+            "openalex",
+            "crossref",
+            "arxiv",
+            "orcid",
+            "semantic_scholar",
+            "europepmc",
+            "core",
+            "pubmed",
+            "openaire",
+            "doaj",
+            "ajol",
+        )
+        if spider not in _allowed_spiders:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Unknown or unavailable spider: {spider}",
+                    }
+                ),
+                400,
+            )
+        _src = next((s for s in CRAWLER_SOURCES if s["id"] == spider), None)
+        if _src and not _source_available(_src):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
+                    }
+                ),
+                400,
+            )
+        boost_special = bool(data.get("boost_special", True))
+
+        try:
+            project_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            script_path = os.path.join(
+                project_root, "scripts", "crawl_multi_institution.py"
+            )
+            cmd = [
+                sys.executable,
+                script_path,
+                "--target",
+                str(target),
+                "--institutions",
+                "unilag",
+                "--spider",
+                spider,
+            ]
+            if not boost_special:
+                cmd.append("--no-boost-special")
+
+            logger.info("Partner-triggered crawl: %s", " ".join(cmd))
+            env = dict(os.environ, PYTHONUNBUFFERED="1")
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                env=env,
+            )
+            crawler_process = process
+            threading.Thread(
+                target=crawler_monitor, args=(process,), daemon=True
+            ).start()
+            _partner_crawl_last[key_hash] = now
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": f"Crawl started — target {target} papers (UNILAG, {spider})",
+                }
+            )
+        except Exception as e:
+            logger.error("partner_crawl_start: %s", e)
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/partner/crawl/status")
+def partner_crawl_status():
+    with crawler_lock:
+        running = crawler_process is not None and crawler_process.poll() is None
+    return jsonify({"status": "running" if running else "idle"})
+
+
 #  Health Check Endpoint for Render
 
 
@@ -2966,6 +3276,7 @@ def health_check():
     from datetime import datetime
 
     from sqlalchemy import text
+
     from uraas.config.methodology import METHODOLOGY
 
     t_start = time.monotonic()
@@ -3009,6 +3320,7 @@ def health_check():
         storage_path = config.STORAGE_PATH
         if os.path.exists(storage_path):
             import shutil
+
             stat = shutil.disk_usage(storage_path)
             free_gb = stat.free / (1024**3)
             health_status["checks"]["disk_space_gb"] = round(free_gb, 2)
@@ -3168,15 +3480,17 @@ def get_unilag_report():
 # file gates them automatically).  The approve/reject token endpoints are
 # intentionally PUBLIC — the token itself is the credential.
 
-ADMIN_ENDPOINTS.update({
-    "ir_status",
-    "ir_collections",
-    "ir_live_stats",
-    "ir_queue_batch",
-    "ir_list_batches",
-    "ir_batch_status",
-    "ir_test_harvest",
-})
+ADMIN_ENDPOINTS.update(
+    {
+        "ir_status",
+        "ir_collections",
+        "ir_live_stats",
+        "ir_queue_batch",
+        "ir_list_batches",
+        "ir_batch_status",
+        "ir_test_harvest",
+    }
+)
 
 
 @app.route("/api/ir/test-harvest", methods=["POST"])
@@ -3199,25 +3513,53 @@ def ir_test_harvest():
     from_date = (data.get("from_date") or "").strip() or None
 
     if not email or "@" not in email:
-        return jsonify({"status": "error", "message": "A valid email address is required"}), 400
+        return (
+            jsonify(
+                {"status": "error", "message": "A valid email address is required"}
+            ),
+            400,
+        )
 
     from uraas.config.institutions import get_registry as _get_reg
+
     _reg = _get_reg()
     inst_cfg = _reg.get(institution)
     if not inst_cfg:
-        return jsonify({"status": "error", "message": f"Unknown institution: {institution}"}), 400
+        return (
+            jsonify(
+                {"status": "error", "message": f"Unknown institution: {institution}"}
+            ),
+            400,
+        )
     if not inst_cfg.oai_endpoint:
-        return jsonify({"status": "error", "message": f"'{institution}' has no OAI endpoint configured"}), 400
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"'{institution}' has no OAI endpoint configured",
+                }
+            ),
+            400,
+        )
 
-    import subprocess, sys as _sys
+    import subprocess
+    import sys as _sys
+
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "scripts", "test_harvest_50.py",
+        "scripts",
+        "test_harvest_50.py",
     )
-    cmd = [_sys.executable, script_path,
-           "--institution", institution,
-           "--count", str(count),
-           "--email", email]
+    cmd = [
+        _sys.executable,
+        script_path,
+        "--institution",
+        institution,
+        "--count",
+        str(count),
+        "--email",
+        email,
+    ]
     if from_date:
         cmd.extend(["--from-date", from_date])
 
@@ -3230,6 +3572,7 @@ def ir_test_harvest():
             bufsize=1,
             env=env,
         )
+
         # Stream output via existing SocketIO terminal
         def _monitor():
             live_filter = _LiveFeedFilter()
@@ -3239,15 +3582,21 @@ def ir_test_harvest():
                     socketio.emit("terminal_output", {"line": line_text})
             process.wait()
             socketio.emit("terminal_output", {"line": "[TEST HARVEST] Complete."})
+
         threading.Thread(target=_monitor, daemon=True).start()
 
-        return jsonify({
-            "status": "started",
-            "message": f"Dry-run harvest started for {inst_cfg.name}. Preview will be emailed to {email}.",
-            "institution": inst_cfg.name,
-            "count": count,
-            "email": email,
-        }), 202
+        return (
+            jsonify(
+                {
+                    "status": "started",
+                    "message": f"Dry-run harvest started for {inst_cfg.name}. Preview will be emailed to {email}.",
+                    "institution": inst_cfg.name,
+                    "count": count,
+                    "email": email,
+                }
+            ),
+            202,
+        )
     except Exception as exc:
         logger.error("ir_test_harvest: %s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500
@@ -3257,6 +3606,7 @@ def ir_test_harvest():
 def ir_status():
     """Check connectivity to the live DSpace IR (no credentials needed for read)."""
     from uraas.services.ir_client import DSpaceClient
+
     client = DSpaceClient()
     result = client.probe()
     return jsonify(result), 200 if result.get("ok") else 503
@@ -3266,6 +3616,7 @@ def ir_status():
 def ir_collections():
     """List DSpace collections the configured account can submit to."""
     from uraas.services.ir_client import DSpaceClient
+
     try:
         client = DSpaceClient()
         client.login()
@@ -3280,6 +3631,7 @@ def ir_collections():
 def ir_live_stats():
     """Composite live stats tile pulled directly from the UNILAG DSpace IR."""
     from uraas.services.ir_client import DSpaceClient
+
     try:
         client = DSpaceClient()
         stats = client.get_live_stats()
@@ -3314,9 +3666,17 @@ def ir_queue_batch():
     if not item_ids:
         return jsonify({"status": "error", "message": "item_ids required"}), 400
     if not isinstance(item_ids, list) or not all(isinstance(i, int) for i in item_ids):
-        return jsonify({"status": "error", "message": "item_ids must be a list of integers"}), 400
+        return (
+            jsonify(
+                {"status": "error", "message": "item_ids must be a list of integers"}
+            ),
+            400,
+        )
     if len(item_ids) > 500:
-        return jsonify({"status": "error", "message": "Maximum 500 items per batch"}), 400
+        return (
+            jsonify({"status": "error", "message": "Maximum 500 items per batch"}),
+            400,
+        )
     if not collection_uuid:
         return jsonify({"status": "error", "message": "collection_uuid required"}), 400
 
@@ -3341,27 +3701,37 @@ def ir_approve_batch(token):
     Renders a plain HTML confirmation page so it works directly in a browser
     after the approver clicks the link in their email.
     """
-    from uraas.services.batch_approval import approve_batch
-
     # Minimal token sanity-check (URL-safe base64 chars only)
     import re as _re
-    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
-        return _approval_html("Invalid Link", "The approval link is malformed.", ok=False), 400
+
+    from uraas.services.batch_approval import approve_batch
+
+    if not token or not _re.match(r"^[A-Za-z0-9_\-]{10,128}$", token):
+        return (
+            _approval_html("Invalid Link", "The approval link is malformed.", ok=False),
+            400,
+        )
 
     result = approve_batch(token)
 
     if result["status"] == "approved":
-        return _approval_html(
-            "Deposit Approved",
-            result["message"],
-            ok=True,
-        ), 200
+        return (
+            _approval_html(
+                "Deposit Approved",
+                result["message"],
+                ok=True,
+            ),
+            200,
+        )
     elif result["status"] == "already_actioned":
-        return _approval_html(
-            "Already Actioned",
-            result["message"],
-            ok=True,
-        ), 200
+        return (
+            _approval_html(
+                "Already Actioned",
+                result["message"],
+                ok=True,
+            ),
+            200,
+        )
     elif result["status"] == "expired":
         return _approval_html("Link Expired", result["message"], ok=False), 410
     else:
@@ -3371,21 +3741,30 @@ def ir_approve_batch(token):
 @app.route("/api/ir/batch/<token>/reject", methods=["GET"])
 def ir_reject_batch(token):
     """Email rejection link — no login required; token is the credential."""
+    import re as _re
+
     from uraas.services.batch_approval import reject_batch
 
-    import re as _re
-    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
-        return _approval_html("Invalid Link", "The rejection link is malformed.", ok=False), 400
+    if not token or not _re.match(r"^[A-Za-z0-9_\-]{10,128}$", token):
+        return (
+            _approval_html(
+                "Invalid Link", "The rejection link is malformed.", ok=False
+            ),
+            400,
+        )
 
     reason = request.args.get("reason", "Rejected via email link")
     result = reject_batch(token, reason=reason)
 
     if result["status"] == "rejected":
-        return _approval_html(
-            "Batch Rejected",
-            result["message"],
-            ok=False,
-        ), 200
+        return (
+            _approval_html(
+                "Batch Rejected",
+                result["message"],
+                ok=False,
+            ),
+            200,
+        )
     elif result["status"] == "already_actioned":
         return _approval_html("Already Actioned", result["message"], ok=True), 200
     else:
@@ -3396,6 +3775,7 @@ def ir_reject_batch(token):
 def ir_list_batches():
     """List all deposit batches (admin panel)."""
     from uraas.services.batch_approval import get_batches
+
     try:
         limit = min(int(request.args.get("limit", 50)), 200)
         batches = get_batches(limit=limit)
@@ -3408,9 +3788,11 @@ def ir_list_batches():
 @app.route("/api/ir/batch/<token>/status")
 def ir_batch_status(token):
     """Get status of a specific batch (admin polling)."""
-    from uraas.services.batch_approval import get_batch
     import re as _re
-    if not token or not _re.match(r'^[A-Za-z0-9_\-]{10,128}$', token):
+
+    from uraas.services.batch_approval import get_batch
+
+    if not token or not _re.match(r"^[A-Za-z0-9_\-]{10,128}$", token):
         return jsonify({"status": "error", "message": "Invalid token"}), 400
     batch = get_batch(token)
     if not batch:
@@ -3486,7 +3868,6 @@ def api_version():
             ],
         }
     )
-
 
 
 #  Run

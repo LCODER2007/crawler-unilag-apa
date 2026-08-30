@@ -49,7 +49,9 @@ class InstitutionProfile:
                 logging.getLogger(__name__).info(
                     "Comparator: ROR match empty for %s (%s), fell back to "
                     "institution-name match (%d papers)",
-                    self.name, self.ror_id, len(items),
+                    self.name,
+                    self.ror_id,
+                    len(items),
                 )
                 ror_filter = Item.institution.ilike(f"%{self.name}%")
         self.metrics["total_papers"] = len(items)

@@ -37,6 +37,7 @@ def _looks_mojibake(text: str) -> bool:
     encoding bug (see parse_record())."""
     return bool(text) and bool(_MOJIBAKE_RE.search(text))
 
+
 _NS = {
     "oai": "http://www.openarchives.org/OAI/2.0/",
     "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
@@ -102,9 +103,7 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         self.from_date = self._normalize_date(from_date) or self._default_from()
         self.until_date = self._normalize_date(until_date)
         self.oai_set = (
-            oai_set
-            or getattr(self.institution_config, "oai_set", None)
-            or None
+            oai_set or getattr(self.institution_config, "oai_set", None) or None
         )
 
         self._accepted = 0
@@ -133,6 +132,7 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def _list_identifiers_url(self, resumption_token: str = "") -> str:
         from urllib.parse import urlencode
+
         if resumption_token:
             return f"{self.oai_endpoint}?{urlencode({'verb': 'ListIdentifiers', 'resumptionToken': resumption_token})}"
         params = {
@@ -148,17 +148,23 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def _get_record_url(self, identifier: str) -> str:
         from urllib.parse import urlencode
+
         return f"{self.oai_endpoint}?{urlencode({'verb': 'GetRecord', 'metadataPrefix': 'oai_dc', 'identifier': identifier})}"
 
     async def start(self):
         url = self._list_identifiers_url()
         self.logger.info("[OAI ListIdentifiers] %s", url)
-        yield scrapy.Request(url=url, callback=self.parse_identifiers, meta={"oai": True})
+        yield scrapy.Request(
+            url=url, callback=self.parse_identifiers, meta={"oai": True}
+        )
 
     def parse_identifiers(self, response):
         """Parse ListIdentifiers page — extract identifiers, yield GetRecord requests."""
         if response.status == 500:
-            self.logger.error("OAI ListIdentifiers 500 — server error on endpoint %s", self.oai_endpoint)
+            self.logger.error(
+                "OAI ListIdentifiers 500 — server error on endpoint %s",
+                self.oai_endpoint,
+            )
             return
 
         sel = Selector(text=response.text, type="xml")
@@ -167,10 +173,14 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
 
         error = sel.xpath("//oai:error/@code").get()
         if error:
-            self.logger.warning("OAI error '%s': %s", error, sel.xpath("//oai:error/text()").get() or "")
+            self.logger.warning(
+                "OAI error '%s': %s", error, sel.xpath("//oai:error/text()").get() or ""
+            )
             return
 
-        identifiers = sel.xpath("//oai:ListIdentifiers/oai:header[not(@status='deleted')]/oai:identifier/text()").getall()
+        identifiers = sel.xpath(
+            "//oai:ListIdentifiers/oai:header[not(@status='deleted')]/oai:identifier/text()"
+        ).getall()
         self.logger.info("[OAI] received %d identifiers in this page", len(identifiers))
 
         for ident in identifiers:
@@ -188,7 +198,9 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         token = sel.xpath("//oai:ListIdentifiers/oai:resumptionToken/text()").get()
         if token and token.strip() and self._accepted < self.target_limit:
             next_url = self._list_identifiers_url(token.strip())
-            yield scrapy.Request(url=next_url, callback=self.parse_identifiers, meta={"oai": True})
+            yield scrapy.Request(
+                url=next_url, callback=self.parse_identifiers, meta={"oai": True}
+            )
 
     def parse_record(self, response):
         """Parse GetRecord response and yield an item if it passes SC gate."""
@@ -274,7 +286,8 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
             return
         self.logger.info(
             "OAI mojibake title repaired via REST: %r -> %r",
-            corrupted_title[:60], clean_title[:60],
+            corrupted_title[:60],
+            clean_title[:60],
         )
         yield from self._build_and_yield_item(dc, clean_title)
 
@@ -286,14 +299,40 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
 
     def _build_and_yield_item(self, dc, title):
-        creators = [c.strip() for c in dc.xpath("./dc:creator/text()").getall() if c and c.strip()]
-        subjects = [s.strip() for s in dc.xpath("./dc:subject/text()").getall() if s and s.strip()]
-        descriptions = [d.strip() for d in dc.xpath("./dc:description/text()").getall() if d and d.strip()]
-        identifiers = [i.strip() for i in dc.xpath("./dc:identifier/text()").getall() if i and i.strip()]
-        dates = [d.strip() for d in dc.xpath("./dc:date/text()").getall() if d and d.strip()]
-        rights = [r.strip() for r in dc.xpath("./dc:rights/text()").getall() if r and r.strip()]
+        creators = [
+            c.strip()
+            for c in dc.xpath("./dc:creator/text()").getall()
+            if c and c.strip()
+        ]
+        subjects = [
+            s.strip()
+            for s in dc.xpath("./dc:subject/text()").getall()
+            if s and s.strip()
+        ]
+        descriptions = [
+            d.strip()
+            for d in dc.xpath("./dc:description/text()").getall()
+            if d and d.strip()
+        ]
+        identifiers = [
+            i.strip()
+            for i in dc.xpath("./dc:identifier/text()").getall()
+            if i and i.strip()
+        ]
+        dates = [
+            d.strip() for d in dc.xpath("./dc:date/text()").getall() if d and d.strip()
+        ]
+        rights = [
+            r.strip()
+            for r in dc.xpath("./dc:rights/text()").getall()
+            if r and r.strip()
+        ]
         doc_type = (dc.xpath("./dc:type/text()").get() or "").strip()
-        languages = [l.strip() for l in dc.xpath("./dc:language/text()").getall() if l and l.strip()]
+        languages = [
+            l.strip()
+            for l in dc.xpath("./dc:language/text()").getall()
+            if l and l.strip()
+        ]
 
         url, doi = self._pick_url_and_doi(identifiers)
         pub_date = self._pick_publication_date(dates)
@@ -365,12 +404,19 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         if not dates:
             return ""
         issued = [d for d in dates if "T" not in d]
-        return (issued[0] if issued else dates[-1])
+        return issued[0] if issued else dates[-1]
 
     @staticmethod
     def _map_rights(rights):
         joined = " ".join(rights).lower()
-        open_markers = ("creativecommons.org", "cc0", "cc by", "public domain", "open access", "openaccess")
+        open_markers = (
+            "creativecommons.org",
+            "cc0",
+            "cc by",
+            "public domain",
+            "open access",
+            "openaccess",
+        )
         if any(m in joined for m in open_markers):
             return "info:eu-repo/semantics/openAccess"
         return "info:eu-repo/semantics/restrictedAccess"

@@ -118,7 +118,9 @@ def score_item_alignment(
                 if doc_vec is not None and pillar_embs is not None:
                     cosine = float(doc_vec @ pillar_embs[(fkey, pkey)])
                     # Rescale past the unrelated-text baseline so noise -> 0.
-                    semantic = max(0.0, (cosine - SEMANTIC_FLOOR) / (1.0 - SEMANTIC_FLOOR))
+                    semantic = max(
+                        0.0, (cosine - SEMANTIC_FLOOR) / (1.0 - SEMANTIC_FLOOR)
+                    )
                     hybrid = 100.0 * (
                         SEMANTIC_WEIGHT * semantic + KEYWORD_WEIGHT * keyword_score
                     )
@@ -135,9 +137,7 @@ def score_item_alignment(
                 }
             if pillars_out:
                 result[fkey] = {
-                    "overall": round(
-                        max(p["score"] for p in pillars_out.values()), 1
-                    ),
+                    "overall": round(max(p["score"] for p in pillars_out.values()), 1),
                     "pillars": pillars_out,
                 }
 

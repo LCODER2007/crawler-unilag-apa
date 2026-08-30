@@ -122,10 +122,16 @@ def apply_work(session, item, work):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--limit", type=int, default=0, help="Max items to process (0 = all)")
     parser.add_argument(
-        "--force", action="store_true", help="Re-fetch items that already have affiliation data"
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Max items to process (0 = all)"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-fetch items that already have affiliation data",
     )
     args = parser.parse_args()
 
@@ -147,7 +153,9 @@ def main():
             items = items[: args.limit]
 
         print("=" * 64)
-        print(f"Items to enrich: {len(items)}  (already enriched, skipped: {len(enriched)})")
+        print(
+            f"Items to enrich: {len(items)}  (already enriched, skipped: {len(enriched)})"
+        )
         print("=" * 64)
         if not args.apply:
             print("[DRY RUN] No API calls or writes. Re-run with --apply.")

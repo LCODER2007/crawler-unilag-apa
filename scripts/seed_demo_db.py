@@ -14,13 +14,21 @@ copies it in), so HF Spaces always starts with data even after a restart.
 """
 
 import os
+import random
 import sys
 from datetime import datetime, timedelta
-import random
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import Author, Base, Collection, Community, Item, engine, SessionLocal
+from uraas.database import (
+    Author,
+    Base,
+    Collection,
+    Community,
+    Item,
+    SessionLocal,
+    engine,
+)
 from uraas.utils.ark_generator import ark_generator
 
 DEMO_PAPERS = [
@@ -128,41 +136,103 @@ DEMO_PAPERS = [
 
 # Pad to 30 papers
 _extra_titles = [
-    ("Ubuntu Philosophy and Collective Well-being in Contemporary African Ethics", "african_literature,indigenous_knowledge"),
-    ("Traditional Water Management Practices of the Niger Delta Communities", "indigenous_knowledge,cultural_heritage"),
-    ("Afrobeat as Cultural Heritage: Fela Kuti's Archive at University of Lagos", "cultural_heritage,african_literature"),
-    ("Endangered Languages of the Benue-Congo Region: A Documentation Framework", "indigenous_knowledge,oral_tradition"),
-    ("Sacred Groves as Living Cultural Heritage in Yorubaland", "cultural_heritage,indigenous_knowledge"),
-    ("Knowledge Repatriation: Returning Benin Bronzes and Digital Surrogates", "cultural_heritage,postcolonial_studies"),
-    ("Decolonising Cartography: Mapping Indigenous Territories in Nigeria", "indigenous_knowledge,postcolonial_studies"),
-    ("Nollywood and the Commodification of Yoruba Oral Narratives", "african_literature,oral_tradition"),
-    ("Traditional Ecological Knowledge and Biodiversity in Lagos Wetlands", "indigenous_knowledge,cultural_heritage"),
-    ("Precolonial Trans-Saharan Trade Networks: New Archaeological Evidence", "cultural_heritage,african_literature"),
-    ("African Proverbs in Contemporary Diplomatic Discourse", "oral_tradition,indigenous_knowledge"),
-    ("The Ogboni Society: Sacred Brotherhood and Political Power in Yorubaland", "indigenous_knowledge,cultural_heritage"),
-    ("Digital Humanities and African Archival Futures", "cultural_heritage,african_literature"),
-    ("Ancestral Veneration Practices in Urban Yoruba Communities", "indigenous_knowledge,oral_tradition"),
-    ("Linguistic Rights and African Language Policy in Nigerian Universities", "african_literature,indigenous_knowledge"),
-    ("Community Archives and the Decolonisation of Memory in West Africa", "cultural_heritage,postcolonial_studies"),
-    ("Trado-Medical Practitioners and the Nigerian Health System", "indigenous_knowledge,cultural_heritage"),
-    ("Ifa Divination Corpus: Computational Approaches to Sacred Oral Literature", "oral_tradition,indigenous_knowledge"),
-    ("Pan-African Student Movements and the Politics of Knowledge Production", "postcolonial_studies,african_literature"),
-    ("Nok Terracotta Figurines: New Dating Evidence from Northern Nigeria", "cultural_heritage,indigenous_knowledge"),
+    (
+        "Ubuntu Philosophy and Collective Well-being in Contemporary African Ethics",
+        "african_literature,indigenous_knowledge",
+    ),
+    (
+        "Traditional Water Management Practices of the Niger Delta Communities",
+        "indigenous_knowledge,cultural_heritage",
+    ),
+    (
+        "Afrobeat as Cultural Heritage: Fela Kuti's Archive at University of Lagos",
+        "cultural_heritage,african_literature",
+    ),
+    (
+        "Endangered Languages of the Benue-Congo Region: A Documentation Framework",
+        "indigenous_knowledge,oral_tradition",
+    ),
+    (
+        "Sacred Groves as Living Cultural Heritage in Yorubaland",
+        "cultural_heritage,indigenous_knowledge",
+    ),
+    (
+        "Knowledge Repatriation: Returning Benin Bronzes and Digital Surrogates",
+        "cultural_heritage,postcolonial_studies",
+    ),
+    (
+        "Decolonising Cartography: Mapping Indigenous Territories in Nigeria",
+        "indigenous_knowledge,postcolonial_studies",
+    ),
+    (
+        "Nollywood and the Commodification of Yoruba Oral Narratives",
+        "african_literature,oral_tradition",
+    ),
+    (
+        "Traditional Ecological Knowledge and Biodiversity in Lagos Wetlands",
+        "indigenous_knowledge,cultural_heritage",
+    ),
+    (
+        "Precolonial Trans-Saharan Trade Networks: New Archaeological Evidence",
+        "cultural_heritage,african_literature",
+    ),
+    (
+        "African Proverbs in Contemporary Diplomatic Discourse",
+        "oral_tradition,indigenous_knowledge",
+    ),
+    (
+        "The Ogboni Society: Sacred Brotherhood and Political Power in Yorubaland",
+        "indigenous_knowledge,cultural_heritage",
+    ),
+    (
+        "Digital Humanities and African Archival Futures",
+        "cultural_heritage,african_literature",
+    ),
+    (
+        "Ancestral Veneration Practices in Urban Yoruba Communities",
+        "indigenous_knowledge,oral_tradition",
+    ),
+    (
+        "Linguistic Rights and African Language Policy in Nigerian Universities",
+        "african_literature,indigenous_knowledge",
+    ),
+    (
+        "Community Archives and the Decolonisation of Memory in West Africa",
+        "cultural_heritage,postcolonial_studies",
+    ),
+    (
+        "Trado-Medical Practitioners and the Nigerian Health System",
+        "indigenous_knowledge,cultural_heritage",
+    ),
+    (
+        "Ifa Divination Corpus: Computational Approaches to Sacred Oral Literature",
+        "oral_tradition,indigenous_knowledge",
+    ),
+    (
+        "Pan-African Student Movements and the Politics of Knowledge Production",
+        "postcolonial_studies,african_literature",
+    ),
+    (
+        "Nok Terracotta Figurines: New Dating Evidence from Northern Nigeria",
+        "cultural_heritage,indigenous_knowledge",
+    ),
 ]
 
 for i, (title, cats) in enumerate(_extra_titles):
-    DEMO_PAPERS.append({
-        "title": title,
-        "abstract": f"Research paper examining {title.lower()}. "
-                    "This study contributes to the growing body of African Special Collections scholarship "
-                    "accessible through URAAS at the University of Lagos.",
-        "authors": [f"Demo Author {chr(65 + i)}", f"Demo Author {chr(66 + i)}"],
-        "doi": f"10.1234/uraas.demo.{i+1:03d}",
-        "source": ["OpenAlex", "DOAJ", "AJOL", "Crossref"][i % 4],
-        "year": str(2019 + (i % 6)),
-        "sc_score": round(1.5 + (i % 10) * 0.2, 1),
-        "sc_cats": cats,
-    })
+    DEMO_PAPERS.append(
+        {
+            "title": title,
+            "abstract": f"Research paper examining {title.lower()}. "
+            "This study contributes to the growing body of African Special Collections scholarship "
+            "accessible through URAAS at the University of Lagos.",
+            "authors": [f"Demo Author {chr(65 + i)}", f"Demo Author {chr(66 + i)}"],
+            "doi": f"10.1234/uraas.demo.{i+1:03d}",
+            "source": ["OpenAlex", "DOAJ", "AJOL", "Crossref"][i % 4],
+            "year": str(2019 + (i % 6)),
+            "sc_score": round(1.5 + (i % 10) * 0.2, 1),
+            "sc_cats": cats,
+        }
+    )
 
 
 def seed():
@@ -170,13 +240,17 @@ def seed():
     session = SessionLocal()
     try:
         if session.query(Item).count() >= 10:
-            print(f"Database already has {session.query(Item).count()} items — skipping seed.")
+            print(
+                f"Database already has {session.query(Item).count()} items — skipping seed."
+            )
             return
 
         print(f"Seeding {len(DEMO_PAPERS)} demo papers...")
 
         # Create a basic community/collection
-        community = session.query(Community).filter_by(name="Special Collections").first()
+        community = (
+            session.query(Community).filter_by(name="Special Collections").first()
+        )
         if not community:
             community = Community(
                 name="Special Collections",
@@ -186,7 +260,11 @@ def seed():
             session.add(community)
             session.flush()
 
-        collection = session.query(Collection).filter_by(name="Oral Traditions & Indigenous Knowledge").first()
+        collection = (
+            session.query(Collection)
+            .filter_by(name="Oral Traditions & Indigenous Knowledge")
+            .first()
+        )
         if not collection:
             collection = Collection(
                 name="Oral Traditions & Indigenous Knowledge",
@@ -228,7 +306,11 @@ def seed():
             item.collections.append(collection)
 
             for a_name in p["authors"]:
-                author = session.query(Author).filter_by(normalized_name=a_name.lower()).first()
+                author = (
+                    session.query(Author)
+                    .filter_by(normalized_name=a_name.lower())
+                    .first()
+                )
                 if not author:
                     author = Author(
                         name=a_name,

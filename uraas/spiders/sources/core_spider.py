@@ -28,7 +28,7 @@ unconditionally.
 
 import os
 import sys
-from urllib.parse import urlencode, quote
+from urllib.parse import quote, urlencode
 
 import scrapy
 
@@ -51,14 +51,30 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
         "USER_AGENT": f"URAAS/1.0 (+SC discovery; mailto:{config.OPENALEX_MAILTO})",
     }
 
-    def __init__(self, institution="unilag", target=50, boost_special=True, sc_only=False, *args, **kwargs):
+    def __init__(
+        self,
+        institution="unilag",
+        target=50,
+        boost_special=True,
+        sc_only=False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
         _truthy = {"1", "true", "yes", "on"}
-        self.boost_special = boost_special.lower() in _truthy if isinstance(boost_special, str) else bool(boost_special)
-        self.sc_only = sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
+        self.boost_special = (
+            boost_special.lower() in _truthy
+            if isinstance(boost_special, str)
+            else bool(boost_special)
+        )
+        self.sc_only = (
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
+        )
 
-        self.api_key = getattr(config, "CORE_API_KEY", "") or os.environ.get("CORE_API_KEY", "")
+        self.api_key = getattr(config, "CORE_API_KEY", "") or os.environ.get(
+            "CORE_API_KEY", ""
+        )
         if not self.api_key:
             self.logger.warning(
                 "CORE_API_KEY not set — running keyless (lower rate limit). "
@@ -73,7 +89,9 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
         self.ror_id = self.institution_config.ror
         self._accepted = 0
         self.max_results_scanned = config.MAX_RESULTS_SCANNED
-        self._affiliation_patterns = self.institution_config.affiliation_patterns or [self.institution_name]
+        self._affiliation_patterns = self.institution_config.affiliation_patterns or [
+            self.institution_name
+        ]
         self._init_dedup_index()
 
     def _headers(self):
@@ -96,15 +114,28 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
     async def start(self):
         if not self.sc_only:
             url = self._build_url(f'"{self.institution_name}"')
-            yield scrapy.Request(url=url, headers=self._headers(), callback=self.parse,
-                                 meta={"wave": "general", "query": f'"{self.institution_name}"', "offset": 0})
+            yield scrapy.Request(
+                url=url,
+                headers=self._headers(),
+                callback=self.parse,
+                meta={
+                    "wave": "general",
+                    "query": f'"{self.institution_name}"',
+                    "offset": 0,
+                },
+            )
 
         if self.boost_special:
             for seed in SC_SEED_KEYWORDS:
                 query = f'"{self.institution_name}" "{seed}"'
                 url = self._build_url(query)
-                yield scrapy.Request(url=url, headers=self._headers(), callback=self.parse,
-                                     meta={"wave": f"sc:{seed}", "query": query, "offset": 0}, priority=10)
+                yield scrapy.Request(
+                    url=url,
+                    headers=self._headers(),
+                    callback=self.parse,
+                    meta={"wave": f"sc:{seed}", "query": query, "offset": 0},
+                    priority=10,
+                )
 
     def parse(self, response):
         if self._accepted >= self.target_limit:
@@ -121,7 +152,9 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             if not title:
                 continue
             doi = (r.get("doi") or "").strip()
-            authors = [a.get("name", "") for a in (r.get("authors") or []) if a.get("name")]
+            authors = [
+                a.get("name", "") for a in (r.get("authors") or []) if a.get("name")
+            ]
             abstract = (r.get("abstract") or "").strip()
             pub_year = r.get("yearPublished") or ""
             # `.get("sourceFulltextUrls", [None])` only falls back to [None]
@@ -131,7 +164,9 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             # for the response (confirmed live 2026-07-19/20: killed CORE
             # mid-crawl, losing every remaining item + the pagination
             # continuation for that response). `or` handles both cases.
-            url_val = (r.get("sourceFulltextUrls") or [None])[0] or (f"https://doi.org/{doi}" if doi else "")
+            url_val = (r.get("sourceFulltextUrls") or [None])[0] or (
+                f"https://doi.org/{doi}" if doi else ""
+            )
             pdf_url = r.get("downloadUrl") or None
             doc_type = r.get("documentType") or ""
 
@@ -158,11 +193,19 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             self._accepted += 1
             item = {
-                "title": title, "abstract": abstract, "authors": authors, "doi": doi,
-                "url": url_val, "pdf_url": pdf_url, "publication_date": str(pub_year),
-                "source_repository": "CORE", "is_unilag_author": True,
-                "raw_affiliation": self.institution_name, "institution": self.institution_name,
-                "institution_ror": self.ror_id, "content_type": doc_type,
+                "title": title,
+                "abstract": abstract,
+                "authors": authors,
+                "doi": doi,
+                "url": url_val,
+                "pdf_url": pdf_url,
+                "publication_date": str(pub_year),
+                "source_repository": "CORE",
+                "is_unilag_author": True,
+                "raw_affiliation": self.institution_name,
+                "institution": self.institution_name,
+                "institution_ror": self.ror_id,
+                "content_type": doc_type,
                 # "strong" only via the staff-roster cross-check — the
                 # title/abstract text fallback can't distinguish
                 # authored-there from written-about (CORE has no author
@@ -174,14 +217,24 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
 
         offset = response.meta.get("offset", 0) + 100
         total = data.get("totalHits", 0)
-        if offset < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            offset < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             query = response.meta["query"]
             next_url = self._build_url(query, offset)
-            yield scrapy.Request(url=next_url, headers=self._headers(), callback=self.parse,
-                                 meta={"wave": wave, "query": query, "offset": offset})
+            yield scrapy.Request(
+                url=next_url,
+                headers=self._headers(),
+                callback=self.parse,
+                meta={"wave": wave, "query": query, "offset": offset},
+            )
 
     def closed(self, reason):
         self.logger.info(
             "CORE spider closed | %s | accepted=%d | skipped_known=%d | reason=%s",
-            self.institution_name, self._accepted, self._skipped_known, reason,
+            self.institution_name,
+            self._accepted,
+            self._skipped_known,
+            reason,
         )

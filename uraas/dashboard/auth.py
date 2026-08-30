@@ -62,7 +62,10 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if not current_role():
             if _wants_json():
-                return jsonify({"status": "error", "message": "Authentication required"}), 401
+                return (
+                    jsonify({"status": "error", "message": "Authentication required"}),
+                    401,
+                )
             return redirect(url_for("login", next=request.path))
         return view(*args, **kwargs)
 
@@ -77,10 +80,18 @@ def admin_required(view):
         role = current_role()
         if not role:
             if _wants_json():
-                return jsonify({"status": "error", "message": "Authentication required"}), 401
+                return (
+                    jsonify({"status": "error", "message": "Authentication required"}),
+                    401,
+                )
             return redirect(url_for("login", next=request.path))
         if role != ADMIN:
-            return jsonify({"status": "error", "message": "Administrator access required"}), 403
+            return (
+                jsonify(
+                    {"status": "error", "message": "Administrator access required"}
+                ),
+                403,
+            )
         return view(*args, **kwargs)
 
     return wrapped

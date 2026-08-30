@@ -5,7 +5,6 @@ import re
 from datetime import date
 
 from scrapy.exceptions import DropItem
-
 from sqlalchemy import func
 
 from uraas.config import config
@@ -45,6 +44,7 @@ class DatabaseStoragePipeline:
         elif config.DSPACE_USERNAME and config.DSPACE_PASSWORD:
             try:
                 from uraas.services.ir_client import DSpaceClient, IRConnectionError
+
                 self._ir_client = DSpaceClient()
                 self._ir_client.login()
                 # If no collection UUID is configured, use the first submittable one.
@@ -55,7 +55,8 @@ class DatabaseStoragePipeline:
                         _ir_log.info(
                             "IR auto-deposit: no DSPACE_COLLECTION_UUID set, "
                             "defaulting to first submittable collection: %s (%s)",
-                            self._ir_collection_uuid, cols[0]["name"],
+                            self._ir_collection_uuid,
+                            cols[0]["name"],
                         )
                     else:
                         _ir_log.warning(
@@ -64,7 +65,10 @@ class DatabaseStoragePipeline:
                         )
                         self._ir_client = None
                 if self._ir_client:
-                    _ir_log.info("IR auto-deposit enabled → collection %s", self._ir_collection_uuid)
+                    _ir_log.info(
+                        "IR auto-deposit enabled → collection %s",
+                        self._ir_collection_uuid,
+                    )
             except Exception as exc:
                 _ir_log.warning("IR auto-deposit disabled (login failed): %s", exc)
                 self._ir_client = None
@@ -116,9 +120,11 @@ class DatabaseStoragePipeline:
 
         new_doi = item.get("doi")
         if new_doi and _validate_doi(new_doi) and not existing.doi:
-            existing.doi = new_doi.replace("https://doi.org/", "").replace(
-                "http://dx.doi.org/", ""
-            ).strip()
+            existing.doi = (
+                new_doi.replace("https://doi.org/", "")
+                .replace("http://dx.doi.org/", "")
+                .strip()
+            )
             existing.dc_identifier_doi = existing.doi
             changed = True
 
@@ -138,9 +144,7 @@ class DatabaseStoragePipeline:
         authors_full = item.get("authors_full") or [
             {"name": a, "orcid": "", "ror": ""} for a in item.get("authors", [])
         ]
-        existing_names = {
-            (a.normalized_name or "").strip() for a in existing.authors
-        }
+        existing_names = {(a.normalized_name or "").strip() for a in existing.authors}
         for auth in authors_full:
             author_name = (auth.get("name") or "").strip()
             if not author_name:
@@ -178,7 +182,9 @@ class DatabaseStoragePipeline:
                 )
             except Exception as e:
                 self.session.rollback()
-                spider.logger.warning(f"Enrichment commit failed for id={existing.id}: {e}")
+                spider.logger.warning(
+                    f"Enrichment commit failed for id={existing.id}: {e}"
+                )
 
     def close_spider(self, spider):
         try:
@@ -209,7 +215,9 @@ class DatabaseStoragePipeline:
                 item["dc_subject"] = sanitize_text(item["dc_subject"])
 
             if not item.get("title"):
-                spider.logger.error("Item title became empty after sanitization, skipping")
+                spider.logger.error(
+                    "Item title became empty after sanitization, skipping"
+                )
                 return item
 
             doi = item.get("doi") or None
@@ -316,7 +324,9 @@ class DatabaseStoragePipeline:
 
             # SC gate: only store papers classified as Special Collections
             if sc_score <= 0.0:
-                raise DropItem(f"Not a special collection: {(item.get('title') or '')[:60]}")
+                raise DropItem(
+                    f"Not a special collection: {(item.get('title') or '')[:60]}"
+                )
 
             # Parse publication date — accept YYYY, YYYY-MM-DD, or full ISO timestamps.
             pub_date_raw = item.get("publication_date") or ""
@@ -324,6 +334,7 @@ class DatabaseStoragePipeline:
             if pub_date_raw:
                 try:
                     from datetime import datetime as _dt
+
                     pub_date_str = str(pub_date_raw).strip()
                     # BUG (found 2026-07-19, live-confirmed 0/54 items in
                     # production had publication_date set despite 40/54
@@ -335,7 +346,13 @@ class DatabaseStoragePipeline:
                     # strptime call failed silently, for every format, for
                     # every item, always. strptime doesn't need pre-slicing —
                     # it already fails cleanly on a non-matching string.
-                    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%Y-%m", "%Y"):
+                    for fmt in (
+                        "%Y-%m-%dT%H:%M:%SZ",
+                        "%Y-%m-%dT%H:%M:%S",
+                        "%Y-%m-%d",
+                        "%Y-%m",
+                        "%Y",
+                    ):
                         try:
                             pub_date = _dt.strptime(pub_date_str, fmt)
                             break
@@ -348,11 +365,16 @@ class DatabaseStoragePipeline:
             raw_type = (item.get("content_type") or item.get("dc_type") or "").strip()
             # Map verbose DSpace dc:type values to our controlled vocabulary
             _type_map = {
-                "thesis": "Thesis", "dissertation": "Thesis",
-                "article": "Article", "journal article": "Article",
-                "report": "Report", "technical report": "Report",
-                "conference paper": "Article", "book chapter": "Article",
-                "dataset": "Dataset", "preprint": "Article",
+                "thesis": "Thesis",
+                "dissertation": "Thesis",
+                "article": "Article",
+                "journal article": "Article",
+                "report": "Report",
+                "technical report": "Report",
+                "conference paper": "Article",
+                "book chapter": "Article",
+                "dataset": "Dataset",
+                "preprint": "Article",
             }
             doc_type = _type_map.get(raw_type.lower(), raw_type) if raw_type else None
 
@@ -372,17 +394,18 @@ class DatabaseStoragePipeline:
                 "Ethnomusicology": "oral_tradition",
             }
             _DOCTYPE_TO_CONTENT_TYPE = {
-                "Thesis": "thesis", "Dataset": "dataset",
-                "Report": "grey_literature", "Article": "research_paper",
+                "Thesis": "thesis",
+                "Dataset": "dataset",
+                "Report": "grey_literature",
+                "Article": "research_paper",
             }
             tk_content_type = None
             for hit in sc_hits:  # sc_hits sorted by -score; first match wins
                 tk_content_type = _SC_CATEGORY_TO_CONTENT_TYPE.get(hit["category"])
                 if tk_content_type:
                     break
-            final_content_type = (
-                tk_content_type
-                or _DOCTYPE_TO_CONTENT_TYPE.get(doc_type, "research_paper")
+            final_content_type = tk_content_type or _DOCTYPE_TO_CONTENT_TYPE.get(
+                doc_type, "research_paper"
             )
 
             # URL: fall back to None — never use a generic domain as unique URL
@@ -400,7 +423,9 @@ class DatabaseStoragePipeline:
                     "dc_rights", "info:eu-repo/semantics/restrictedAccess"
                 ),
                 dc_type=doc_type,
-                dc_language=item.get("dc_language") or item.get("language_code") or None,
+                dc_language=item.get("dc_language")
+                or item.get("language_code")
+                or None,
                 abstract=item.get("abstract") or None,
                 doi=doi,
                 url=item_url,
@@ -408,7 +433,9 @@ class DatabaseStoragePipeline:
                 source_repository=item.get("source_repository"),
                 pdf_url=item.get("pdf_url"),
                 content_type=final_content_type,
-                language_code=item.get("language_code") or item.get("dc_language") or None,
+                language_code=item.get("language_code")
+                or item.get("dc_language")
+                or None,
                 is_african_language=bool(item.get("is_african_language", False)),
                 # AI keywords (comma-separated)
                 dc_subject=item.get("dc_subject") or ", ".join(tags[:15]),
@@ -424,9 +451,7 @@ class DatabaseStoragePipeline:
                     if item.get("counts_by_year")
                     else None
                 ),
-                funders=(
-                    json.dumps(item["funders"]) if item.get("funders") else None
-                ),
+                funders=(json.dumps(item["funders"]) if item.get("funders") else None),
                 # Institution tracking for multi-institution analytics
                 institution=institution_name,
                 ror=institution_ror,
@@ -506,6 +531,7 @@ class DatabaseStoragePipeline:
                 doc.pid_source = "handle"
             elif item.get("ark"):
                 from datetime import datetime as _dt
+
                 doc.ark = item["ark"]
                 doc.ark_assigned_at = _dt.utcnow()
                 doc.pid_source = "ark"
@@ -532,6 +558,7 @@ class DatabaseStoragePipeline:
             # Score framework alignment (AU charters, Agenda 2063, etc.)
             try:
                 from uraas.services.alignment_engine import score_item_alignment
+
                 al_json, al_ver = score_item_alignment(
                     doc.title or "", doc.abstract or "", doc.dc_subject or ""
                 )
@@ -566,9 +593,12 @@ class DatabaseStoragePipeline:
                     pdf_path = None
                     if doc.pdf_url:
                         # Resolve local file path from stored File record if present
-                        f_rec = self.session.query(File).filter_by(item_id=doc.id).first()
+                        f_rec = (
+                            self.session.query(File).filter_by(item_id=doc.id).first()
+                        )
                         if f_rec and f_rec.file_path:
                             import os as _os
+
                             if _os.path.exists(f_rec.file_path):
                                 pdf_path = f_rec.file_path
                     result = self._ir_client.deposit_item(
@@ -577,18 +607,27 @@ class DatabaseStoragePipeline:
                     if result["status"] == "ok":
                         _ir_log.info(
                             "IR deposit OK → dspace_id=%s  title=%s",
-                            result.get("dspace_id"), (doc.title or "")[:60],
+                            result.get("dspace_id"),
+                            (doc.title or "")[:60],
                         )
                         print(
                             f"URAAS_IR_DEPOSIT: {(doc.title or '')[:80]}",
                             flush=True,
                         )
                     elif result["status"] == "duplicate":
-                        _ir_log.debug("IR deposit skipped (duplicate): %s", (doc.title or "")[:60])
+                        _ir_log.debug(
+                            "IR deposit skipped (duplicate): %s", (doc.title or "")[:60]
+                        )
                     else:
-                        _ir_log.warning("IR deposit failed: %s — %s", (doc.title or "")[:60], result.get("message"))
+                        _ir_log.warning(
+                            "IR deposit failed: %s — %s",
+                            (doc.title or "")[:60],
+                            result.get("message"),
+                        )
                 except Exception as exc:
-                    _ir_log.warning("IR deposit error for '%s': %s", (doc.title or "")[:60], exc)
+                    _ir_log.warning(
+                        "IR deposit error for '%s': %s", (doc.title or "")[:60], exc
+                    )
 
             return item
 

@@ -14,8 +14,8 @@ No API key needed. Rate limit: polite 2s delay.
 """
 
 import os
-import sys
 import re
+import sys
 from urllib.parse import urlencode, urljoin
 
 import scrapy
@@ -36,9 +36,18 @@ from uraas.spiders.mixins import DedupAwareSpiderMixin
 _SEARCH_BASE = "https://www.ajol.info/index.php/ajol/search/search"
 _DOI_RE = re.compile(r"10\.\d{4,}/\S+")
 _SC_SEEDS = [
-    "indigenous knowledge", "cultural heritage", "african literature",
-    "oral tradition", "ethnobotany", "traditional medicine", "postcolonial",
-    "yoruba", "igbo", "hausa", "nigeria", "west africa",
+    "indigenous knowledge",
+    "cultural heritage",
+    "african literature",
+    "oral tradition",
+    "ethnobotany",
+    "traditional medicine",
+    "postcolonial",
+    "yoruba",
+    "igbo",
+    "hausa",
+    "nigeria",
+    "west africa",
 ]
 
 
@@ -64,8 +73,13 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
     }
 
     def __init__(
-        self, institution="unilag", target=50, boost_special=True, sc_only=False,
-        *args, **kwargs,
+        self,
+        institution="unilag",
+        target=50,
+        boost_special=True,
+        sc_only=False,
+        *args,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
@@ -76,9 +90,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             else bool(boost_special)
         )
         self.sc_only = (
-            sc_only.lower() in _truthy
-            if isinstance(sc_only, str)
-            else bool(sc_only)
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
         )
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -116,7 +128,8 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             q = f'"{self.institution_name}"'
             seen_queries.add(q)
             yield Request(
-                self._build_url(q), callback=self.parse_list,
+                self._build_url(q),
+                callback=self.parse_list,
                 meta={"query": q, "page": 1},
             )
 
@@ -126,13 +139,17 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 if q not in seen_queries:
                     seen_queries.add(q)
                     yield Request(
-                        self._build_url(q), callback=self.parse_list,
-                        meta={"query": q, "page": 1}, priority=5,
+                        self._build_url(q),
+                        callback=self.parse_list,
+                        meta={"query": q, "page": 1},
+                        priority=5,
                     )
 
     def parse_list(self, response):
         if response.status in (403, 429):
-            self.logger.warning(f"AJOL blocked ({response.status}) — skipping: {response.url[:80]}")
+            self.logger.warning(
+                f"AJOL blocked ({response.status}) — skipping: {response.url[:80]}"
+            )
             return
         if self._accepted >= self.target_limit:
             self._stop_if_target_reached()
@@ -151,7 +168,10 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             if not link:
                 continue
             full_url = urljoin(response.url, link)
-            if "/article/view/" not in full_url and "/article/download/" not in full_url:
+            if (
+                "/article/view/" not in full_url
+                and "/article/download/" not in full_url
+            ):
                 continue
             if full_url in self._seen_urls:
                 continue
@@ -164,8 +184,13 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             authors_str = item.css("div.meta div.authors::text").get("") or ""
             listing_authors = [a.strip() for a in authors_str.split(",") if a.strip()]
             yield Request(
-                full_url, callback=self.parse_article,
-                meta={"title": title, "url": full_url, "listing_authors": listing_authors},
+                full_url,
+                callback=self.parse_article,
+                meta={
+                    "title": title,
+                    "url": full_url,
+                    "listing_authors": listing_authors,
+                },
             )
 
         # Pagination — AJOL's own `page=N` query param is silently ignored
@@ -189,14 +214,17 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             and self._accepted < self.target_limit
         ):
             yield Request(
-                next_page_href, callback=self.parse_list,
+                next_page_href,
+                callback=self.parse_list,
                 meta={"query": query, "page": page + 1},
             )
 
     def parse_article(self, response):
         """Extract metadata from an AJOL article detail page (OJS-based)."""
         if response.status in (403, 429):
-            self.logger.warning(f"AJOL blocked ({response.status}) on article — skipping")
+            self.logger.warning(
+                f"AJOL blocked ({response.status}) on article — skipping"
+            )
             return
         # h1.page-title/.article-title/h3.title never match live pages — the
         # real heading is h1.page-header (live-verified 2026-07-18). Keep the
@@ -247,9 +275,9 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             or ""
         ).strip()
 
-        pdf_url = (
-            response.css("a.pdf::attr(href), a[href*='download']::attr(href)").get()
-        )
+        pdf_url = response.css(
+            "a.pdf::attr(href), a[href*='download']::attr(href)"
+        ).get()
         if pdf_url:
             pdf_url = urljoin(response.url, pdf_url)
 

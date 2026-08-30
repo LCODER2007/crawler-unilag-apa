@@ -74,7 +74,9 @@ def main() -> int:
         try:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
-                print(f"  -> {stmt.split(' ON ')[0].replace('CREATE ', '').strip()} ensured")
+                print(
+                    f"  -> {stmt.split(' ON ')[0].replace('CREATE ', '').strip()} ensured"
+                )
         except Exception as e:
             print(f"  (index creation skipped: {e})")
 

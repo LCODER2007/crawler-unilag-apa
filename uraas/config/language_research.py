@@ -6,6 +6,7 @@ Extracted from uraas/dashboard/app.py language_research() route to:
   2. Eliminate the per-request re-compile of large regex patterns.
   3. Serve as the single source of truth for keyword lists.
 """
+
 import re
 
 # Tier-1: strong African-language / humanities signals (each match = 2 pts)

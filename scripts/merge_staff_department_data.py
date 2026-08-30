@@ -37,7 +37,9 @@ def _norm_orcid(v):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
     args = parser.parse_args()
 
     with open(TARGET, "r", encoding="utf-8") as f:

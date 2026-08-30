@@ -73,9 +73,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
             else bool(boost_special)
         )
         self.sc_only = (
-            sc_only.lower() in _truthy
-            if isinstance(sc_only, str)
-            else bool(sc_only)
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
         )
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -97,6 +95,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def _build_url(self, query: str, offset: int = 0) -> str:
         import urllib.parse
+
         q = urllib.parse.quote(query)
         return (
             f"{_S2_BASE}?query={q}"
@@ -144,9 +143,14 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # Cap at 8 highest-signal SC seeds to avoid exhausting the S2
             # 100 req/5 min budget before we get any results.
             _TOP_SEEDS = [
-                "indigenous knowledge", "oral tradition", "african literature",
-                "cultural heritage", "postcolonial", "ethnomusicology",
-                "pan-african", "traditional medicine",
+                "indigenous knowledge",
+                "oral tradition",
+                "african literature",
+                "cultural heritage",
+                "postcolonial",
+                "ethnomusicology",
+                "pan-african",
+                "traditional medicine",
             ]
             for seed in _TOP_SEEDS:
                 query = f"{self.institution_name} {seed}"
@@ -161,7 +165,9 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def parse(self, response):
         if response.status == 429:
-            self.logger.warning("S2 rate-limited (429) — request will be retried by Scrapy")
+            self.logger.warning(
+                "S2 rate-limited (429) — request will be retried by Scrapy"
+            )
             return
         if self._accepted >= self.target_limit:
             self._stop_if_target_reached()
@@ -193,7 +199,8 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
             pdf_url = oa.get("url") if oa else None
 
             url_val = (
-                f"https://doi.org/{doi}" if doi
+                f"https://doi.org/{doi}"
+                if doi
                 else (f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "")
             )
 
@@ -202,7 +209,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
             ]
 
             fields = []
-            for f in (paper.get("fieldsOfStudy") or []):
+            for f in paper.get("fieldsOfStudy") or []:
                 if isinstance(f, dict):
                     cat = f.get("category", "")
                     if cat:
@@ -261,7 +268,10 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
         # Offset-based pagination
         total = data.get("total", 0)
         offset = response.meta.get("offset", 0) + _LIMIT
-        if offset < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            offset < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             query = response.meta["query"]
             wave = response.meta["wave"]
             next_url = self._build_url(query, offset)

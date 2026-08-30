@@ -18,7 +18,6 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from uraas.config import config
 
-
 # Cache the dialect at import time — URL cannot change at runtime.
 _IS_SQLITE: bool = (config.DATABASE_URL or "").lower().startswith("sqlite")
 
@@ -94,7 +93,9 @@ class Community(Base):
     # ── Unit type + self-minted PID ──────────────────────────────────────────
     # unit_type: "faculty" (default) | "ace" (Africa Centre of Excellence)
     unit_type = Column(String(30), default="faculty")
-    pmd = Column(String(128))  # self-minted persistent ID (see ark_generator); unique index below
+    pmd = Column(
+        String(128)
+    )  # self-minted persistent ID (see ark_generator); unique index below
     pmd_assigned_at = Column(DateTime)
 
     collections = relationship("Collection", back_populates="community")
@@ -174,7 +175,9 @@ class Item(Base):
     # can't tell a paper authored AT the institution from one merely written
     # ABOUT it/someone there — see scripts/register_docid.py). Gates
     # automatic DOCID registration; per-source logic lives in each spider.
-    affiliation_confidence = Column(String(10), index=True)  # "strong" | "weak" | NULL (legacy rows)
+    affiliation_confidence = Column(
+        String(10), index=True
+    )  # "strong" | "weak" | NULL (legacy rows)
 
     # ── APA-specific fields ───────────────────────────────────────────────────
     # Institution ROR for multi-tenant comparison
@@ -290,7 +293,9 @@ class ItemAffiliation(Base):
     ror = Column(String(128), index=True)  # short form, e.g. "05rk03822"
     institution_name = Column(String(255))
     country_code = Column(String(2), index=True)  # ISO2 from OpenAlex
-    author_count = Column(Integer, default=1)  # authors at this institution on this paper
+    author_count = Column(
+        Integer, default=1
+    )  # authors at this institution on this paper
 
 
 class AlignmentAggregate(Base):
@@ -345,8 +350,8 @@ class DepositBatch(Base):
     # Values: pending_approval | approved | rejected | depositing | completed | failed
 
     approval_email = Column(String(255), nullable=False)
-    collection_uuid = Column(String(128))   # DSpace target collection UUID
-    collection_name = Column(String(255))   # for display only
+    collection_uuid = Column(String(128))  # DSpace target collection UUID
+    collection_name = Column(String(255))  # for display only
 
     # JSON array of local Item.id values to deposit, e.g. [1, 7, 42]
     item_ids_json = Column(Text, nullable=False, default="[]")
@@ -355,12 +360,12 @@ class DepositBatch(Base):
     deposited_count = Column(Integer, default=0)
     failed_count = Column(Integer, default=0)
 
-    notes = Column(Text)           # rejection reason, or first fatal error
+    notes = Column(Text)  # rejection reason, or first fatal error
     requested_by = Column(String(100))  # session username
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime)       # approval link expires after 48 h
+    expires_at = Column(DateTime)  # approval link expires after 48 h
     approved_at = Column(DateTime)
     completed_at = Column(DateTime)
 
@@ -381,10 +386,18 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False)  # partner label, e.g. "Africa PID Alliance / DOCiD"
-    key_hash = Column(String(64), unique=True, index=True, nullable=False)  # sha256 hex digest
-    key_prefix = Column(String(12), nullable=False)  # first chars only, for display/audit
-    scope = Column(String(20), default="read", nullable=False)  # "read" is the only scope for now — never admin
+    name = Column(
+        String(255), nullable=False
+    )  # partner label, e.g. "Africa PID Alliance / DOCiD"
+    key_hash = Column(
+        String(64), unique=True, index=True, nullable=False
+    )  # sha256 hex digest
+    key_prefix = Column(
+        String(12), nullable=False
+    )  # first chars only, for display/audit
+    scope = Column(
+        String(20), default="read", nullable=False
+    )  # "read" is the only scope for now — never admin
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100))  # admin session username that issued it
     last_used_at = Column(DateTime)
@@ -462,7 +475,9 @@ def sync_schema_columns():
                 try:
                     ddl_type = column.type.compile(dialect=engine.dialect)
                 except Exception as e:
-                    print(f"  [WARN] cannot compile DDL type for {table.name}.{column.name}: {e}")
+                    print(
+                        f"  [WARN] cannot compile DDL type for {table.name}.{column.name}: {e}"
+                    )
                     continue
                 stmt = f"ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl_type}"
                 try:
@@ -471,4 +486,8 @@ def sync_schema_columns():
                     added += 1
                 except Exception as e:
                     print(f"  [WARN] {stmt} failed: {e}")
-    print(f"  schema sync: {added} missing column(s) added" if added else "  schema sync: already in sync")
+    print(
+        f"  schema sync: {added} missing column(s) added"
+        if added
+        else "  schema sync: already in sync"
+    )

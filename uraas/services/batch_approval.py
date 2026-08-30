@@ -20,7 +20,7 @@ import threading
 from datetime import datetime
 
 from uraas.config import config
-from uraas.database import DepositBatch, Item, File, SessionLocal
+from uraas.database import DepositBatch, File, Item, SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ APPROVAL_LINK_TTL_HOURS = 48
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def queue_batch(
     *,
@@ -100,7 +101,10 @@ def approve_batch(token: str) -> dict:
     try:
         batch = db.query(DepositBatch).filter_by(token=token).first()
         if not batch:
-            return {"status": "not_found", "message": "Approval link not found or already used."}
+            return {
+                "status": "not_found",
+                "message": "Approval link not found or already used.",
+            }
         if batch.status != "pending_approval":
             return {
                 "status": "already_actioned",
@@ -143,7 +147,10 @@ def reject_batch(token: str, reason: str = "") -> dict:
     try:
         batch = db.query(DepositBatch).filter_by(token=token).first()
         if not batch:
-            return {"status": "not_found", "message": "Rejection link not found or already used."}
+            return {
+                "status": "not_found",
+                "message": "Rejection link not found or already used.",
+            }
         if batch.status != "pending_approval":
             return {
                 "status": "already_actioned",
@@ -191,6 +198,7 @@ def get_batches(limit: int = 50) -> list[dict]:
 
 # ── Internal deposit runner ───────────────────────────────────────────────────
 
+
 def _run_deposit(batch_id: int):
     """Background thread: iterate over the batch items and deposit each one."""
     from uraas.services.ir_client import DSpaceClient, IRConnectionError
@@ -223,7 +231,13 @@ def _run_deposit(batch_id: int):
         for item_id in item_ids:
             item = db.query(Item).filter_by(id=item_id).first()
             if not item:
-                deposit_log.append({"item_id": item_id, "status": "error", "message": "Not found in local DB"})
+                deposit_log.append(
+                    {
+                        "item_id": item_id,
+                        "status": "error",
+                        "message": "Not found in local DB",
+                    }
+                )
                 fail_count += 1
                 continue
 
@@ -233,11 +247,13 @@ def _run_deposit(batch_id: int):
                 "university of lagos" in (item.institution or "").lower()
             )
             if not is_unilag:
-                deposit_log.append({
-                    "item_id": item_id,
-                    "status": "skipped",
-                    "message": f"Not a UNILAG paper (institution: {item.institution!r})",
-                })
+                deposit_log.append(
+                    {
+                        "item_id": item_id,
+                        "status": "skipped",
+                        "message": f"Not a UNILAG paper (institution: {item.institution!r})",
+                    }
+                )
                 continue
 
             # Resolve local PDF path if one exists
@@ -245,6 +261,7 @@ def _run_deposit(batch_id: int):
             file_rec = db.query(File).filter_by(item_id=item_id).first()
             if file_rec and file_rec.file_path:
                 import os
+
                 candidate = file_rec.file_path
                 if not os.path.isabs(candidate):
                     candidate = os.path.join(config.STORAGE_PATH, candidate)
@@ -282,16 +299,23 @@ def _run_deposit(batch_id: int):
         batch.completed_at = datetime.utcnow()
         batch.updated_at = datetime.utcnow()
         if fail_count:
-            batch.notes = f"{fail_count} item(s) failed to deposit — see deposit_log for details"
+            batch.notes = (
+                f"{fail_count} item(s) failed to deposit — see deposit_log for details"
+            )
         db.commit()
         logger.info(
-            "Batch %s deposit complete: %d ok, %d failed", batch_id, ok_count, fail_count
+            "Batch %s deposit complete: %d ok, %d failed",
+            batch_id,
+            ok_count,
+            fail_count,
         )
 
     except Exception as exc:
         logger.exception("Unexpected error in deposit batch %s: %s", batch_id, exc)
         try:
-            _mark_failed(db, db.query(DepositBatch).filter_by(id=batch_id).first(), str(exc))
+            _mark_failed(
+                db, db.query(DepositBatch).filter_by(id=batch_id).first(), str(exc)
+            )
         except Exception:
             pass
     finally:
@@ -308,6 +332,7 @@ def _mark_failed(db, batch, reason: str):
 
 
 # ── Serialisation helper ──────────────────────────────────────────────────────
+
 
 def _batch_to_dict(batch: DepositBatch) -> dict:
     return {

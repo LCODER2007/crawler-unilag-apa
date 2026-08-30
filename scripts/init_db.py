@@ -9,13 +9,17 @@ import sys
 # Add project root to path (parent of scripts/)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from uraas.database import Collection, Community, SessionLocal, init_db, sync_schema_columns
-
 # Import citation tracker models so SQLAlchemy registers their tables with
 # Base.metadata before create_all() runs — otherwise citations,
 # citation_metrics, and author_metrics are never created.
 import uraas.services.citation_tracker  # noqa: F401
-
+from uraas.database import (
+    Collection,
+    Community,
+    SessionLocal,
+    init_db,
+    sync_schema_columns,
+)
 from uraas.utils.unilag_classifier import UNILAG_STRUCTURE
 
 # Base.metadata.create_all() (called by init_db() below) only creates tables

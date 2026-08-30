@@ -38,8 +38,14 @@ _NS = {
 _BATCH = 50
 # arXiv is primarily CS/STEM — only a few SC seed terms will yield results.
 _SC_RELEVANT = {
-    "indigenous", "cultural heritage", "traditional knowledge", "oral tradition",
-    "ethnobotany", "decolonial", "african literature", "postcolonial",
+    "indigenous",
+    "cultural heritage",
+    "traditional knowledge",
+    "oral tradition",
+    "ethnobotany",
+    "decolonial",
+    "african literature",
+    "postcolonial",
 }
 
 
@@ -69,9 +75,7 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
             else bool(boost_special)
         )
         self.sc_only = (
-            sc_only.lower() in _truthy
-            if isinstance(sc_only, str)
-            else bool(sc_only)
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
         )
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -105,8 +109,7 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # Combine institution with SC seeds that are relevant to arXiv
             inst_q = f'all:"{self.institution_name}"'
             priority_seeds = [
-                s for s in SC_SEED_KEYWORDS
-                if any(k in s.lower() for k in _SC_RELEVANT)
+                s for s in SC_SEED_KEYWORDS if any(k in s.lower() for k in _SC_RELEVANT)
             ][:8]
             for seed in priority_seeds:
                 q = f'{inst_q} AND all:"{seed}"'
@@ -140,9 +143,7 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
             self._seen_ids.add(arxiv_id)
 
             title = (
-                (entry.findtext("atom:title", "", _NS) or "")
-                .strip()
-                .replace("\n", " ")
+                (entry.findtext("atom:title", "", _NS) or "").strip().replace("\n", " ")
             )
             abstract = (
                 (entry.findtext("atom:summary", "", _NS) or "")
@@ -238,7 +239,10 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
         query = response.meta.get("query", "")
         start = response.meta.get("start", 0)
         next_start = start + _BATCH
-        if next_start < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            next_start < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             yield scrapy.Request(
                 self._build_url(query, next_start),
                 callback=self.parse,

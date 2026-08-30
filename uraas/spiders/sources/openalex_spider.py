@@ -225,8 +225,9 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             authorships_truncated = len(authorships) >= AUTHORSHIPS_TRUNCATION_LIMIT
 
             # ── Gate 2: Authorship ROR verification ──────────────────────────
-            if not authorships_truncated and not self.institution_config.verify_ror_in_authorships(
-                authorships
+            if (
+                not authorships_truncated
+                and not self.institution_config.verify_ror_in_authorships(authorships)
             ):
                 self._rejected_gate2 += 1
                 self.logger.debug(f"Gate 2 FAIL (no ROR match): {title[:60]}")
@@ -359,7 +360,9 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "counts_by_year": work.get("counts_by_year", []),
                 "openalex_id": work.get("id", ""),
                 "language_code": lang_code,
-                "is_african_language": bool(lang_code and lang_code in AFRICAN_LANG_CODES),
+                "is_african_language": bool(
+                    lang_code and lang_code in AFRICAN_LANG_CODES
+                ),
                 "funders": funders,
                 # Every accepted item passed the server-side ROR filter (Gate
                 # 1) at minimum — OpenAlex's own curated institution-linkage
@@ -440,11 +443,13 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             ror = f.get("ror")
             ror = ror.replace("https://ror.org/", "") if ror else None
             award_ids = [a for a in award_by_funder_id.get(fid, []) if a]
-            result.append({
-                "name": name,
-                "ror": ror,
-                "award_id": ", ".join(award_ids) if award_ids else None,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "ror": ror,
+                    "award_id": ", ".join(award_ids) if award_ids else None,
+                }
+            )
         return result
 
     def _extract_sdg_from_concepts(self, concepts: list) -> str:

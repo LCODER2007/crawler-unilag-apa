@@ -38,7 +38,10 @@ class Config:
     # configured. Intended for session-scoped use during test crawls
     # ($env:URAAS_DISABLE_IR_DEPOSIT = "1"), never written to .env.
     DISABLE_IR_DEPOSIT = os.getenv("URAAS_DISABLE_IR_DEPOSIT", "false").lower() in {
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
     # Dashboard
@@ -86,6 +89,7 @@ class Config:
             # live dashboard for remote users connecting to the UNILAG server.
             if "localhost" in self.DASHBOARD_CORS_ORIGINS:
                 import warnings
+
                 warnings.warn(
                     "DASHBOARD_CORS_ORIGINS still contains 'localhost' in production. "
                     "Set DASHBOARD_CORS_ORIGINS to the actual UNILAG HTTPS domain "
@@ -110,11 +114,15 @@ class Config:
 
     # ── Public dashboard URL (needed for approval email links) ────────────────
     # Set to the URL users reach the dashboard at (no trailing slash).
-    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "http://localhost:8080").rstrip("/")
+    DASHBOARD_BASE_URL = os.getenv(
+        "DASHBOARD_BASE_URL", "http://localhost:8080"
+    ).rstrip("/")
 
     # ── Live DSpace IR (api-ir.unilag.edu.ng) ────────────────────────────────
     # Backend API base — NOT the Angular frontend URL.
-    DSPACE_API_URL = os.getenv("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server").rstrip("/")
+    DSPACE_API_URL = os.getenv(
+        "DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server"
+    ).rstrip("/")
     DSPACE_USERNAME = os.getenv("DSPACE_USERNAME", "")
     DSPACE_PASSWORD = os.getenv("DSPACE_PASSWORD", "")
     # Target DSpace collection UUID for automatic crawl-time deposits.

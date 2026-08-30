@@ -34,7 +34,11 @@ from uraas.database import (
     db_year,
     db_year_month,
 )
-from uraas.services.sc_engine import SC_FILTER, category_breakdown, is_special_collection
+from uraas.services.sc_engine import (
+    SC_FILTER,
+    category_breakdown,
+    is_special_collection,
+)
 from uraas.utils.ai_classifier import (
     SPECIAL_COLLECTIONS,
     extract_keywords,
@@ -195,12 +199,16 @@ class URAASAnalyticsEngine:
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
-            q = session.query(
-                Author.name,
-                Author.orcid,
-                Author.ror,
-                func.count(Item.id).label("count"),
-            ).join(Author.items).filter(SC_FILTER)
+            q = (
+                session.query(
+                    Author.name,
+                    Author.orcid,
+                    Author.ror,
+                    func.count(Item.id).label("count"),
+                )
+                .join(Author.items)
+                .filter(SC_FILTER)
+            )
             if community_id:
                 q = (
                     q.join(Item.collections)
@@ -234,11 +242,7 @@ class URAASAnalyticsEngine:
             q = session.query(Item).filter(SC_FILTER)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
-            docs = (
-                q
-                .options(joinedload(Item.collections))
-                .all()
-            )
+            docs = q.options(joinedload(Item.collections)).all()
             edges: Dict[Tuple, int] = {}
             for doc in docs:
                 colls = sorted(c.name for c in doc.collections if c and c.name)
@@ -269,8 +273,7 @@ class URAASAnalyticsEngine:
 
             # Batch-fetch all File records once to avoid an O(N) query per paper.
             file_map: Dict[int, object] = {
-                row.item_id: row
-                for row in session.query(File).all()
+                row.item_id: row for row in session.query(File).all()
             }
 
             for comm in communities:
@@ -340,12 +343,13 @@ class URAASAnalyticsEngine:
         finally:
             session.close()
 
-
     def get_publications_by_year(self, institution: Optional[str] = None) -> List[Dict]:
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
-            q = session.query(db_year(Item.publication_date), func.count(Item.id)).filter(SC_FILTER)
+            q = session.query(
+                db_year(Item.publication_date), func.count(Item.id)
+            ).filter(SC_FILTER)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
             q = (
@@ -426,7 +430,11 @@ class URAASAnalyticsEngine:
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
-            q = session.query(Author.name, func.count(Item.id)).join(Author.items).filter(SC_FILTER)
+            q = (
+                session.query(Author.name, func.count(Item.id))
+                .join(Author.items)
+                .filter(SC_FILTER)
+            )
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
             q = q.group_by(Author.name).order_by(desc(func.count(Item.id))).limit(limit)
@@ -464,7 +472,9 @@ class URAASAnalyticsEngine:
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
-            q = session.query(db_year_month(Item.created_at), func.count(Item.id)).filter(SC_FILTER)
+            q = session.query(
+                db_year_month(Item.created_at), func.count(Item.id)
+            ).filter(SC_FILTER)
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
             q = q.group_by(db_year_month(Item.created_at)).order_by(
@@ -478,7 +488,9 @@ class URAASAnalyticsEngine:
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
-            q = session.query(func.date(Item.created_at), func.count(Item.id)).filter(SC_FILTER)
+            q = session.query(func.date(Item.created_at), func.count(Item.id)).filter(
+                SC_FILTER
+            )
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
             q = q.group_by(func.date(Item.created_at)).order_by(
@@ -708,7 +720,9 @@ class URAASAnalyticsEngine:
 
         session = SessionLocal()
         try:
-            q = session.query(Item.content_type, Item.tk_label, Item.dc_type).filter(SC_FILTER)
+            q = session.query(Item.content_type, Item.tk_label, Item.dc_type).filter(
+                SC_FILTER
+            )
             if inst_name:
                 q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
             items = q.all()
@@ -835,9 +849,7 @@ class URAASAnalyticsEngine:
             results: Dict[str, List] = {cat: [] for cat in SPECIAL_COLLECTIONS}
 
             for item_id, title, abstract, dc_subject in items:
-                cats = category_breakdown(
-                    title or "", abstract or "", dc_subject or ""
-                )
+                cats = category_breakdown(title or "", abstract or "", dc_subject or "")
                 for cat_result in cats:
                     cat = cat_result["category"]
                     if cat in results:
@@ -913,7 +925,10 @@ class URAASAnalyticsEngine:
                 "intra_african_pct": 0,
             },
             "themes": [{"category": c, "count": 0} for c in canonical],
-            "co_occurrence": {"labels": canonical, "matrix": [[0] * len(canonical) for _ in canonical]},
+            "co_occurrence": {
+                "labels": canonical,
+                "matrix": [[0] * len(canonical) for _ in canonical],
+            },
             "countries": [],
             "sdgs": [],
             "keywords": [],
@@ -926,6 +941,7 @@ class URAASAnalyticsEngine:
         _name_to_iso2 = {v.lower(): k for k, v in COUNTRY_NAMES.items()}
         try:
             from uraas.config import get_registry as _get_reg
+
             _inst_country: Dict[str, str] = {
                 cfg.name: _name_to_iso2.get(cfg.country.lower(), "")
                 for cfg in _get_reg().list_all()
@@ -1057,14 +1073,16 @@ class URAASAnalyticsEngine:
                 "kpis": {
                     "total_items": total_items,
                     "repo_total": repo_total,
-                    "pct_of_repo": round(total_items / repo_total * 100, 1)
-                    if repo_total
-                    else 0,
+                    "pct_of_repo": (
+                        round(total_items / repo_total * 100, 1) if repo_total else 0
+                    ),
                     "themes_represented": themes_represented,
                     "total_citations": total_citations,
-                    "intra_african_pct": round(intra_african / total_items * 100, 1)
-                    if total_items
-                    else 0,
+                    "intra_african_pct": (
+                        round(intra_african / total_items * 100, 1)
+                        if total_items
+                        else 0
+                    ),
                 },
                 "themes": [
                     {"category": c, "count": theme_counts[c]} for c in canonical
@@ -1375,7 +1393,9 @@ class URAASAnalyticsEngine:
                 ),
                 key=lambda p: -p["count"],
             )
-            countries = sorted({p["source"] for p in pairs} | {p["target"] for p in pairs})
+            countries = sorted(
+                {p["source"] for p in pairs} | {p["target"] for p in pairs}
+            )
             result = {"pairs": pairs, "countries": countries}
             analytics_cache.set(cache_key, result, ttl=1800)
             return result
@@ -1547,14 +1567,11 @@ class URAASAnalyticsEngine:
                     },
                     "geometry": {
                         "type": "LineString",
-                        "coordinates": great_circle_arc(
-                            src[0], src[1], dst[0], dst[1]
-                        ),
+                        "coordinates": great_circle_arc(src[0], src[1], dst[0], dst[1]),
                     },
                 }
             )
         return {"type": "FeatureCollection", "features": features}
-
 
     def get_pid_coverage(self, institution: Optional[str] = None) -> Dict:
         """Return PID coverage statistics — key metric for PID Alliance audiences.
@@ -1569,10 +1586,14 @@ class URAASAnalyticsEngine:
             if not total:
                 return {
                     "total": 0,
-                    "doi_count": 0, "doi_pct": 0.0,
-                    "orcid_count": 0, "orcid_pct": 0.0,
-                    "ark_count": 0, "ark_pct": 0.0,
-                    "ror_count": 0, "ror_pct": 0.0,
+                    "doi_count": 0,
+                    "doi_pct": 0.0,
+                    "orcid_count": 0,
+                    "orcid_pct": 0.0,
+                    "ark_count": 0,
+                    "ark_pct": 0.0,
+                    "ror_count": 0,
+                    "ror_pct": 0.0,
                 }
 
             doi_count = (
@@ -1612,20 +1633,30 @@ class URAASAnalyticsEngine:
 
             return {
                 "total": total,
-                "doi_count": doi_count, "doi_pct": _pct(doi_count),
-                "orcid_count": orcid_count, "orcid_pct": _pct(orcid_count),
-                "ark_count": ark_count, "ark_pct": _pct(ark_count),
-                "ror_count": ror_count, "ror_pct": _pct(ror_count),
+                "doi_count": doi_count,
+                "doi_pct": _pct(doi_count),
+                "orcid_count": orcid_count,
+                "orcid_pct": _pct(orcid_count),
+                "ark_count": ark_count,
+                "ark_pct": _pct(ark_count),
+                "ror_count": ror_count,
+                "ror_pct": _pct(ror_count),
             }
         except Exception as e:
             logger.error("get_pid_coverage: %s", e)
-            return {"total": 0, "doi_count": 0, "doi_pct": 0.0,
-                    "orcid_count": 0, "orcid_pct": 0.0,
-                    "ark_count": 0, "ark_pct": 0.0,
-                    "ror_count": 0, "ror_pct": 0.0}
+            return {
+                "total": 0,
+                "doi_count": 0,
+                "doi_pct": 0.0,
+                "orcid_count": 0,
+                "orcid_pct": 0.0,
+                "ark_count": 0,
+                "ark_pct": 0.0,
+                "ror_count": 0,
+                "ror_pct": 0.0,
+            }
         finally:
             session.close()
-
 
     # ── Knowledge Repatriation Index ─────────────────────────────────────────
 
@@ -1656,8 +1687,14 @@ class URAASAnalyticsEngine:
             sc_ids = self._get_sc_item_ids(session, institution)
             total = len(sc_ids)
             if not total:
-                return {"score": 0, "africa_led": 0, "north_south": 0,
-                        "unclassified": 0, "total": 0, "trend": []}
+                return {
+                    "score": 0,
+                    "africa_led": 0,
+                    "north_south": 0,
+                    "unclassified": 0,
+                    "total": 0,
+                    "trend": [],
+                }
 
             african_codes = set(COUNTRY_NAMES.keys())
 
@@ -1676,8 +1713,10 @@ class URAASAnalyticsEngine:
                 countries = {
                     row[0].upper()
                     for row in session.query(ItemAffiliation.country_code)
-                    .filter(ItemAffiliation.item_id == item_id,
-                            ItemAffiliation.country_code.isnot(None))
+                    .filter(
+                        ItemAffiliation.item_id == item_id,
+                        ItemAffiliation.country_code.isnot(None),
+                    )
                     .all()
                     if row[0]
                 }
@@ -1692,9 +1731,11 @@ class URAASAnalyticsEngine:
             # Fall back to coauthor_countries for items without affiliation records
             no_aff = [i for i in sc_ids if i not in aff_items]
             no_country_ids = set()
-            for row in (session.query(Item.id, Item.coauthor_countries)
-                        .filter(Item.id.in_(no_aff))
-                        .all()):
+            for row in (
+                session.query(Item.id, Item.coauthor_countries)
+                .filter(Item.id.in_(no_aff))
+                .all()
+            ):
                 codes_raw = (row[1] or "").strip()
                 if not codes_raw:
                     no_country_ids.add(row[0])
@@ -1718,12 +1759,16 @@ class URAASAnalyticsEngine:
 
             # Year-over-year trend (last 5 years of classified papers)
             trend_rows = (
-                session.query(db_year(Item.publication_date),
-                              Item.is_intra_african,
-                              func.count(Item.id))
-                .filter(Item.id.in_(sc_ids),
-                        Item.publication_date.isnot(None),
-                        Item.coauthor_countries.isnot(None))
+                session.query(
+                    db_year(Item.publication_date),
+                    Item.is_intra_african,
+                    func.count(Item.id),
+                )
+                .filter(
+                    Item.id.in_(sc_ids),
+                    Item.publication_date.isnot(None),
+                    Item.coauthor_countries.isnot(None),
+                )
                 .group_by(db_year(Item.publication_date), Item.is_intra_african)
                 .order_by(db_year(Item.publication_date))
                 .all()
@@ -1748,17 +1793,23 @@ class URAASAnalyticsEngine:
                 "total": total,
                 "trend": trend,
                 "interpretation": (
-                    "Strong" if score >= 60
-                    else "Moderate" if score >= 35
-                    else "Dependent"
+                    "Strong"
+                    if score >= 60
+                    else "Moderate" if score >= 35 else "Dependent"
                 ),
             }
             analytics_cache.set(cache_key, result, ttl=1800)
             return result
         except Exception as e:
             logger.error("get_knowledge_repatriation: %s", e)
-            return {"score": 0, "africa_led": 0, "north_south": 0,
-                    "unclassified": 0, "total": 0, "trend": []}
+            return {
+                "score": 0,
+                "africa_led": 0,
+                "north_south": 0,
+                "unclassified": 0,
+                "total": 0,
+                "trend": [],
+            }
         finally:
             session.close()
 
@@ -1788,12 +1839,19 @@ class URAASAnalyticsEngine:
         try:
             sc_ids = self._get_sc_item_ids(session, institution)
             if not sc_ids:
-                return {"score": 0, "sdg_distribution": [], "dominant_sdg": None,
-                        "gap_sdgs": [], "interpretation": "No data"}
+                return {
+                    "score": 0,
+                    "sdg_distribution": [],
+                    "dominant_sdg": None,
+                    "gap_sdgs": [],
+                    "interpretation": "No data",
+                }
 
-            rows = (session.query(Item.sdg_tags)
-                    .filter(Item.id.in_(sc_ids), Item.sdg_tags.isnot(None))
-                    .all())
+            rows = (
+                session.query(Item.sdg_tags)
+                .filter(Item.id.in_(sc_ids), Item.sdg_tags.isnot(None))
+                .all()
+            )
 
             sdg_counts: Dict[str, int] = defaultdict(int)
             for (tags,) in rows:
@@ -1803,8 +1861,13 @@ class URAASAnalyticsEngine:
                         sdg_counts[tag] += 1
 
             if not sdg_counts:
-                return {"score": 0, "sdg_distribution": [], "dominant_sdg": None,
-                        "gap_sdgs": [], "interpretation": "No SDG data"}
+                return {
+                    "score": 0,
+                    "sdg_distribution": [],
+                    "dominant_sdg": None,
+                    "gap_sdgs": [],
+                    "interpretation": "No SDG data",
+                }
 
             # Shannon entropy normalised to 0-100
             total_tags = sum(sdg_counts.values())
@@ -1814,13 +1877,17 @@ class URAASAnalyticsEngine:
             score = round(entropy / max_entropy * 100, 1)
 
             # Gap SDGs: SDGs 1-17 not represented at all
-            represented = {int(k.split()[1]) for k in sdg_counts if k.startswith("SDG") and len(k.split()) > 1}
+            represented = {
+                int(k.split()[1])
+                for k in sdg_counts
+                if k.startswith("SDG") and len(k.split()) > 1
+            }
             gap_sdgs = [f"SDG {i}" for i in range(1, 18) if i not in represented]
 
             dominant = max(sdg_counts, key=sdg_counts.get) if sdg_counts else None
             distribution = sorted(
                 [{"sdg": k, "count": v} for k, v in sdg_counts.items()],
-                key=lambda x: -x["count"]
+                key=lambda x: -x["count"],
             )[:17]
 
             result = {
@@ -1832,18 +1899,26 @@ class URAASAnalyticsEngine:
                 "baseline_score": 45.0,
                 "vs_baseline": round(score - 45.0, 1),
                 "interpretation": (
-                    "Highly Diversified" if score >= 70
-                    else "Diversified" if score >= 50
-                    else "Specialised" if score >= 30
-                    else "Narrow"
+                    "Highly Diversified"
+                    if score >= 70
+                    else (
+                        "Diversified"
+                        if score >= 50
+                        else "Specialised" if score >= 30 else "Narrow"
+                    )
                 ),
             }
             analytics_cache.set(cache_key, result, ttl=1800)
             return result
         except Exception as e:
             logger.error("get_research_diversity: %s", e)
-            return {"score": 0, "sdg_distribution": [], "dominant_sdg": None,
-                    "gap_sdgs": [], "interpretation": "No data"}
+            return {
+                "score": 0,
+                "sdg_distribution": [],
+                "dominant_sdg": None,
+                "gap_sdgs": [],
+                "interpretation": "No data",
+            }
         finally:
             session.close()
 
@@ -1873,80 +1948,117 @@ class URAASAnalyticsEngine:
             sc_ids = self._get_sc_item_ids(session, institution)
             total = len(sc_ids)
             if not total:
-                return {"score": 0, "components": {}, "total": 0,
-                        "grade": "F", "interpretation": "No data"}
+                return {
+                    "score": 0,
+                    "components": {},
+                    "total": 0,
+                    "grade": "F",
+                    "interpretation": "No data",
+                }
 
             oa_count = (
                 session.query(func.count(Item.id))
-                .filter(Item.id.in_(sc_ids),
-                        Item.dc_rights.like("%openAccess%"))
+                .filter(Item.id.in_(sc_ids), Item.dc_rights.like("%openAccess%"))
                 .scalar()
             ) or 0
 
             doi_count = (
                 session.query(func.count(Item.id))
-                .filter(Item.id.in_(sc_ids),
-                        Item.doi.isnot(None), Item.doi != "")
+                .filter(Item.id.in_(sc_ids), Item.doi.isnot(None), Item.doi != "")
                 .scalar()
             ) or 0
 
             ark_count = (
                 session.query(func.count(Item.id))
-                .filter(Item.id.in_(sc_ids),
-                        Item.ark.isnot(None), Item.ark != "")
+                .filter(Item.id.in_(sc_ids), Item.ark.isnot(None), Item.ark != "")
                 .scalar()
             ) or 0
 
             orcid_count = len(
                 session.query(Item.id)
                 .join(Item.authors)
-                .filter(Item.id.in_(sc_ids),
-                        Author.orcid.isnot(None), Author.orcid != "")
-                .distinct().all()
+                .filter(
+                    Item.id.in_(sc_ids), Author.orcid.isnot(None), Author.orcid != ""
+                )
+                .distinct()
+                .all()
             )
 
-            def pct(n): return round(n / total * 100, 1) if total else 0.0
+            def pct(n):
+                return round(n / total * 100, 1) if total else 0.0
 
-            oa_pct    = pct(oa_count)
-            doi_pct   = pct(doi_count)
+            oa_pct = pct(oa_count)
+            doi_pct = pct(doi_count)
             orcid_pct = pct(orcid_count)
-            ark_pct   = pct(ark_count)
+            ark_pct = pct(ark_count)
 
             score = round(
-                (oa_pct    * 0.40) +
-                (doi_pct   * 0.25) +
-                (orcid_pct * 0.20) +
-                (ark_pct   * 0.15),
-                1
+                (oa_pct * 0.40)
+                + (doi_pct * 0.25)
+                + (orcid_pct * 0.20)
+                + (ark_pct * 0.15),
+                1,
             )
 
-            grade = "A" if score >= 75 else "B" if score >= 55 else "C" if score >= 35 else "D" if score >= 20 else "F"
+            grade = (
+                "A"
+                if score >= 75
+                else (
+                    "B"
+                    if score >= 55
+                    else "C" if score >= 35 else "D" if score >= 20 else "F"
+                )
+            )
 
             result = {
                 "score": score,
                 "grade": grade,
                 "total": total,
                 "components": {
-                    "open_access":    {"value": oa_pct,    "weight": 40, "count": oa_count},
-                    "doi_coverage":   {"value": doi_pct,   "weight": 25, "count": doi_count},
-                    "orcid_coverage": {"value": orcid_pct, "weight": 20, "count": orcid_count},
-                    "ark_coverage":   {"value": ark_pct,   "weight": 15, "count": ark_count},
+                    "open_access": {"value": oa_pct, "weight": 40, "count": oa_count},
+                    "doi_coverage": {
+                        "value": doi_pct,
+                        "weight": 25,
+                        "count": doi_count,
+                    },
+                    "orcid_coverage": {
+                        "value": orcid_pct,
+                        "weight": 20,
+                        "count": orcid_count,
+                    },
+                    "ark_coverage": {
+                        "value": ark_pct,
+                        "weight": 15,
+                        "count": ark_count,
+                    },
                 },
                 "continental_baseline": 38.0,
                 "vs_baseline": round(score - 38.0, 1),
                 "interpretation": (
-                    "Excellent — Plan S compliant" if score >= 75
-                    else "Good — approaching open science standards" if score >= 55
-                    else "Developing — action needed on OA and PIDs" if score >= 35
-                    else "Critical — significant gaps in open science"
+                    "Excellent — Plan S compliant"
+                    if score >= 75
+                    else (
+                        "Good — approaching open science standards"
+                        if score >= 55
+                        else (
+                            "Developing — action needed on OA and PIDs"
+                            if score >= 35
+                            else "Critical — significant gaps in open science"
+                        )
+                    )
                 ),
             }
             analytics_cache.set(cache_key, result, ttl=1800)
             return result
         except Exception as e:
             logger.error("get_open_science_health: %s", e)
-            return {"score": 0, "components": {}, "total": 0, "grade": "F",
-                    "interpretation": "No data"}
+            return {
+                "score": 0,
+                "components": {},
+                "total": 0,
+                "grade": "F",
+                "interpretation": "No data",
+            }
         finally:
             session.close()
 

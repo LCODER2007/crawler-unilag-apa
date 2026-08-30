@@ -89,7 +89,9 @@ class DedupAwareSpiderMixin:
         self._skipped_known = 0
         self.logger.info(
             "Dedup index loaded: %d DOIs, %d URLs, %d titles",
-            len(self._seen_dois), len(self._seen_urls), len(self._seen_titles),
+            len(self._seen_dois),
+            len(self._seen_urls),
+            len(self._seen_titles),
         )
 
     def _is_known(

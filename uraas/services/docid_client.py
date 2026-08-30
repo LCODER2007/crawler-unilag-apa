@@ -87,10 +87,12 @@ class DocIDClient:
             )
         self.base = config.DOCID_API_URL or DEFAULT_BASE_URL
         self._s = requests.Session()
-        self._s.headers.update({
-            "User-Agent": "URAAS/1.0 (APA Intelligence Platform; uraas-bot@unilag.edu.ng)",
-            "Accept": "application/json",
-        })
+        self._s.headers.update(
+            {
+                "User-Agent": "URAAS/1.0 (APA Intelligence Platform; uraas-bot@unilag.edu.ng)",
+                "Accept": "application/json",
+            }
+        )
         self.access_token: str | None = None
         self.user_id: int | None = None
         self._ref_cache: dict = {}
@@ -102,7 +104,9 @@ class DocIDClient:
             timeout=_TIMEOUT,
         )
         if r.status_code == 401:
-            raise DocIDConnectionError("DOCiD login failed — check DOCID_EMAIL/PASSWORD")
+            raise DocIDConnectionError(
+                "DOCiD login failed — check DOCID_EMAIL/PASSWORD"
+            )
         r.raise_for_status()
         data = r.json()
         # Response shape for a SUCCESSFUL login was never confirmed live (only
@@ -110,9 +114,7 @@ class DocIDClient:
         # try several plausible nestings defensively rather than assume one.
         inner = data.get("data") if isinstance(data.get("data"), dict) else data
         token = (
-            inner.get("access_token")
-            or inner.get("token")
-            or inner.get("accessToken")
+            inner.get("access_token") or inner.get("token") or inner.get("accessToken")
         )
         if not token:
             raise DocIDConnectionError(
@@ -216,7 +218,9 @@ class DocIDClient:
         data = r.json()
         docid = (data.get("data") or {}).get("id") or data.get("id")
         if not docid:
-            raise DocIDConnectionError(f"assign-doi did not return an id — response: {data!r}")
+            raise DocIDConnectionError(
+                f"assign-doi did not return an id — response: {data!r}"
+            )
         return docid
 
     # ── Publish ────────────────────────────────────────────────────────────
@@ -290,29 +294,35 @@ class DocIDClient:
             except (TypeError, ValueError):
                 funders = []
         for i, funder in enumerate(funders):
-            fields.extend([
-                (f"funders[{i}][name]", funder.get("name", "")),
-                (f"funders[{i}][other_name]", ""),
-                (f"funders[{i}][type]", "1"),
-                (f"funders[{i}][country]", ""),
-                (f"funders[{i}][ror_id]", funder.get("ror") or ""),
-            ])
+            fields.extend(
+                [
+                    (f"funders[{i}][name]", funder.get("name", "")),
+                    (f"funders[{i}][other_name]", ""),
+                    (f"funders[{i}][type]", "1"),
+                    (f"funders[{i}][country]", ""),
+                    (f"funders[{i}][ror_id]", funder.get("ror") or ""),
+                ]
+            )
 
         for i, author in enumerate(getattr(item, "authors", [])):
             name = (getattr(author, "name", "") or "").strip()
             if not name:
                 continue
             parts = name.rsplit(" ", 1)
-            given_name, family_name = (parts[0], parts[1]) if len(parts) == 2 else ("", name)
+            given_name, family_name = (
+                (parts[0], parts[1]) if len(parts) == 2 else ("", name)
+            )
             orcid = getattr(author, "orcid", "") or ""
-            fields.extend([
-                (f"creators[{i}][family_name]", family_name),
-                (f"creators[{i}][given_name]", given_name),
-                (f"creators[{i}][identifier]", "ORCID" if orcid else ""),
-                (f"creators[{i}][role]", str(author_role_id)),
-                (f"creators[{i}][orcid_id]", orcid),
-                (f"creators[{i}][affiliation]", item.institution or ""),
-            ])
+            fields.extend(
+                [
+                    (f"creators[{i}][family_name]", family_name),
+                    (f"creators[{i}][given_name]", given_name),
+                    (f"creators[{i}][identifier]", "ORCID" if orcid else ""),
+                    (f"creators[{i}][role]", str(author_role_id)),
+                    (f"creators[{i}][orcid_id]", orcid),
+                    (f"creators[{i}][affiliation]", item.institution or ""),
+                ]
+            )
 
         # The real endpoint requires actual multipart/form-data (it reads
         # request.formData() server-side, not a JSON body) even though every

@@ -40,7 +40,9 @@ from uraas.utils.analytics_cache import analytics_cache
 from uraas.utils.openalex_client import oa_get
 
 TITLE_THRESHOLD = 92  # near-unique signal — strict on purpose
-AUTHOR_THRESHOLD = 80  # corroborating only — loose to tolerate name-order/transliteration variance
+AUTHOR_THRESHOLD = (
+    80  # corroborating only — loose to tolerate name-order/transliteration variance
+)
 CANDIDATES_PER_QUERY = 5
 SELECT = "id,doi,title,authorships,cited_by_count,counts_by_year"
 
@@ -104,15 +106,18 @@ def apply_match(item, work):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--limit", type=int, default=0, help="Max items to process (0 = all)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Max items to process (0 = all)"
+    )
     args = parser.parse_args()
 
     session = SessionLocal()
     try:
-        q = (
-            session.query(Item)
-            .filter(Item.doi.is_(None), Item.special_collection_score > 0)
+        q = session.query(Item).filter(
+            Item.doi.is_(None), Item.special_collection_score > 0
         )
         items = q.all()
         if args.limit:

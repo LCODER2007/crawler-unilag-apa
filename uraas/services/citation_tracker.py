@@ -359,7 +359,6 @@ class CitationTracker:
         finally:
             session.close()
 
-
     @staticmethod
     def fetch_work_velocity(openalex_id: str) -> Optional[Dict]:
         """Fetch counts_by_year + cited_by_count for one work from OpenAlex.

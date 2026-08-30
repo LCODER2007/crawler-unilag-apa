@@ -36,7 +36,9 @@ from uraas.utils.ark_generator import ark_generator
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input_file", help="JSON file listing ACE units to seed")
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
     args = parser.parse_args()
 
     with open(args.input_file, encoding="utf-8") as f:
@@ -70,7 +72,9 @@ def main():
         print("=" * 64)
         for entry, institution_config, existing, pmd in planned:
             status = "UPDATE" if existing else "CREATE"
-            print(f"[{status}] {entry['name']} ({institution_config.name}) -> pmd={pmd}")
+            print(
+                f"[{status}] {entry['name']} ({institution_config.name}) -> pmd={pmd}"
+            )
         print("=" * 64)
         print(f"{len(planned)} ACE unit(s) to process")
 

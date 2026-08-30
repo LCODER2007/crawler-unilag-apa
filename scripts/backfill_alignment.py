@@ -30,8 +30,12 @@ from uraas.utils.analytics_cache import analytics_cache
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--force", action="store_true", help="Re-score items already at current version")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Re-score items already at current version"
+    )
     parser.add_argument("--batch", type=int, default=500)
     args = parser.parse_args()
 
@@ -79,9 +83,7 @@ def main():
 
         # Aggregates: global + each distinct institution
         rows = recompute_aggregates(session, None)
-        institutions = [
-            i for (i,) in session.query(Item.institution).distinct() if i
-        ]
+        institutions = [i for (i,) in session.query(Item.institution).distinct() if i]
         for inst in institutions:
             rows += recompute_aggregates(session, inst)
         print(f"\nAggregate rows written: {rows} ({1 + len(institutions)} scopes)")

@@ -42,3 +42,9 @@ pytest_out*
 *.log
 test_write.txt
 dashboard.log
+
+# Test/coverage run artifacts
+.coverage
+coverage.xml
+htmlcov/
+tests/reports/

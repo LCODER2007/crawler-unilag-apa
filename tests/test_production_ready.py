@@ -199,34 +199,27 @@ class TestStaffValidation:
 
 
 class TestAPIEndpoints:
-    """Test API endpoints"""
+    """Test API endpoints — uses the admin_client fixture from
+    tests/conftest.py (every dashboard route except a small public
+    allowlist requires an authenticated session)."""
 
-    @pytest.fixture
-    def client(self):
-        """Create test client"""
-        from uraas.dashboard.app import app
-
-        app.config["TESTING"] = True
-        with app.test_client() as client:
-            yield client
-
-    def test_dashboard_loads(self, client):
+    def test_dashboard_loads(self, admin_client):
         """Test dashboard loads"""
-        response = client.get("/")
+        response = admin_client.get("/")
         assert response.status_code == 200, "Dashboard should load"
 
-    def test_analytics_overview(self, client):
+    def test_analytics_overview(self, admin_client):
         """Test analytics overview endpoint"""
-        response = client.get("/api/analytics/overview")
+        response = admin_client.get("/api/analytics/overview")
         assert response.status_code == 200, "Analytics overview should work"
 
         data = response.get_json()
         assert "total_papers" in data, "Should have total papers"
         assert "total_authors" in data, "Should have total authors"
 
-    def test_search_endpoint(self, client):
+    def test_search_endpoint(self, admin_client):
         """Test search endpoint"""
-        response = client.get("/api/analytics/search?q=test&limit=10")
+        response = admin_client.get("/api/analytics/search?q=test&limit=10")
         assert response.status_code == 200, "Search should work"
 
         data = response.get_json()
@@ -270,18 +263,13 @@ class TestPerformance:
 class TestSecurity:
     """Test security measures"""
 
-    def test_no_sql_injection_in_search(self):
+    def test_no_sql_injection_in_search(self, admin_client):
         """Test SQL injection protection"""
-        from uraas.dashboard.app import app
+        malicious_query = "'; DROP TABLE items; --"
+        response = admin_client.get(f"/api/analytics/search?q={malicious_query}")
 
-        app.config["TESTING"] = True
-
-        with app.test_client() as client:
-            malicious_query = "'; DROP TABLE items; --"
-            response = client.get(f"/api/analytics/search?q={malicious_query}")
-
-            # Should not crash
-            assert response.status_code in [200, 400], "Should handle malicious input"
+        # Should not crash
+        assert response.status_code in [200, 400], "Should handle malicious input"
 
     def test_xss_protection(self):
         """Test XSS protection"""
@@ -340,30 +328,6 @@ class TestCodeQuality:
                             assert (
                                 len(debug_prints) == 0
                             ), f"Found debug print statements in {filepath}"
-
-    def test_imports_organized(self):
-        """Verify imports are organized"""
-        import os
-
-        for root, dirs, files in os.walk("uraas"):
-            for file in files:
-                if file.endswith(".py"):
-                    filepath = os.path.join(root, file)
-                    with open(filepath, "r") as f:
-                        lines = f.readlines()
-
-                        # Check that imports are at the top
-                        import_section_ended = False
-                        for i, line in enumerate(lines[:50]):
-                            if line.strip() and not line.startswith(
-                                ("import", "from", "#", '"""', "'''")
-                            ):
-                                import_section_ended = True
-                            elif import_section_ended and line.startswith(
-                                ("import", "from")
-                            ):
-                                # Imports after code is bad
-                                pass  # Allow for now
 
 
 def run_all_tests():

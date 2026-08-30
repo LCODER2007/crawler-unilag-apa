@@ -80,7 +80,9 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
     by save_staff()'s merge-by-ORCID/name logic.)
     """
     inst_name = inst_config.name
-    log.info(f"Harvesting authors for {inst_name} (ROR: {inst_config.ror}) via /authors API...")
+    log.info(
+        f"Harvesting authors for {inst_name} (ROR: {inst_config.ror}) via /authors API..."
+    )
 
     staff = []
     cursor = "*"
@@ -114,14 +116,16 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
             orcid_url = author.get("orcid") or ""
             orcid = orcid_url.replace("https://orcid.org/", "") if orcid_url else None
             aid = (author.get("id") or "").replace("https://openalex.org/", "")
-            staff.append({
-                "name": name,
-                "orcid": orcid,
-                "department": None,
-                "faculty": None,
-                "openalex_id": aid,
-                "paper_count": author.get("works_count", 0),
-            })
+            staff.append(
+                {
+                    "name": name,
+                    "orcid": orcid,
+                    "department": None,
+                    "faculty": None,
+                    "openalex_id": aid,
+                    "paper_count": author.get("works_count", 0),
+                }
+            )
 
         page += 1
         log.info(f"  Page {page}: +{len(results)} authors | total so far: {len(staff)}")

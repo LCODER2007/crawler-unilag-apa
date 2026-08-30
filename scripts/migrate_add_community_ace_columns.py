@@ -40,7 +40,9 @@ def main() -> int:
         print("  pmd already present, skipping")
 
     if not column_exists("communities", "pmd_assigned_at"):
-        statements.append("ALTER TABLE communities ADD COLUMN pmd_assigned_at TIMESTAMP")
+        statements.append(
+            "ALTER TABLE communities ADD COLUMN pmd_assigned_at TIMESTAMP"
+        )
     else:
         print("  pmd_assigned_at already present, skipping")
 

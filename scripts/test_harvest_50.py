@@ -38,10 +38,13 @@ _RATE_SLEEP = 1.0  # polite delay between requests per source
 
 # ── OpenAlex ──────────────────────────────────────────────────────────────────
 
+
 def _reconstruct_abstract(inverted_index: dict) -> str:
     if not inverted_index:
         return ""
-    pairs = [(pos, word) for word, positions in inverted_index.items() for pos in positions]
+    pairs = [
+        (pos, word) for word, positions in inverted_index.items() for pos in positions
+    ]
     pairs.sort()
     return " ".join(w for _, w in pairs)
 
@@ -96,9 +99,13 @@ def harvest_openalex(
                     continue
                 if norm in seen_titles:
                     continue
-                abstract = _reconstruct_abstract(work.get("abstract_inverted_index") or {})
+                abstract = _reconstruct_abstract(
+                    work.get("abstract_inverted_index") or {}
+                )
                 concepts = work.get("concepts") or []
-                dc_subject = ", ".join(c.get("display_name", "") for c in concepts[:6] if c)
+                dc_subject = ", ".join(
+                    c.get("display_name", "") for c in concepts[:6] if c
+                )
                 is_sc, score, cats = is_special_collection(title, abstract, dc_subject)
                 if not is_sc:
                     continue
@@ -111,20 +118,31 @@ def harvest_openalex(
                     if a.get("author", {}).get("display_name")
                 ]
                 oa = work.get("open_access") or {}
-                landing = (work.get("primary_location") or {}).get("landing_page_url") or ""
+                landing = (work.get("primary_location") or {}).get(
+                    "landing_page_url"
+                ) or ""
                 url_val = landing or (f"https://doi.org/{doi}" if doi else "")
-                papers.append(_paper(
-                    title, abstract, authors, doi, url_val,
-                    oa.get("oa_url") if oa.get("is_oa") else None,
-                    work.get("publication_date") or "",
-                    work.get("type") or "",
-                    score, cats, "OpenAlex",
-                ))
+                papers.append(
+                    _paper(
+                        title,
+                        abstract,
+                        authors,
+                        doi,
+                        url_val,
+                        oa.get("oa_url") if oa.get("is_oa") else None,
+                        work.get("publication_date") or "",
+                        work.get("type") or "",
+                        score,
+                        cats,
+                        "OpenAlex",
+                    )
+                )
                 _log_hit(len(papers), score, cats, title)
             meta = data.get("meta") or {}
             next_cursor = meta.get("next_cursor")
             if next_cursor and results and len(papers) < max_results:
                 from urllib.parse import parse_qs, urlparse
+
                 qs = parse_qs(urlparse(url).query)
                 filt = (qs.get("filter") or [f"institutions.ror:{ror_short}"])[0]
                 url = (
@@ -141,6 +159,7 @@ def harvest_openalex(
 
 # ── Crossref ──────────────────────────────────────────────────────────────────
 
+
 def harvest_crossref(
     session: requests.Session,
     institution_name: str,
@@ -149,6 +168,7 @@ def harvest_crossref(
     seen_titles: set,
 ) -> list[dict]:
     from urllib.parse import quote
+
     papers: list[dict] = []
     seeds = list(SC_SEED_KEYWORDS) + [None]
 
@@ -200,15 +220,29 @@ def harvest_crossref(
                 issued = work.get("issued", {}).get("date-parts", [[]])[0]
                 pub_date = "-".join(str(p) for p in issued) if issued else ""
                 pdf_url = next(
-                    (lk["URL"] for lk in work.get("link", [])
-                     if lk.get("content-type") == "application/pdf"),
+                    (
+                        lk["URL"]
+                        for lk in work.get("link", [])
+                        if lk.get("content-type") == "application/pdf"
+                    ),
                     None,
                 )
                 url_val = work.get("URL") or (f"https://doi.org/{doi}" if doi else "")
-                papers.append(_paper(
-                    title, abstract, authors, doi, url_val, pdf_url,
-                    pub_date, "", score, cats, "Crossref",
-                ))
+                papers.append(
+                    _paper(
+                        title,
+                        abstract,
+                        authors,
+                        doi,
+                        url_val,
+                        pdf_url,
+                        pub_date,
+                        "",
+                        score,
+                        cats,
+                        "Crossref",
+                    )
+                )
                 _log_hit(len(papers), score, cats, title)
             offset += 50
             if items and offset < 500 and len(papers) < max_results:
@@ -228,6 +262,7 @@ def harvest_crossref(
 
 # ── Semantic Scholar ──────────────────────────────────────────────────────────
 
+
 def harvest_semantic_scholar(
     session: requests.Session,
     institution_name: str,
@@ -241,6 +276,7 @@ def harvest_semantic_scholar(
     Set S2_API_KEY in .env for a higher rate limit (free key at semanticscholar.org).
     """
     from urllib.parse import quote
+
     from uraas.config import config as cfg
 
     papers: list[dict] = []
@@ -310,16 +346,28 @@ def harvest_semantic_scholar(
                     seen_dois.add(doi)
                 seen_titles.add(norm)
                 authors = [
-                    a.get("name", "") for a in (work.get("authors") or []) if a.get("name")
+                    a.get("name", "")
+                    for a in (work.get("authors") or [])
+                    if a.get("name")
                 ]
                 year = work.get("year")
                 oa = work.get("openAccessPdf") or {}
                 url_val = f"https://doi.org/{doi}" if doi else ""
-                papers.append(_paper(
-                    title, abstract, authors, doi, url_val,
-                    oa.get("url"), f"{year}-01-01" if year else "",
-                    "", score, cats, "Semantic Scholar",
-                ))
+                papers.append(
+                    _paper(
+                        title,
+                        abstract,
+                        authors,
+                        doi,
+                        url_val,
+                        oa.get("url"),
+                        f"{year}-01-01" if year else "",
+                        "",
+                        score,
+                        cats,
+                        "Semantic Scholar",
+                    )
+                )
                 _log_hit(len(papers), score, cats, title)
             total = data.get("total", 0)
             offset += 100
@@ -332,6 +380,7 @@ def harvest_semantic_scholar(
 
 # ── EuropePMC ─────────────────────────────────────────────────────────────────
 
+
 def harvest_europepmc(
     session: requests.Session,
     institution_name: str,
@@ -341,6 +390,7 @@ def harvest_europepmc(
     seen_titles: set,
 ) -> list[dict]:
     from urllib.parse import urlencode
+
     papers: list[dict] = []
 
     # EuropePMC AFFILIATION field matches against stored author affiliation strings.
@@ -349,11 +399,21 @@ def harvest_europepmc(
 
     # EuropePMC is best for ethnobotany/traditional medicine SC papers
     priority_seeds = [
-        s for s in SC_SEED_KEYWORDS
-        if any(k in s.lower() for k in (
-            "indigenous", "traditional", "ethnobotany", "cultural",
-            "oral", "decolonial", "ubuntu", "ethnomusicology",
-        ))
+        s
+        for s in SC_SEED_KEYWORDS
+        if any(
+            k in s.lower()
+            for k in (
+                "indigenous",
+                "traditional",
+                "ethnobotany",
+                "cultural",
+                "oral",
+                "decolonial",
+                "ubuntu",
+                "ethnomusicology",
+            )
+        )
     ]
 
     for seed in priority_seeds:
@@ -399,28 +459,45 @@ def harvest_europepmc(
                 seen_titles.add(norm)
                 pmid = r.get("pmid") or ""
                 url_val = (
-                    f"https://doi.org/{doi}" if doi
+                    f"https://doi.org/{doi}"
+                    if doi
                     else (f"https://europepmc.org/article/med/{pmid}" if pmid else "")
                 )
                 pdf_url = None
                 if r.get("isOpenAccess") == "Y":
-                    for ft in ((r.get("fullTextUrlList") or {}).get("fullTextUrl") or []):
+                    for ft in (r.get("fullTextUrlList") or {}).get("fullTextUrl") or []:
                         if ft.get("documentStyle") == "pdf":
                             pdf_url = ft.get("url")
                             break
                 authors_raw = (r.get("authorList") or {}).get("author") or []
                 authors = [
                     f"{a.get('firstName','')} {a.get('lastName','')}".strip()
-                    for a in authors_raw if a.get("lastName")
+                    for a in authors_raw
+                    if a.get("lastName")
                 ]
-                papers.append(_paper(
-                    title, abstract, authors, doi, url_val, pdf_url,
-                    r.get("firstPublicationDate") or r.get("pubYear") or "",
-                    r.get("pubType") or "", score, cats, "EuropePMC",
-                ))
+                papers.append(
+                    _paper(
+                        title,
+                        abstract,
+                        authors,
+                        doi,
+                        url_val,
+                        pdf_url,
+                        r.get("firstPublicationDate") or r.get("pubYear") or "",
+                        r.get("pubType") or "",
+                        score,
+                        cats,
+                        "EuropePMC",
+                    )
+                )
                 _log_hit(len(papers), score, cats, title)
             next_cursor = data.get("nextCursorMark")
-            if next_cursor and next_cursor != cursor and results and len(papers) < max_results:
+            if (
+                next_cursor
+                and next_cursor != cursor
+                and results
+                and len(papers) < max_results
+            ):
                 cursor = next_cursor
                 time.sleep(_RATE_SLEEP)
             else:
@@ -430,6 +507,7 @@ def harvest_europepmc(
 
 
 # ── DOAJ ──────────────────────────────────────────────────────────────────────
+
 
 def harvest_doaj(
     session: requests.Session,
@@ -444,15 +522,26 @@ def harvest_doaj(
     Free API, no key required.
     """
     from urllib.parse import quote
+
     papers: list[dict] = []
 
     # DOAJ article search: query is full-text across title/abstract/keywords
     priority_seeds = [
-        s for s in SC_SEED_KEYWORDS
-        if any(k in s.lower() for k in (
-            "indigenous", "traditional", "cultural", "oral",
-            "postcolonial", "decolonial", "african", "ubuntu",
-        ))
+        s
+        for s in SC_SEED_KEYWORDS
+        if any(
+            k in s.lower()
+            for k in (
+                "indigenous",
+                "traditional",
+                "cultural",
+                "oral",
+                "postcolonial",
+                "decolonial",
+                "african",
+                "ubuntu",
+            )
+        )
     ]
 
     for seed in priority_seeds:
@@ -502,18 +591,30 @@ def harvest_doaj(
                     seen_dois.add(doi)
                 seen_titles.add(norm)
                 authors = [
-                    a.get("name", "") for a in (bib.get("author") or []) if a.get("name")
+                    a.get("name", "")
+                    for a in (bib.get("author") or [])
+                    if a.get("name")
                 ]
                 pub_date = bib.get("year") or ""
                 url_val = f"https://doi.org/{doi}" if doi else ""
                 for lnk in bib.get("link") or []:
                     if lnk.get("type") in ("fulltext", "homepage"):
                         url_val = url_val or lnk.get("url", "")
-                papers.append(_paper(
-                    title, abstract, authors, doi, url_val, None,
-                    pub_date, bib.get("journal", {}).get("title", "") or "",
-                    score, cats, "DOAJ",
-                ))
+                papers.append(
+                    _paper(
+                        title,
+                        abstract,
+                        authors,
+                        doi,
+                        url_val,
+                        None,
+                        pub_date,
+                        bib.get("journal", {}).get("title", "") or "",
+                        score,
+                        cats,
+                        "DOAJ",
+                    )
+                )
                 _log_hit(len(papers), score, cats, title)
             total = data.get("total", 0)
             if page * 100 < min(total, 500) and len(papers) < max_results:
@@ -527,9 +628,19 @@ def harvest_doaj(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _paper(
-    title, abstract, authors, doi, url, pdf_url,
-    pub_date, doc_type, score, cats, source,
+    title,
+    abstract,
+    authors,
+    doi,
+    url,
+    pdf_url,
+    pub_date,
+    doc_type,
+    score,
+    cats,
+    source,
 ) -> dict:
     return {
         "title": title,
@@ -556,6 +667,7 @@ def _log_hit(n: int, score: float, cats: list, title: str):
 
 # ── Main harvest orchestrator ─────────────────────────────────────────────────
 
+
 def harvest_all(
     ror_short: str,
     institution_name: str,
@@ -571,10 +683,12 @@ def harvest_all(
     coverage rather than being filled by whichever source responds fastest.
     """
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": f"URAAS-TestHarvest/1.0 (dry-run; mailto:{config.OPENALEX_MAILTO})",
-        "Accept": "application/json",
-    })
+    session.headers.update(
+        {
+            "User-Agent": f"URAAS-TestHarvest/1.0 (dry-run; mailto:{config.OPENALEX_MAILTO})",
+            "Accept": "application/json",
+        }
+    )
 
     # Per-source quota: each source gets at least 10, up to max_results
     per_source = max(10, max_results // 4)
@@ -584,14 +698,26 @@ def harvest_all(
     source_results: dict[str, list[dict]] = {}
 
     source_fns = [
-        ("OpenAlex", lambda: harvest_openalex(
-            session, ror_short, per_source, set(), set())),
-        ("Crossref", lambda: harvest_crossref(
-            session, institution_name, per_source, set(), set())),
-        ("Semantic Scholar", lambda: harvest_semantic_scholar(
-            session, institution_name, per_source, set(), set())),
-        ("DOAJ", lambda: harvest_doaj(
-            session, institution_name, per_source, set(), set())),
+        (
+            "OpenAlex",
+            lambda: harvest_openalex(session, ror_short, per_source, set(), set()),
+        ),
+        (
+            "Crossref",
+            lambda: harvest_crossref(
+                session, institution_name, per_source, set(), set()
+            ),
+        ),
+        (
+            "Semantic Scholar",
+            lambda: harvest_semantic_scholar(
+                session, institution_name, per_source, set(), set()
+            ),
+        ),
+        (
+            "DOAJ",
+            lambda: harvest_doaj(session, institution_name, per_source, set(), set()),
+        ),
     ]
 
     for source_name, harvest_fn in source_fns:
@@ -634,11 +760,17 @@ def harvest_all(
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
-def send_preview_email(to_email: str, institution_name: str, papers: list[dict]) -> bool:
+
+def send_preview_email(
+    to_email: str, institution_name: str, papers: list[dict]
+) -> bool:
     from uraas.config import config as cfg
 
     if not cfg.SMTP_HOST or not cfg.SMTP_USER or not cfg.SMTP_PASSWORD:
-        print("[WARN] SMTP not configured — skipping email. Set SMTP_* in .env", flush=True)
+        print(
+            "[WARN] SMTP not configured — skipping email. Set SMTP_* in .env",
+            flush=True,
+        )
         preview = json.dumps(papers[:3], indent=2, ensure_ascii=True)
         print(f"       First 3 papers: {preview}", flush=True)
         return False
@@ -652,7 +784,9 @@ def send_preview_email(to_email: str, institution_name: str, papers: list[dict])
 
     source_counts: dict[str, int] = {}
     for p in papers:
-        source_counts[p.get("source", "?")] = source_counts.get(p.get("source", "?"), 0) + 1
+        source_counts[p.get("source", "?")] = (
+            source_counts.get(p.get("source", "?"), 0) + 1
+        )
     source_summary = " · ".join(f"{s}: {c}" for s, c in sorted(source_counts.items()))
 
     rows_html = ""
@@ -660,11 +794,13 @@ def send_preview_email(to_email: str, institution_name: str, papers: list[dict])
         cats = ", ".join(p["sc_categories"])
         url_part = (
             f'<a href="{p["url"]}" style="color:#3b82f6">{p["url"][:55]}</a>'
-            if p["url"] else "—"
+            if p["url"]
+            else "—"
         )
         pdf_part = (
             f' <a href="{p["pdf_url"]}" style="color:#16a34a;font-size:10px">[PDF]</a>'
-            if p.get("pdf_url") else ""
+            if p.get("pdf_url")
+            else ""
         )
         rows_html += f"""
         <tr style="border-bottom:1px solid #e5e7eb">
@@ -788,7 +924,9 @@ def save_json_preview(papers: list[dict], institution: str) -> str:
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(
             {"institution": institution, "count": len(papers), "papers": papers},
-            f, indent=2, ensure_ascii=False,
+            f,
+            indent=2,
+            ensure_ascii=False,
         )
     print(f"[OK] Preview saved to: {out_path}", flush=True)
     return out_path
@@ -799,7 +937,9 @@ def main():
         description="Multi-source test harvest (dry run — no DB, no IR deposit)"
     )
     parser.add_argument("--institution", default="unilag")
-    parser.add_argument("--count", type=int, default=50, help="Max SC papers to collect")
+    parser.add_argument(
+        "--count", type=int, default=50, help="Max SC papers to collect"
+    )
     parser.add_argument("--email", default="lawalgiyath200716@gmail.com")
     args = parser.parse_args()
 
@@ -829,7 +969,9 @@ def main():
     # Source breakdown
     source_counts: dict[str, int] = {}
     for p in papers:
-        source_counts[p.get("source", "?")] = source_counts.get(p.get("source", "?"), 0) + 1
+        source_counts[p.get("source", "?")] = (
+            source_counts.get(p.get("source", "?"), 0) + 1
+        )
 
     print(f"\n{'='*60}", flush=True)
     print("HARVEST SUMMARY", flush=True)

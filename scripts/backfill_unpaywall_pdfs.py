@@ -49,8 +49,12 @@ def fetch_pdf_url(doi: str) -> str | None:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--limit", type=int, default=None, help="Max items to check this run")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max items to check this run"
+    )
     args = parser.parse_args()
 
     session = SessionLocal()
@@ -77,7 +81,9 @@ def main():
                 it.pdf_url = pdf_url
                 filled += 1
                 print(f"  OK  id={it.id} -> {pdf_url[:70]}")
-            time.sleep(0.3)  # polite — Unpaywall has no published hard rate limit, but be reasonable
+            time.sleep(
+                0.3
+            )  # polite — Unpaywall has no published hard rate limit, but be reasonable
         session.commit()
         print(f"\nDONE. Filled: {filled}/{len(candidates)}")
         return 0

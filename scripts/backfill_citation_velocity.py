@@ -26,9 +26,15 @@ from uraas.utils.analytics_cache import analytics_cache
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
-    parser.add_argument("--limit", type=int, default=200, help="Max items (most-cited first)")
-    parser.add_argument("--force", action="store_true", help="Recompute existing shares")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=200, help="Max items (most-cited first)"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Recompute existing shares"
+    )
     args = parser.parse_args()
 
     session = SessionLocal()

@@ -1,5 +1,18 @@
-# URAAS CI/CD Pipeline
-name: CI/CD Pipeline
+# URAAS CI Pipeline
+#
+# Rewritten 2026-08 — the previous version was aspirational boilerplate for
+# infrastructure this project never actually built: it built/pushed to
+# Docker Hub, deployed to Kubernetes, and ran a "performance" job against
+# `https://uraas.example.com` using tests/performance/locustfile.py — none
+# of which exist. That last job alone failed on every single run (missing
+# file, unreachable fake host), which is the real reason CI had been red on
+# all 28 recorded runs regardless of whether the actual code was correct.
+#
+# The real deployment path is manual: scripts/push_to_hf.py to the Hugging
+# Face Space, a deliberate, reviewed action — not something CI should
+# auto-trigger on push. This workflow now only verifies what's true: lint,
+# the test suite, and a non-blocking security scan.
+name: CI Pipeline
 
 on:
   push:
@@ -9,7 +22,6 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
 
 jobs:
   # Linting and Code Quality
@@ -18,26 +30,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flake8 black isort mypy
-      
+
       - name: Run Black
         run: black --check .
-      
+
       - name: Run isort
         run: isort --check-only .
-      
+
       - name: Run Flake8
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-      
+
       - name: Run MyPy
         run: mypy uraas --ignore-missing-imports
 
@@ -46,7 +58,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: lint
-    
+
     services:
       postgres:
         image: postgres:15
@@ -61,81 +73,62 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-html
-      
+          pip install pytest pytest-cov
+
       - name: Initialize Database
         env:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
         run: python scripts/init_db.py
-      
+
       - name: Run Tests
         env:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-          REDIS_URL: redis://localhost:6379/0
         run: |
-          pytest tests/ \
-            --cov=uraas \
-            --cov-report=xml \
-            --cov-report=html \
-            --html=tests/reports/test_report.html \
-            --self-contained-html
-      
+          pytest tests/ --cov=uraas --cov-report=xml --cov-report=term
+
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
-          fail_ci_if_error: true
-      
-      - name: Upload Test Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-report
-          path: tests/reports/
+          # Coverage upload is informational, not a correctness gate — a
+          # Codecov outage shouldn't read as "the code is broken" when every
+          # test above actually passed.
+          fail_ci_if_error: false
 
-  # Security Scan
+  # Security Scan — informational only (continue-on-error on every step);
+  # findings are worth reviewing but shouldn't block merges on their own.
   security:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: lint
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run Bandit Security Scan
         continue-on-error: true
         run: |
           pip install bandit
           bandit -r uraas/ -f json -o bandit-report.json
-      
+
       - name: Run Pip Audit
         continue-on-error: true
         run: |
           pip install pip-audit
           pip-audit --format json -o pip-audit-report.json
-      
+
       - name: Upload Security Reports
         uses: actions/upload-artifact@v4
         if: always()
@@ -144,95 +137,3 @@ jobs:
           path: |
             bandit-report.json
             pip-audit-report.json
-
-  # Build Docker Image
-  build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    if: github.event_name == 'push'
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-    steps:
-      - uses: actions/checkout@v4
-        if: env.DOCKER_USERNAME != ''
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        if: env.DOCKER_USERNAME != ''
-      
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        if: env.DOCKER_USERNAME != ''
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        if: env.DOCKER_USERNAME != ''
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/uraas:latest
-            ${{ secrets.DOCKER_USERNAME }}/uraas:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/uraas:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/uraas:buildcache,mode=max
-
-  # Deploy to Production
-  deploy:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    env:
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-    steps:
-      - uses: actions/checkout@v4
-        if: env.KUBE_CONFIG != ''
-      
-      - name: Configure kubectl
-        uses: azure/k8s-set-context@v4
-        if: env.KUBE_CONFIG != ''
-        with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBE_CONFIG }}
-      
-      - name: Deploy to Kubernetes
-        if: env.KUBE_CONFIG != ''
-        run: |
-          kubectl apply -f kubernetes/
-          kubectl rollout status deployment/uraas-app
-      
-      - name: Verify Deployment
-        if: env.KUBE_CONFIG != ''
-        run: |
-          kubectl get pods -l app=uraas
-          kubectl get services uraas-service
-
-  # Performance Tests
-  performance:
-    name: Performance Tests
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Run Load Tests
-        run: |
-          pip install locust
-          locust -f tests/performance/locustfile.py \
-            --headless \
-            --users 100 \
-            --spawn-rate 10 \
-            --run-time 5m \
-            --host https://uraas.example.com \
-            --html tests/reports/load_test_report.html
-      
-      - name: Upload Performance Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: performance-report
-          path: tests/reports/load_test_report.html

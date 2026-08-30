@@ -27,7 +27,9 @@ def oa_params(extra: Optional[dict] = None) -> dict:
     return params
 
 
-def oa_get(path: str, params: Optional[dict] = None, timeout: int = 30) -> Optional[dict]:
+def oa_get(
+    path: str, params: Optional[dict] = None, timeout: int = 30
+) -> Optional[dict]:
     """GET an OpenAlex endpoint ('/works', '/works/W123', or a full URL).
 
     Returns parsed JSON, or None on any failure (callers treat missing data

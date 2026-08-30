@@ -49,7 +49,7 @@ def cmd_create(args):
         print(f"Prefix: {row.key_prefix}  (safe to log/reference later)")
         print(f"Scope:  {row.scope}")
         print("\nGive the partner this header format:")
-        print(f'    X-API-Key: {raw}')
+        print(f"    X-API-Key: {raw}")
     finally:
         session.close()
 
@@ -64,8 +64,10 @@ def cmd_list(args):
         for r in rows:
             status = "REVOKED" if r.revoked else "active"
             last_used = r.last_used_at.isoformat() if r.last_used_at else "never"
-            print(f"[{r.id}] {r.key_prefix}...  {r.name!r}  scope={r.scope}  "
-                  f"status={status}  created={r.created_at}  last_used={last_used}")
+            print(
+                f"[{r.id}] {r.key_prefix}...  {r.name!r}  scope={r.scope}  "
+                f"status={status}  created={r.created_at}  last_used={last_used}"
+            )
     finally:
         session.close()
 
@@ -91,11 +93,17 @@ def cmd_revoke(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_create = sub.add_parser("create", help="Issue a new partner API key")
-    p_create.add_argument("--name", required=True, help="Partner label, e.g. 'Africa PID Alliance / DOCiD'")
+    p_create.add_argument(
+        "--name",
+        required=True,
+        help="Partner label, e.g. 'Africa PID Alliance / DOCiD'",
+    )
     p_create.add_argument("--created-by", default=None)
     p_create.set_defaults(func=cmd_create)
 

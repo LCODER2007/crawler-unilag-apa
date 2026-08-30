@@ -281,7 +281,9 @@ def is_special_collection(
     if not keep:
         return (False, 0.0, [])
 
-    score = float(sum(c * 3 for _, c, _ in strong_hits) + sum(c for _, c, _ in support_hits))
+    score = float(
+        sum(c * 3 for _, c, _ in strong_hits) + sum(c for _, c, _ in support_hits)
+    )
     if score <= 0:
         return (False, 0.0, [])
 
@@ -340,7 +342,10 @@ if __name__ == "__main__":
     samples = [
         ("Yoruba cosmology and oral tradition in Ifa divination", ""),
         ("Compressive strength of recycled concrete aggregate", ""),
-        ("Indigenous medicine for malaria among the Igbo", "ethnobotany traditional healing"),
+        (
+            "Indigenous medicine for malaria among the Igbo",
+            "ethnobotany traditional healing",
+        ),
         ("Deep learning for tumour segmentation", ""),
         ("A study of SS 304 stainless steel corrosion", ""),
         ("Ubuntu philosophy and African communalism", ""),

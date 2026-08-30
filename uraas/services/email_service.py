@@ -93,9 +93,15 @@ def send_batch_approval_request(
 
 # ── Email templates ───────────────────────────────────────────────────────────
 
+
 def _build_html(
-    batch_id, item_count, collection_name, requested_by,
-    approve_url, reject_url, expires_hours,
+    batch_id,
+    item_count,
+    collection_name,
+    requested_by,
+    approve_url,
+    reject_url,
+    expires_hours,
 ) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -184,8 +190,13 @@ def _build_html(
 
 
 def _build_plain(
-    batch_id, item_count, collection_name, requested_by,
-    approve_url, reject_url, expires_hours,
+    batch_id,
+    item_count,
+    collection_name,
+    requested_by,
+    approve_url,
+    reject_url,
+    expires_hours,
 ) -> str:
     return f"""URAAS — IR Deposit Approval Request
 University of Lagos Institutional Repository

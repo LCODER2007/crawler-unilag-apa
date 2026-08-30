@@ -33,10 +33,12 @@ class DSpaceClient:
     def __init__(self):
         self.base = config.DSPACE_API_URL.rstrip("/")
         self._s = requests.Session()
-        self._s.headers.update({
-            "User-Agent": "URAAS/1.0 (APA Intelligence Platform; uraas-bot@unilag.edu.ng)",
-            "Accept": "application/json",
-        })
+        self._s.headers.update(
+            {
+                "User-Agent": "URAAS/1.0 (APA Intelligence Platform; uraas-bot@unilag.edu.ng)",
+                "Accept": "application/json",
+            }
+        )
         self.jwt: str | None = None
         self.csrf: str | None = None
 
@@ -61,9 +63,8 @@ class DSpaceClient:
         return token
 
     def _refresh_csrf(self, response: requests.Response):
-        new = (
-            response.headers.get("DSPACE-XSRF-TOKEN")
-            or self._s.cookies.get("DSPACE-XSRF-COOKIE", "")
+        new = response.headers.get("DSPACE-XSRF-TOKEN") or self._s.cookies.get(
+            "DSPACE-XSRF-COOKIE", ""
         )
         if new:
             self.csrf = new
@@ -93,13 +94,18 @@ class DSpaceClient:
             r = self._s.post(
                 f"{self.base}/api/authn/login",
                 headers={"X-XSRF-TOKEN": self.csrf},
-                data={"user": config.DSPACE_USERNAME, "password": config.DSPACE_PASSWORD},
+                data={
+                    "user": config.DSPACE_USERNAME,
+                    "password": config.DSPACE_PASSWORD,
+                },
                 timeout=_TIMEOUT,
             )
             self._refresh_csrf(r)
 
         if r.status_code == 401:
-            raise IRConnectionError("DSpace login failed — check DSPACE_USERNAME/PASSWORD")
+            raise IRConnectionError(
+                "DSpace login failed — check DSPACE_USERNAME/PASSWORD"
+            )
         r.raise_for_status()
         auth = r.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
@@ -161,12 +167,10 @@ class DSpaceClient:
                 timeout=_TIMEOUT,
             )
             r.raise_for_status()
-            raw = (
-                r.json()
-                .get("_embedded", {})
-                .get("values", [])
-            )
-            return [{"label": v.get("label", ""), "count": v.get("count", 0)} for v in raw]
+            raw = r.json().get("_embedded", {}).get("values", [])
+            return [
+                {"label": v.get("label", ""), "count": v.get("count", 0)} for v in raw
+            ]
         except Exception as exc:
             logger.warning("get_facet %s: %s", facet, exc)
             return []
@@ -199,6 +203,7 @@ class DSpaceClient:
         if not self.jwt:
             self.login()
         import re as _re
+
         try:
             # 1. Get authn/status to find eperson link
             r = self._s.get(
@@ -219,7 +224,9 @@ class DSpaceClient:
                 return []
 
             # 3. Extract collection UUIDs from COLLECTION_{uuid}_SUBMIT group names
-            r3 = self._s.get(groups_href, headers=self._write_headers(), timeout=_TIMEOUT)
+            r3 = self._s.get(
+                groups_href, headers=self._write_headers(), timeout=_TIMEOUT
+            )
             r3.raise_for_status()
             groups = r3.json().get("_embedded", {}).get("groups", [])
             submit_uuids = set()
@@ -265,11 +272,22 @@ class DSpaceClient:
         if doi:
             r = self._s.get(
                 f"{self.base}/api/discover/search/objects",
-                params={"query": f"dc.identifier.uri:{doi}", "dsoType": "item", "size": 1},
+                params={
+                    "query": f"dc.identifier.uri:{doi}",
+                    "dsoType": "item",
+                    "size": 1,
+                },
                 timeout=_TIMEOUT,
             )
             try:
-                if r.json().get("_embedded", {}).get("searchResult", {}).get("page", {}).get("totalElements", 0) > 0:
+                if (
+                    r.json()
+                    .get("_embedded", {})
+                    .get("searchResult", {})
+                    .get("page", {})
+                    .get("totalElements", 0)
+                    > 0
+                ):
                     return True
             except Exception:
                 pass
@@ -370,10 +388,17 @@ class DSpaceClient:
         )
         self._refresh_csrf(r2)
         if not r2.ok:
-            logger.warning("metadata patch failed for ws %s: %s %s", ws_id, r2.status_code, r2.text[:200])
+            logger.warning(
+                "metadata patch failed for ws %s: %s %s",
+                ws_id,
+                r2.status_code,
+                r2.text[:200],
+            )
 
         # 3. Grant the submission license (required by UNILAG DSpace 9 form) ──
-        license_patch = [{"op": "replace", "path": "/sections/license/granted", "value": True}]
+        license_patch = [
+            {"op": "replace", "path": "/sections/license/granted", "value": True}
+        ]
         rl = self._s.patch(
             f"{self.base}/api/submission/workspaceitems/{ws_id}",
             headers={**self._write_headers(), "Content-Type": "application/json"},
@@ -410,7 +435,9 @@ class DSpaceClient:
                 # HTTP status code.
                 logger.warning(
                     "Workspace item %s has %d validation error(s), aborting before workflow submit: %s",
-                    ws_id, len(errors), errors,
+                    ws_id,
+                    len(errors),
+                    errors,
                 )
                 self._s.delete(
                     f"{self.base}/api/submission/workspaceitems/{ws_id}",
@@ -433,7 +460,9 @@ class DSpaceClient:
         if not r3.ok:
             logger.warning(
                 "Workflow submission failed for ws %s: %s %s",
-                ws_id, r3.status_code, r3.text[:1500],
+                ws_id,
+                r3.status_code,
+                r3.text[:1500],
             )
         r3.raise_for_status()
 
@@ -442,6 +471,7 @@ class DSpaceClient:
 
 
 # ── Dublin Core field mapping (§6.4) ─────────────────────────────────────────
+
 
 def _mv(value: str, place: int = 0) -> dict:
     """Build a DSpace 9 metadata value object (language/authority/confidence required)."""
@@ -465,11 +495,13 @@ def _build_metadata_patch(item) -> list[dict]:
 
     def _add(dc_path: str, value: str, section: str = "traditionalpageone"):
         if value and value.strip():
-            ops.append({
-                "op": "add",
-                "path": f"/sections/{section}/{dc_path}",
-                "value": [_mv(value.strip())],
-            })
+            ops.append(
+                {
+                    "op": "add",
+                    "path": f"/sections/{section}/{dc_path}",
+                    "value": [_mv(value.strip())],
+                }
+            )
 
     _add("dc.title", item.title or "")
     _add("dc.date.issued", item.dc_date_issued or "")
@@ -494,35 +526,43 @@ def _build_metadata_patch(item) -> list[dict]:
         a.name for a in getattr(item, "authors", []) if getattr(a, "name", "")
     ]
     if author_names:
-        ops.append({
-            "op": "add",
-            "path": "/sections/traditionalpageone/dc.contributor.author",
-            "value": [_mv(n, i) for i, n in enumerate(author_names)],
-        })
+        ops.append(
+            {
+                "op": "add",
+                "path": "/sections/traditionalpageone/dc.contributor.author",
+                "value": [_mv(n, i) for i, n in enumerate(author_names)],
+            }
+        )
 
     # Abstract and subjects go in traditionalpagetwo (DSpace 9 default layout)
     if item.abstract and item.abstract.strip():
-        ops.append({
-            "op": "add",
-            "path": "/sections/traditionalpagetwo/dc.description.abstract",
-            "value": [_mv(item.abstract.strip())],
-        })
+        ops.append(
+            {
+                "op": "add",
+                "path": "/sections/traditionalpagetwo/dc.description.abstract",
+                "value": [_mv(item.abstract.strip())],
+            }
+        )
 
     subject_tags = [t.strip() for t in (item.dc_subject or "").split(",") if t.strip()]
     if subject_tags:
-        ops.append({
-            "op": "add",
-            "path": "/sections/traditionalpagetwo/dc.subject",
-            "value": [_mv(t, i) for i, t in enumerate(subject_tags)],
-        })
+        ops.append(
+            {
+                "op": "add",
+                "path": "/sections/traditionalpagetwo/dc.subject",
+                "value": [_mv(t, i) for i, t in enumerate(subject_tags)],
+            }
+        )
 
     # ARK + DocID as identifiers
     other_ids = [v for v in [item.ark, item.docid] if v]
     if other_ids:
-        ops.append({
-            "op": "add",
-            "path": "/sections/traditionalpageone/dc.identifier.other",
-            "value": [_mv(v, i) for i, v in enumerate(other_ids)],
-        })
+        ops.append(
+            {
+                "op": "add",
+                "path": "/sections/traditionalpageone/dc.identifier.other",
+                "value": [_mv(v, i) for i, v in enumerate(other_ids)],
+            }
+        )
 
     return ops

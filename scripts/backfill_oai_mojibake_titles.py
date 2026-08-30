@@ -42,18 +42,20 @@ def _handle_from_url(url: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Write changes (default: dry run)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write changes (default: dry run)"
+    )
     args = parser.parse_args()
 
     session = SessionLocal()
     try:
         candidates = (
-            session.query(Item)
-            .filter(Item.source_repository.like("%OAI-PMH%"))
-            .all()
+            session.query(Item).filter(Item.source_repository.like("%OAI-PMH%")).all()
         )
         corrupted = [it for it in candidates if _looks_mojibake(it.title or "")]
-        print(f"OAI-sourced items: {len(candidates)}   mojibake titles: {len(corrupted)}")
+        print(
+            f"OAI-sourced items: {len(candidates)}   mojibake titles: {len(corrupted)}"
+        )
 
         registry = get_registry()
         # Item.institution stores the display name (e.g. "University of
@@ -75,7 +77,9 @@ def main():
                 else ""
             )
             if not handle or not rest_base:
-                print(f"  id={it.id}: no handle/oai_endpoint (url={it.url!r}, institution={it.institution!r}), cannot repair")
+                print(
+                    f"  id={it.id}: no handle/oai_endpoint (url={it.url!r}, institution={it.institution!r}), cannot repair"
+                )
                 failed += 1
                 continue
             try:
@@ -93,7 +97,9 @@ def main():
                 continue
 
             if not clean_title or _looks_mojibake(clean_title):
-                print(f"  id={it.id}: REST also returned unusable title: {clean_title!r}")
+                print(
+                    f"  id={it.id}: REST also returned unusable title: {clean_title!r}"
+                )
                 failed += 1
                 continue
 

@@ -183,7 +183,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # (sometimes with a ROR-linked affiliationIdentifier) for others.
             raw_affs = []
             for c in creators:
-                for aff in (c.get("affiliation") or []):
+                for aff in c.get("affiliation") or []:
                     if isinstance(aff, str):
                         if aff:
                             raw_affs.append(aff)
@@ -205,7 +205,8 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # pattern as core_spider.py/openaire_spider.py.
                 combined = f"{title} {abstract}".lower()
                 if not any(
-                    p.lower() in combined for p in self.institution_config.affiliation_patterns
+                    p.lower() in combined
+                    for p in self.institution_config.affiliation_patterns
                 ):
                     self._rejected_aff += 1
                     continue
@@ -219,12 +220,16 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 continue
 
             pub_year = attrs.get("publicationYear") or ""
-            pub_date = str(pub_year) if pub_year else str(attrs.get("registered") or "")[:10]
+            pub_date = (
+                str(pub_year) if pub_year else str(attrs.get("registered") or "")[:10]
+            )
 
             resource_type_general = (
                 (attrs.get("types") or {}).get("resourceTypeGeneral") or ""
             ).lower()
-            content_type = self._RESOURCE_TYPE_MAP.get(resource_type_general, resource_type_general or "dataset")
+            content_type = self._RESOURCE_TYPE_MAP.get(
+                resource_type_general, resource_type_general or "dataset"
+            )
 
             self._accepted += 1
             item = {
@@ -238,7 +243,9 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "content_type": content_type,
                 "source_repository": "DataCite",
                 "is_unilag_author": True,
-                "raw_affiliation": " | ".join(raw_affs) if raw_affs else self.institution_name,
+                "raw_affiliation": (
+                    " | ".join(raw_affs) if raw_affs else self.institution_name
+                ),
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # "strong" only when a structured creators.affiliation entry
@@ -261,7 +268,11 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
             yield scrapy.Request(
                 url=next_link,
                 callback=self.parse,
-                meta={"wave": wave, "query": query, "scanned_this_wave": scanned_this_wave},
+                meta={
+                    "wave": wave,
+                    "query": query,
+                    "scanned_this_wave": scanned_this_wave,
+                },
             )
 
     def closed(self, reason):

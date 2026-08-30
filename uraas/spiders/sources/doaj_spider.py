@@ -25,8 +25,16 @@ from uraas.spiders.mixins import DedupAwareSpiderMixin
 
 _BASE = "https://doaj.org/api/v3/search/articles"
 _SC_AFFINITY = {
-    "indigenous", "cultural", "traditional", "oral", "heritage",
-    "african", "yoruba", "igbo", "hausa", "postcolonial",
+    "indigenous",
+    "cultural",
+    "traditional",
+    "oral",
+    "heritage",
+    "african",
+    "yoruba",
+    "igbo",
+    "hausa",
+    "postcolonial",
 }
 
 
@@ -39,8 +47,13 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
     }
 
     def __init__(
-        self, institution="unilag", target=50, boost_special=True, sc_only=False,
-        *args, **kwargs,
+        self,
+        institution="unilag",
+        target=50,
+        boost_special=True,
+        sc_only=False,
+        *args,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
@@ -51,9 +64,7 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
             else bool(boost_special)
         )
         self.sc_only = (
-            sc_only.lower() in _truthy
-            if isinstance(sc_only, str)
-            else bool(sc_only)
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
         )
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -86,14 +97,14 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
             q = f'"{self.institution_name}"'
             seen.add(q)
             yield scrapy.Request(
-                self._build_url(q), callback=self.parse,
+                self._build_url(q),
+                callback=self.parse,
                 meta={"query": q, "page": 1},
             )
 
         if self.boost_special:
             priority_seeds = [
-                s for s in SC_SEED_KEYWORDS
-                if any(k in s.lower() for k in _SC_AFFINITY)
+                s for s in SC_SEED_KEYWORDS if any(k in s.lower() for k in _SC_AFFINITY)
             ][:6]
             for seed in priority_seeds:
                 # Query institution AND seed together — a keyword-only query
@@ -109,7 +120,8 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 if q not in seen:
                     seen.add(q)
                     yield scrapy.Request(
-                        self._build_url(q), callback=self.parse,
+                        self._build_url(q),
+                        callback=self.parse,
                         meta={"query": q, "page": 1, "fallback_seed": seed},
                         priority=5,
                         errback=self._on_compound_query_error,
@@ -124,11 +136,15 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
         seed = request.meta.get("fallback_seed")
         if not seed:
             return
-        self.logger.warning(f"DOAJ compound query failed for seed={seed!r}, falling back to keyword-only")
+        self.logger.warning(
+            f"DOAJ compound query failed for seed={seed!r}, falling back to keyword-only"
+        )
         q = f'"{seed}"'
         yield scrapy.Request(
-            self._build_url(q), callback=self.parse,
-            meta={"query": q, "page": 1}, priority=5,
+            self._build_url(q),
+            callback=self.parse,
+            meta={"query": q, "page": 1},
+            priority=5,
         )
 
     def parse(self, response):
@@ -157,7 +173,11 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 (a.get("affiliation") or "") for a in bib.get("author", [])
             ).lower()
             affil_strong = inst_lower in affil_text
-            if not affil_strong and inst_lower not in title.lower() and inst_lower not in abstract.lower():
+            if (
+                not affil_strong
+                and inst_lower not in title.lower()
+                and inst_lower not in abstract.lower()
+            ):
                 continue
 
             doi = ""
@@ -219,9 +239,13 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
         total = int(data.get("total") or 0)
         page = response.meta.get("page", 1)
         query = response.meta.get("query", "")
-        if page * 50 < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            page * 50 < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             yield scrapy.Request(
-                self._build_url(query, page + 1), callback=self.parse,
+                self._build_url(query, page + 1),
+                callback=self.parse,
                 meta={"query": query, "page": page + 1},
             )
 

@@ -38,12 +38,26 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
         "USER_AGENT": f"URAAS/1.0 (+SC discovery; mailto:{config.OPENALEX_MAILTO})",
     }
 
-    def __init__(self, institution="unilag", target=50, boost_special=True, sc_only=False, *args, **kwargs):
+    def __init__(
+        self,
+        institution="unilag",
+        target=50,
+        boost_special=True,
+        sc_only=False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
         _truthy = {"1", "true", "yes", "on"}
-        self.boost_special = boost_special.lower() in _truthy if isinstance(boost_special, str) else bool(boost_special)
-        self.sc_only = sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
+        self.boost_special = (
+            boost_special.lower() in _truthy
+            if isinstance(boost_special, str)
+            else bool(boost_special)
+        )
+        self.sc_only = (
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
+        )
         registry = get_registry()
         self.institution_config = registry.get(institution)
         if not self.institution_config:
@@ -52,7 +66,9 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
         self.ror_id = self.institution_config.ror
         self._accepted = 0
         self.max_results_scanned = config.MAX_RESULTS_SCANNED
-        self._affiliation_patterns = self.institution_config.affiliation_patterns or [self.institution_name]
+        self._affiliation_patterns = self.institution_config.affiliation_patterns or [
+            self.institution_name
+        ]
         self._init_dedup_index()
 
     def _text_affiliation_match(self, title: str, abstract: str) -> bool:
@@ -79,17 +95,33 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
     async def start(self):
         if not self.sc_only:
             yield scrapy.Request(
-                self._build_url(f'"{self.institution_name}"'), callback=self.parse,
+                self._build_url(f'"{self.institution_name}"'),
+                callback=self.parse,
                 meta={"search": f'"{self.institution_name}"', "page": 1},
             )
         if self.boost_special:
-            priority_seeds = [s for s in SC_SEED_KEYWORDS
-                              if any(k in s for k in ("indigenous", "cultural", "postcolonial", "oral", "decolonial", "ubuntu"))]
+            priority_seeds = [
+                s
+                for s in SC_SEED_KEYWORDS
+                if any(
+                    k in s
+                    for k in (
+                        "indigenous",
+                        "cultural",
+                        "postcolonial",
+                        "oral",
+                        "decolonial",
+                        "ubuntu",
+                    )
+                )
+            ]
             for seed in priority_seeds:
                 search = f'"{self.institution_name}" "{seed}"'
                 yield scrapy.Request(
-                    self._build_url(search), callback=self.parse,
-                    meta={"search": search, "page": 1}, priority=10,
+                    self._build_url(search),
+                    callback=self.parse,
+                    meta={"search": search, "page": 1},
+                    priority=10,
                 )
 
     def parse(self, response):
@@ -116,11 +148,15 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             # spellings/shapes defensively since the exact schema isn't
             # formally versioned in the docs.
             desc = r.get("descriptions") or r.get("description") or ""
-            abstract = (desc if isinstance(desc, str) else " ".join(desc) if isinstance(desc, list) else "").strip()
+            abstract = (
+                desc
+                if isinstance(desc, str)
+                else " ".join(desc) if isinstance(desc, list) else ""
+            ).strip()
 
             # DOI from pids list
             doi = ""
-            for pid in (r.get("pids") or []):
+            for pid in r.get("pids") or []:
                 if isinstance(pid, dict) and pid.get("scheme", "").lower() == "doi":
                     doi = pid.get("value", "")
                     break
@@ -128,7 +164,8 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             authors_raw = r.get("authors") or []
             authors = [
                 (a.get("fullName") or a.get("fullname") or "").strip()
-                for a in authors_raw if isinstance(a, dict)
+                for a in authors_raw
+                if isinstance(a, dict)
             ]
             authors = [a for a in authors if a]
 
@@ -153,10 +190,17 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             self._accepted += 1
             item = {
-                "title": title, "abstract": abstract, "authors": authors, "doi": doi,
-                "url": url_val, "pdf_url": None, "publication_date": year,
-                "source_repository": "OpenAIRE", "is_unilag_author": True,
-                "raw_affiliation": self.institution_name, "institution": self.institution_name,
+                "title": title,
+                "abstract": abstract,
+                "authors": authors,
+                "doi": doi,
+                "url": url_val,
+                "pdf_url": None,
+                "publication_date": year,
+                "source_repository": "OpenAIRE",
+                "is_unilag_author": True,
+                "raw_affiliation": self.institution_name,
+                "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # "strong" only via the staff-roster cross-check — OpenAIRE
                 # carries no author affiliation field to check instead.
@@ -168,8 +212,12 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
         total = int(data.get("header", {}).get("numFound") or 0)
         page = response.meta.get("page", 1)
         search = response.meta.get("search", "")
-        if page * 50 < min(total, self.max_results_scanned) and self._accepted < self.target_limit:
+        if (
+            page * 50 < min(total, self.max_results_scanned)
+            and self._accepted < self.target_limit
+        ):
             yield scrapy.Request(
-                self._build_url(search, page + 1), callback=self.parse,
+                self._build_url(search, page + 1),
+                callback=self.parse,
                 meta={"search": search, "page": page + 1},
             )

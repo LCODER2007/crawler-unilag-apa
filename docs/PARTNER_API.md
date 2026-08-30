@@ -1,8 +1,10 @@
 # URAAS Partner API
 
-Server-to-server read access to URAAS (University of Lagos Academic Archive &
+Server-to-server access to URAAS (University of Lagos Academic Archive &
 Special Collections) data — built for external partners like the Africa PID
 Alliance / DOCiD to integrate against, without needing a browser session.
+Mostly read (papers, Special Collections, analytics); one narrowly-scoped
+action (triggering a UNILAG crawl) is also available.
 
 This is separate from the dashboard's human login (username/password +
 session cookie). Partner access uses a long-lived API key instead.
@@ -25,9 +27,9 @@ X-API-Key: uraas_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 - Missing or invalid key → `401 Unauthorized`
 - Valid key used against an endpoint outside this document → `403 Forbidden`
-  (partner keys are read-only by construction — no key can reach crawler
-  controls, admin exports, or anything that mutates data, regardless of what
-  path is requested)
+  (a key only ever reaches the endpoints listed here, by construction — the
+  admin crawler console, bulk exports, and anything else that mutates data
+  stay 403 regardless of what path is requested)
 - Keys are issued manually by a URAAS admin. To request one, contact the
   URAAS team directly — there is no self-service signup.
 
@@ -138,6 +140,33 @@ registry key (e.g. `unilag`); omitting it returns null fields.
 { "status": "success", "data": { "institution_name": "University of Lagos", "country_name": "Nigeria", "country_code": "NG" } }
 ```
 
+### `POST /api/partner/crawl/start`
+Trigger a fresh UNILAG crawl yourself, instead of waiting on someone to run
+one from the dashboard. Deliberately narrower than the internal admin
+trigger — a crawl fans out to a dozen third-party APIs and can end in real
+DOCiD registrations, so nothing partner-triggered is unrestrained:
+
+- **Institution is always `unilag`** — not a request field, can't be overridden.
+- **`target`** — papers to find, 1–50 (default 20). Higher targets aren't available via this endpoint.
+- **`spider`** — one of `openalex`, `crossref`, `arxiv`, `orcid`, `semantic_scholar`, `europepmc`, `core`, `pubmed`, `openaire`, `doaj`, `ajol` (default `openalex`).
+- **`boost_special`** — bias the crawl toward Special Collections (default `true`).
+- **Cooldown: one trigger per key per 10 minutes**, independent of the 120/min general rate limit and independent of whether a crawl happens to be running.
+
+```json
+{ "target": 20, "spider": "openalex", "boost_special": true }
+```
+
+```json
+{ "status": "success", "message": "Crawl started — target 20 papers (UNILAG, openalex)" }
+```
+
+A crawl already running (triggered by anyone — admin or partner) → `400`.
+Cooldown still active → `429` with seconds remaining.
+
+### `GET /api/partner/crawl/status`
+`{"status": "running"}` or `{"status": "idle"}`. Poll this after triggering a
+crawl, then re-pull from the read endpoints above once it's idle again.
+
 ---
 
 ## Example
@@ -151,18 +180,28 @@ curl -H "X-API-Key: uraas_live_..." \
 
 ## What this API does *not* do (yet)
 
-There is currently no inbound path — nothing lets DOCID's platform push data
-or notifications back into URAAS (e.g. "here's the DocID we just assigned,
-sync your record" or a webhook on registration). Every endpoint above is
-URAAS serving data out. If two-way sync is needed, that's new work to scope
-separately, not something already exposed here.
+Triggering a crawl (above) is the only inbound action available. There's
+still no way for DOCID's platform to push data or notifications back into
+URAAS — no webhook for "here's the DocID we just assigned, sync your
+record." Every other endpoint is URAAS serving data out. If that kind of
+two-way sync is needed, that's new work to scope separately, not something
+already exposed here.
 
 ## For URAAS admins — issuing/revoking keys
+
+Two equivalent paths — a CLI for local/shell access, and an HTTP path (admin
+session required) for a deployed instance with no shell, like the HF Space:
 
 ```bash
 python scripts/manage_api_keys.py create --name "Africa PID Alliance / DOCiD"
 python scripts/manage_api_keys.py list
 python scripts/manage_api_keys.py revoke --prefix uraas_live_AbCd1234
+```
+
+```
+POST   /api/admin/api-keys              { "name": "..." }
+GET    /api/admin/api-keys
+POST   /api/admin/api-keys/<id>/revoke
 ```
 
 The full key value is shown exactly once, at creation — only its hash is

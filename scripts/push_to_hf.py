@@ -19,28 +19,42 @@ import sys
 import tempfile
 
 # ── Config ────────────────────────────────────────────────────────────────────
-REPO_ID   = "Lordkiki/APA-URAAS"
+REPO_ID = "Lordkiki/APA-URAAS"
 REPO_TYPE = "space"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Directories/files to never push
 IGNORE_DIRS = {
-    ".git", ".claude", "__pycache__", ".pytest_cache", ".mypy_cache",
-    "storage", "logs", "data", "backups", "node_modules",
-    ".venv", "venv", "env",
+    ".git",
+    ".claude",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    "storage",
+    "logs",
+    "data",
+    "backups",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
 }
 IGNORE_FILES = {
-    ".env", ".env.prod", ".env.prod.example",
-    "uraas.db",                  # DB lives on /data in HF, not in image
-    "Dockerfile",                # replaced by Dockerfile.hf
-    "README.md",                 # replaced by README.hf.md (has HF frontmatter)
+    ".env",
+    ".env.prod",
+    ".env.prod.example",
+    "uraas.db",  # DB lives on /data in HF, not in image
+    "Dockerfile",  # replaced by Dockerfile.hf
+    "README.md",  # replaced by README.hf.md (has HF frontmatter)
     "docker-compose.yml",
     "docker-compose.prod.yml",
     "docker-compose.replica.yml",
     "docker-compose.demo.yml",
 }
 IGNORE_EXTS = {
-    ".pyc", ".pyo", ".pyd",
+    ".pyc",
+    ".pyo",
+    ".pyd",
     # Database files/backups — belt-and-suspenders beyond the exact
     # "uraas.db" name check below and the startswith("uraas.db") check,
     # since a missed pattern here means real crawled data (author names,
@@ -49,13 +63,19 @@ IGNORE_EXTS = {
     # 1819-item/14MB snapshot, was uploaded because only "uraas.db" itself
     # was excluded, not the ".bak" variant — deleted from the live Space
     # after the fact, but should never have gone up in the first place.
-    ".bak", ".backup", ".old", ".orig", ".db", ".sqlite", ".sqlite3",
+    ".bak",
+    ".backup",
+    ".old",
+    ".orig",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
 }
 
 
 def should_skip(rel_path: str, is_dir: bool) -> bool:
     parts = rel_path.replace("\\", "/").split("/")
-    name  = parts[-1]
+    name = parts[-1]
     if is_dir:
         return name in IGNORE_DIRS
     # Catches any suffix variant regardless of extension — uraas.db-wal,
@@ -63,10 +83,7 @@ def should_skip(rel_path: str, is_dir: bool) -> bool:
     # uraas.db.20260629, etc. — not just the exact names/extensions above.
     if name.startswith("uraas.db"):
         return True
-    return (
-        name in IGNORE_FILES
-        or os.path.splitext(name)[1].lower() in IGNORE_EXTS
-    )
+    return name in IGNORE_FILES or os.path.splitext(name)[1].lower() in IGNORE_EXTS
 
 
 def stage_project(src: str, dst: str) -> int:
@@ -77,7 +94,8 @@ def stage_project(src: str, dst: str) -> int:
 
         # Prune excluded directories in-place so os.walk doesn't recurse
         dirs[:] = [
-            d for d in dirs
+            d
+            for d in dirs
             if not should_skip(
                 os.path.join(rel_root, d) if rel_root != "." else d,
                 is_dir=True,
@@ -93,7 +111,11 @@ def stage_project(src: str, dst: str) -> int:
 
             # HF-specific renames
             if fname == "Dockerfile.hf":
-                dest_rel = os.path.join(os.path.dirname(rel), "Dockerfile") if os.path.dirname(rel) else "Dockerfile"
+                dest_rel = (
+                    os.path.join(os.path.dirname(rel), "Dockerfile")
+                    if os.path.dirname(rel)
+                    else "Dockerfile"
+                )
             elif fname == "README.hf.md":
                 dest_rel = "README.md"
             else:
@@ -137,6 +159,7 @@ def main():
         print("  Logged in via HF_TOKEN env var.")
     else:
         from huggingface_hub import HfFolder
+
         cached = HfFolder.get_token()
         if cached:
             try:
@@ -147,7 +170,9 @@ def main():
         if not cached:
             if not sys.stdin.isatty():
                 print()
-                print("  No HF_TOKEN env var, no cached credential, and no terminal to prompt on.")
+                print(
+                    "  No HF_TOKEN env var, no cached credential, and no terminal to prompt on."
+                )
                 print("  Set HF_TOKEN=hf_... and re-run, e.g.:")
                 print(f"    HF_TOKEN=hf_... python {os.path.basename(__file__)}")
                 sys.exit(1)
@@ -169,12 +194,18 @@ def main():
 
         # Sanity checks
         has_dockerfile = "Dockerfile" in staged_names
-        has_readme     = "README.md" in staged_names
-        has_start_sh   = os.path.exists(os.path.join(staging, "scripts", "start_hf.sh"))
+        has_readme = "README.md" in staged_names
+        has_start_sh = os.path.exists(os.path.join(staging, "scripts", "start_hf.sh"))
 
-        print(f"  Dockerfile   : {'OK' if has_dockerfile else 'MISSING -- check Dockerfile.hf exists'}")
-        print(f"  README.md    : {'OK' if has_readme else 'MISSING -- check README.hf.md exists'}")
-        print(f"  start_hf.sh  : {'OK' if has_start_sh else 'MISSING -- check scripts/start_hf.sh'}")
+        print(
+            f"  Dockerfile   : {'OK' if has_dockerfile else 'MISSING -- check Dockerfile.hf exists'}"
+        )
+        print(
+            f"  README.md    : {'OK' if has_readme else 'MISSING -- check README.hf.md exists'}"
+        )
+        print(
+            f"  start_hf.sh  : {'OK' if has_start_sh else 'MISSING -- check scripts/start_hf.sh'}"
+        )
 
         if not has_dockerfile:
             print()
@@ -205,26 +236,35 @@ def main():
     print()
     print("  --- Secrets to set in Space Settings -> Variables & Secrets ---")
     secrets = [
-        ("URAAS_ENV",              "production"),
-        ("DASHBOARD_SECRET_KEY",   "307790fc5aff3fe1e766303f6b94e2fc28c831582bfba5b34802e2c9cbbac0ce"),
-        ("ADMIN_USERNAME",         "admin"),
-        ("ADMIN_PASSWORD_HASH",    "scrypt:32768:8:1$r2KZFX32rJ2twbfV$16f394a253c2b505a215ff2747f7dafbb098eb0eb8b4e6bb9fb521f0ea38af8ce71f33d2354245d68cc383678257367bf410aa45f835b5e848bff95a746878c8"),
-        ("VIEWER_USERNAME",        "viewer"),
-        ("VIEWER_PASSWORD_HASH",   "scrypt:32768:8:1$M8OjWxX64B38akos$2803ad5b29508c4d69df115579630b2a4cbdf2c8406157598c088d5511a7b3d79f91399035040660705413c63fdc41aa0d020cbd7b45038c8ed51d20092ea609"),
-        ("SMTP_HOST",              "smtp.gmail.com"),
-        ("SMTP_PORT",              "587"),
-        ("SMTP_USE_TLS",           "true"),
-        ("SMTP_USER",              "lawalgiyath200716@gmail.com"),
-        ("SMTP_PASSWORD",          "ufwqbdrecpfrzppn"),
-        ("SMTP_FROM",              "URAAS UNILAG <lawalgiyath200716@gmail.com>"),
-        ("DASHBOARD_BASE_URL",     "https://lordkiki-apa-uraas.hf.space"),
+        ("URAAS_ENV", "production"),
+        (
+            "DASHBOARD_SECRET_KEY",
+            "307790fc5aff3fe1e766303f6b94e2fc28c831582bfba5b34802e2c9cbbac0ce",
+        ),
+        ("ADMIN_USERNAME", "admin"),
+        (
+            "ADMIN_PASSWORD_HASH",
+            "scrypt:32768:8:1$r2KZFX32rJ2twbfV$16f394a253c2b505a215ff2747f7dafbb098eb0eb8b4e6bb9fb521f0ea38af8ce71f33d2354245d68cc383678257367bf410aa45f835b5e848bff95a746878c8",
+        ),
+        ("VIEWER_USERNAME", "viewer"),
+        (
+            "VIEWER_PASSWORD_HASH",
+            "scrypt:32768:8:1$M8OjWxX64B38akos$2803ad5b29508c4d69df115579630b2a4cbdf2c8406157598c088d5511a7b3d79f91399035040660705413c63fdc41aa0d020cbd7b45038c8ed51d20092ea609",
+        ),
+        ("SMTP_HOST", "smtp.gmail.com"),
+        ("SMTP_PORT", "587"),
+        ("SMTP_USE_TLS", "true"),
+        ("SMTP_USER", "lawalgiyath200716@gmail.com"),
+        ("SMTP_PASSWORD", "ufwqbdrecpfrzppn"),
+        ("SMTP_FROM", "URAAS UNILAG <lawalgiyath200716@gmail.com>"),
+        ("DASHBOARD_BASE_URL", "https://lordkiki-apa-uraas.hf.space"),
         ("DASHBOARD_CORS_ORIGINS", "https://lordkiki-apa-uraas.hf.space"),
-        ("ARK_NAAN",               "99999"),
-        ("ARK_SHOULDER",           "z1"),
-        ("OPENALEX_MAILTO",        "lawalgiyath200716@gmail.com"),
-        ("DSPACE_API_URL",         "https://api-ir.unilag.edu.ng/server"),
-        ("DSPACE_USERNAME",        "<professor email — set as Secret, not Variable>"),
-        ("DSPACE_PASSWORD",        "<professor password — set as Secret, not Variable>"),
+        ("ARK_NAAN", "99999"),
+        ("ARK_SHOULDER", "z1"),
+        ("OPENALEX_MAILTO", "lawalgiyath200716@gmail.com"),
+        ("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server"),
+        ("DSPACE_USERNAME", "<professor email — set as Secret, not Variable>"),
+        ("DSPACE_PASSWORD", "<professor password — set as Secret, not Variable>"),
     ]
     max_k = max(len(k) for k, _ in secrets)
     for k, v in secrets:

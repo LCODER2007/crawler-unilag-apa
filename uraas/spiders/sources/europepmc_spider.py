@@ -12,7 +12,7 @@ The API is free, no key required.
 
 import os
 import sys
-from urllib.parse import urlencode, quote
+from urllib.parse import quote, urlencode
 
 import scrapy
 
@@ -57,9 +57,7 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
             else bool(boost_special)
         )
         self.sc_only = (
-            sc_only.lower() in _truthy
-            if isinstance(sc_only, str)
-            else bool(sc_only)
+            sc_only.lower() in _truthy if isinstance(sc_only, str) else bool(sc_only)
         )
         registry = get_registry()
         self.institution_config = registry.get(institution)
@@ -71,7 +69,9 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
         self.max_results_scanned = config.MAX_RESULTS_SCANNED
 
         # Use primary affiliation patterns to widen EPMC search
-        self._affiliation_patterns = self.institution_config.affiliation_patterns or [self.institution_name]
+        self._affiliation_patterns = self.institution_config.affiliation_patterns or [
+            self.institution_name
+        ]
 
         self.logger.info(
             "EuropePMC spider | %s | boost_special=%s | target=%d",
@@ -128,11 +128,21 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # Only run the most SC-relevant seeds for EPMC — ethnobotany, traditional
             # knowledge, and cultural heritage are where EPMC adds the most value.
             priority_seeds = [
-                s for s in SC_SEED_KEYWORDS
-                if any(k in s.lower() for k in (
-                    "indigenous", "traditional", "ethnobotany", "cultural", "oral",
-                    "decolonial", "ubuntu", "ethnomusicology",
-                ))
+                s
+                for s in SC_SEED_KEYWORDS
+                if any(
+                    k in s.lower()
+                    for k in (
+                        "indigenous",
+                        "traditional",
+                        "ethnobotany",
+                        "cultural",
+                        "oral",
+                        "decolonial",
+                        "ubuntu",
+                        "ethnomusicology",
+                    )
+                )
             ]
             for seed in priority_seeds:
                 query = self._affil_query(seed)
@@ -173,12 +183,13 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
             doc_type = r.get("pubType") or r.get("source") or ""
 
             url_val = (
-                f"https://doi.org/{doi}" if doi
+                f"https://doi.org/{doi}"
+                if doi
                 else (f"https://europepmc.org/article/med/{pmid}" if pmid else "")
             )
             pdf_url = None
             if r.get("isOpenAccess") == "Y" and r.get("fullTextUrlList"):
-                for ft in (r.get("fullTextUrlList", {}).get("fullTextUrl") or []):
+                for ft in r.get("fullTextUrlList", {}).get("fullTextUrl") or []:
                     if ft.get("documentStyle") == "pdf":
                         pdf_url = ft.get("url")
                         break
