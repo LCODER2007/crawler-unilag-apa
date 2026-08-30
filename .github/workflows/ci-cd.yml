@@ -100,27 +100,6 @@ jobs:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
         run: python scripts/init_db.py
 
-      # Temporary bisection steps (2026-08): "Run Tests" has been failing in
-      # CI with pytest exit code 4 (a usage/config error, not a test
-      # failure) with no traceback visible via the API or web log viewer —
-      # splitting the single command into stages that each show clearly in
-      # the job's step list, so whichever one actually fails narrows this
-      # down in one run instead of another blind guess-and-push cycle.
-      - name: Diagnostic - versions
-        run: |
-          pip list
-          pytest --version
-
-      - name: Diagnostic - collect only
-        env:
-          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-        run: pytest tests/ --collect-only -q
-
-      - name: Run Tests (no coverage)
-        env:
-          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-        run: pytest tests/ -v --tb=long
-
       - name: Run Tests
         env:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db

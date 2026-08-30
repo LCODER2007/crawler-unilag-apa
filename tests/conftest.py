@@ -9,6 +9,16 @@ able to log in at all.
 """
 
 import os
+import sys
+
+# Every other test file in this suite has this same sys.path.insert — this
+# file didn't, and it worked locally by accident: `python -m pytest` (what
+# was used for all local verification) prepends the current directory to
+# sys.path automatically, but CI's plain `pytest tests/ ...` does not.
+# Live-verified 2026-08-30: CI failed with "ModuleNotFoundError: No module
+# named 'uraas'" at conftest.py collection, exit code 4, with no local
+# reproduction because the local invocation always masked it.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("VIEWER_USERNAME", "viewer")
