@@ -1,7 +1,4 @@
 scrapy>=2.11.0,<2.15.0
-playwright>=1.40.0
-pytest-playwright>=0.4.0
-scrapy-playwright>=0.0.34
 psycopg2-binary>=2.9.9
 SQLAlchemy>=2.0.25
 Flask>=3.0.0
