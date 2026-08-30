@@ -3904,7 +3904,7 @@ if __name__ == "__main__":
     # Run with SocketIO
     socketio.run(
         app,
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 — required to be reachable from outside the container (HF Spaces/Docker); debug is already gated off in production below
         port=port,
         debug=not is_production,
         use_reloader=not is_production,

@@ -17,9 +17,9 @@ rate.
 import os
 import sys
 from urllib.parse import urlencode
-from xml.etree import ElementTree
 
 import scrapy
+from defusedxml import ElementTree
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
