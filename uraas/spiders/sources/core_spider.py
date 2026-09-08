@@ -211,6 +211,16 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # authored-there from written-about (CORE has no author
                 # affiliation field at all to check instead).
                 "affiliation_confidence": "strong" if roster_ok else "weak",
+                # CORE aggregates open-access repositories; a record carrying
+                # a downloadUrl is one CORE itself serves the full text for.
+                # Anything without one stays at the restricted default rather
+                # than claiming an access level the source doesn't support.
+                "dc_rights": (
+                    "info:eu-repo/semantics/openAccess"
+                    if pdf_url
+                    else "info:eu-repo/semantics/restrictedAccess"
+                ),
+                "suggested_access": "Public" if pdf_url else "Private",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

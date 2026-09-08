@@ -229,6 +229,11 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # arxiv:affiliation check or (when that's absent) the staff
                 # roster cross-check above — never a bare text mention.
                 "affiliation_confidence": "strong",
+                # arXiv is an open-access preprint server — everything it
+                # serves is freely readable, so this is a property of the
+                # source rather than a per-record flag.
+                "dc_rights": "info:eu-repo/semantics/openAccess",
+                "suggested_access": "Public",
             }
             yield item
             self._mark_seen(doi=doi, url=arxiv_id, title=title)

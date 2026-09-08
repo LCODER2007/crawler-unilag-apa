@@ -327,7 +327,8 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             pdf_url = None
             oa = work.get("open_access", {})
-            if oa.get("is_oa") and oa.get("oa_url"):
+            is_oa = bool(oa.get("is_oa"))
+            if is_oa and oa.get("oa_url"):
                 pdf_url = oa["oa_url"]
 
             # Extract SDG tags from concepts
@@ -368,6 +369,16 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # 1) at minimum — OpenAlex's own curated institution-linkage
                 # database, the strongest affiliation signal available here.
                 "affiliation_confidence": "strong",
+                # OpenAlex's own open_access.is_oa verdict. Without this the
+                # item falls back to Item.dc_rights' restrictedAccess default,
+                # which is what made every OA metric in the dashboard read 0%
+                # and made /api/papers/<id>/download 403 for every caller.
+                "dc_rights": (
+                    "info:eu-repo/semantics/openAccess"
+                    if is_oa
+                    else "info:eu-repo/semantics/restrictedAccess"
+                ),
+                "suggested_access": "Public" if is_oa else "Private",
             }
             yield item
             self._mark_seen(doi=doi, url=url, title=title)

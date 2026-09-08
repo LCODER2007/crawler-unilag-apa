@@ -188,7 +188,8 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 else (f"https://europepmc.org/article/med/{pmid}" if pmid else "")
             )
             pdf_url = None
-            if r.get("isOpenAccess") == "Y" and r.get("fullTextUrlList"):
+            is_oa = r.get("isOpenAccess") == "Y"
+            if is_oa and r.get("fullTextUrlList"):
                 for ft in r.get("fullTextUrlList", {}).get("fullTextUrl") or []:
                     if ft.get("documentStyle") == "pdf":
                         pdf_url = ft.get("url")
@@ -230,6 +231,15 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # AFFILIATION: field (see _affil_query) — not a free-text
                 # guess, so every accepted item is a strong match.
                 "affiliation_confidence": "strong",
+                # EuropePMC's own isOpenAccess flag — see the same note in
+                # openalex_spider.py: without this, dc_rights stays at the
+                # restrictedAccess model default forever.
+                "dc_rights": (
+                    "info:eu-repo/semantics/openAccess"
+                    if is_oa
+                    else "info:eu-repo/semantics/restrictedAccess"
+                ),
+                "suggested_access": "Public" if is_oa else "Private",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

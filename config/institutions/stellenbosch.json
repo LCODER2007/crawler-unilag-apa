@@ -11,7 +11,8 @@
     "@sun.ac.za",
     "SU Stellenbosch",
     "Stellenbosch Univ.",
-    "Stellenbosch, South Africa"
+    "Stellenbosch, South Africa",
+    "Stellenbosch University Department"
   ],
   "faculties": [
     "Faculty of AgriSciences",
@@ -30,5 +31,6 @@
     "concurrent_requests": 8,
     "retry_times": 3,
     "download_delay": 2.0
-  }
+  },
+  "sub_region": "Southern Africa"
 }

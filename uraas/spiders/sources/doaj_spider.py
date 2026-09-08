@@ -232,6 +232,11 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 # can't distinguish a paper authored there from one merely
                 # written about it/someone there.
                 "affiliation_confidence": "strong" if affil_strong else "weak",
+                # DOAJ is the Directory of *Open Access* Journals — every
+                # article it indexes is open access by definition, so this is
+                # a fact about the source, not a per-record flag to look up.
+                "dc_rights": "info:eu-repo/semantics/openAccess",
+                "suggested_access": "Public",
             }
             yield item
             self._mark_seen(doi=doi, url=url_val, title=title)

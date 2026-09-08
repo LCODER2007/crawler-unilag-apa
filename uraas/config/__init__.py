@@ -43,6 +43,18 @@ class Config:
         "yes",
         "on",
     }
+    # Push-to-DOCiD after each crawl. Defaults OFF: the Africa PID Alliance
+    # team asked (2026-09) to *pull* from URAAS into their own staging, where
+    # a curator promotes records — so URAAS pushing the same records in at
+    # the same time would have both sides ingesting everything twice. Set
+    # URAAS_ENABLE_DOCID_PUSH=1 only if that direction is agreed and the
+    # pull integration is switched off on their side.
+    ENABLE_DOCID_PUSH = os.getenv("URAAS_ENABLE_DOCID_PUSH", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     # Dashboard
     DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8080"))

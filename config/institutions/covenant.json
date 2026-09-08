@@ -11,7 +11,8 @@
     "@covenantuniversity.edu.ng",
     "Canaanland Ota",
     "Covenant University Ota",
-    "CU Ota"
+    "CU Ota",
+    "Covenant University Department"
   ],
   "faculties": [
     "College of Science and Technology",
@@ -25,5 +26,6 @@
     "concurrent_requests": 8,
     "retry_times": 3,
     "download_delay": 2.0
-  }
+  },
+  "sub_region": "West Africa"
 }

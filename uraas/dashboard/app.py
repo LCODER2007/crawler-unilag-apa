@@ -125,6 +125,7 @@ ADMIN_ENDPOINTS = {
     "admin_list_api_keys",
     "admin_create_api_key",
     "admin_revoke_api_key",
+    "admin_backfill_open_access",
     # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) —
     # that path is checked earlier in _enforce_authentication and returns
     # before this set is ever consulted. Listing them here only closes the
@@ -320,8 +321,20 @@ def _auto_register_docid():
     restricts candidates to affiliation_confidence == "strong" and no-op's
     cleanly (prints "[DISABLED]", exits 0) when DOCID_EMAIL/DOCID_PASSWORD
     aren't configured.
+
+    Off by default since 2026-09 (config.ENABLE_DOCID_PUSH): the Africa PID
+    Alliance team asked to pull from URAAS into their own curator-gated
+    staging instead. Pushing as well would mean both sides ingest the same
+    records twice, which is exactly what they flagged.
     """
     import sys as _sys
+
+    if not config.ENABLE_DOCID_PUSH:
+        logger.info(
+            "[auto-docid] push disabled (URAAS_ENABLE_DOCID_PUSH not set) — "
+            "DOCiD pulls from URAAS instead; skipping."
+        )
+        return
 
     script = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -2104,6 +2117,53 @@ def admin_revoke_api_key(key_id):
         session_db.close()
 
 
+def _run_open_access_backfill():
+    """Background: resolve real open-access status for records that predate
+    the spiders recording it (see scripts/backfill_open_access.py)."""
+    import subprocess
+    import sys as _sys
+
+    script = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "scripts",
+        "backfill_open_access.py",
+    )
+    try:
+        proc = subprocess.Popen(
+            [_sys.executable, script, "--apply"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        for line in iter(proc.stdout.readline, b""):
+            text = line.decode("utf-8", errors="replace").strip()
+            if text:
+                socketio.emit("terminal_output", {"line": f"[OA-BACKFILL] {text}"})
+        proc.wait()
+        analytics_cache.invalidate_all()
+        logger.info("[oa-backfill] finished with code %s", proc.returncode)
+    except Exception as exc:
+        logger.error("[oa-backfill] failed: %s", exc)
+
+
+@app.route("/api/admin/backfill-open-access", methods=["POST"])
+def admin_backfill_open_access():
+    """Resolve open-access status for existing records (admin only).
+
+    Item.dc_rights was never written by any code path until 2026-09, so
+    every record crawled before then sits at the restrictedAccess model
+    default regardless of its real licence — which zeroed every OA metric
+    and made /api/papers/<id>/download 403 for all non-admin callers. The
+    spiders now set it at crawl time; this repairs the backlog. Runs in a
+    background thread (it makes one Unpaywall call per record) and streams
+    progress to the dashboard's live feed.
+    """
+    threading.Thread(target=_run_open_access_backfill, daemon=True).start()
+    return api_ok(
+        {"started": True},
+        narrative="Open-access backfill started — progress is streaming to the live feed.",
+    )
+
+
 @app.route("/api/author/<int:author_id>/metrics")
 def get_author_metrics(author_id):
     """Get bibliometric indicators for an author (h-index, citations, etc.)."""
@@ -3340,25 +3400,34 @@ def health_check():
 @app.route("/api/university-registry", methods=["GET"])
 def get_university_registry():
     """
-    Get the comprehensive 52-country African university registry.
+    The African university registry (52 institutions across 17 countries as
+    of this writing) URAAS crawls against — name, ROR, country, sub-region.
+
+    Previously read from data/university_registry.json, a file that never
+    actually existed in this repo (a genuine pre-existing bug, not a
+    deployment gap — it 500'd locally too, live-verified 2026-09). The real
+    registry has lived in uraas.config.institutions.InstitutionRegistry all
+    along; serving it directly here means this endpoint can never drift out
+    of sync with the registry the crawler itself uses.
     """
+    from uraas.config.institutions import get_registry
+
     try:
-        import json
-
-        registry_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "data",
-            "university_registry.json",
-        )
-        if not os.path.exists(registry_path):
-            registry_path = "data/university_registry.json"
-
-        with open(registry_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return jsonify(data)
+        registry = get_registry()
+        data = [
+            {
+                "key": inst.short_name,
+                "name": inst.name,
+                "ror": inst.ror,
+                "country": inst.country,
+                "sub_region": inst.sub_region,
+            }
+            for inst in registry.list_all()
+        ]
+        return jsonify({"status": "success", "count": len(data), "data": data})
     except Exception as e:
         logger.error(f"get_university_registry: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/reports/unilag-subregion", methods=["GET"])

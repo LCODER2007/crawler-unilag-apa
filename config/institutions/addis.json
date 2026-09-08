@@ -11,7 +11,8 @@
     "@aau.edu.et",
     "Addis Ababa University, Ethiopia",
     "Haile Selassie I University",
-    "AAU Addis"
+    "AAU Addis",
+    "Addis Ababa University Department"
   ],
   "faculties": [
     "College of Business and Economics",
@@ -31,5 +32,6 @@
     "concurrent_requests": 8,
     "retry_times": 3,
     "download_delay": 2.0
-  }
+  },
+  "sub_region": "East Africa"
 }
