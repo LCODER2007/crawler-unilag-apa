@@ -224,6 +224,15 @@ def main():
             repo_id=REPO_ID,
             repo_type=REPO_TYPE,
             commit_message="Deploy URAAS — African Research Archival & Analytics System",
+            # upload_folder only adds and updates — without this, a file
+            # deleted locally lives on in the Space forever. Live-verified
+            # 2026-09: 10 duplicate institution configs were removed here and
+            # the deployed registry still served all 53 afterwards, because
+            # the deletions never propagated. Scoped to config/ (the tree
+            # this actually matters for) rather than "*", so a stray delete
+            # pattern can't wipe Space-side runtime state such as the
+            # persistent database.
+            delete_patterns=["config/institutions/*.json"],
         )
 
     # ── Done ───────────────────────────────────────────────────────────────
