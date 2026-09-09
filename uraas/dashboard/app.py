@@ -682,6 +682,22 @@ def get_paper(item_id):
                     item.publication_date.isoformat() if item.publication_date else None
                 ),
                 "source_repository": item.source_repository or "",
+                # Attribution and classification travel with the record.
+                # Without these a partner pulling records into staging can't
+                # tell which institution a paper is attributed to, how
+                # confidently that attribution was made, or which Special
+                # Collection it belongs to — the last being the whole reason
+                # to ingest it. Previously all three were only reachable via
+                # separate aggregate endpoints.
+                "institution": item.institution or "",
+                "ror": item.ror or "",
+                "affiliation_confidence": item.affiliation_confidence or "",
+                "special_collection_categories": [
+                    c.strip()
+                    for c in (item.special_collection_categories or "").split(",")
+                    if c.strip()
+                ],
+                "special_collection_score": item.special_collection_score or 0.0,
                 "authors": [{"name": a.name} for a in item.authors],
                 "collections": collections,
                 "dc": {

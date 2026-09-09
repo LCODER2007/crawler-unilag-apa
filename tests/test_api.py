@@ -484,3 +484,30 @@ def test_keyword_cloud_response_time(admin_client):
     elapsed = time.time() - start
     assert r.status_code == 200
     assert elapsed < 10.0, f"Keyword cloud took {elapsed:.2f}s, should be < 10s"
+
+
+def test_paper_detail_carries_attribution_and_classification(admin_client):
+    """A pulled record must be self-describing.
+
+    Partners stage records one at a time, so institution, ROR, affiliation
+    confidence and Special Collections category have to travel on the record
+    itself — previously they were only reachable via separate aggregate
+    endpoints, which meant a staged record couldn't say what it was.
+    """
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter(Item.institution.isnot(None)).first()
+    finally:
+        session.close()
+    if not item:
+        pytest.skip("no item with an institution in the database")
+    d = admin_client.get(f"/api/papers/{item.id}").get_json()
+    for field in (
+        "institution",
+        "ror",
+        "affiliation_confidence",
+        "special_collection_categories",
+        "special_collection_score",
+    ):
+        assert field in d, f"{field} missing from paper detail"
+    assert isinstance(d["special_collection_categories"], list)
