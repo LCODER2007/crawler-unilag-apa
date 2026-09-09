@@ -51,11 +51,18 @@ _CLOSED = "info:eu-repo/semantics/restrictedAccess"
 
 
 def fetch_oa_status(doi: str):
-    """Return (is_oa, oa_status) from Unpaywall, or (None, None) on failure.
+    """Return (is_oa, oa_status, pdf_url) from Unpaywall, or (None, None,
+    None) on failure.
 
-    None means "couldn't determine" and is deliberately distinct from
-    False — an API failure must never downgrade a record we already believe
-    is open access.
+    None for is_oa means "couldn't determine" and is deliberately distinct
+    from False — an API failure must never downgrade a record we already
+    believe is open access.
+
+    The same response also carries best_oa_location, so the full-text URL
+    comes free with the call we're already making. That matters: an item can
+    be open access and still be undownloadable simply because no pdf_url was
+    ever captured for it (54 of 206 records on the live Space had one, 57
+    more were open access without one).
     """
     try:
         r = requests.get(
@@ -64,11 +71,13 @@ def fetch_oa_status(doi: str):
             timeout=_TIMEOUT,
         )
         if r.status_code != 200:
-            return None, None
+            return None, None, None
         data = r.json()
-        return bool(data.get("is_oa")), data.get("oa_status")
+        loc = data.get("best_oa_location") or {}
+        pdf_url = loc.get("url_for_pdf") or loc.get("url") or None
+        return bool(data.get("is_oa")), data.get("oa_status"), pdf_url
     except Exception:
-        return None, None
+        return None, None, None
 
 
 def main():
@@ -83,14 +92,22 @@ def main():
 
     session = SessionLocal()
     try:
+        # Two kinds of record need this: ones whose access level was never
+        # resolved, and ones already known to be open access but with no
+        # full-text URL captured — the latter are open access yet still
+        # undownloadable, which is just as much a gap.
         candidates = (
             session.query(Item)
             .filter(Item.doi.isnot(None))
             .filter(Item.doi != "")
-            .filter(Item.dc_rights == _CLOSED)
+            .filter(
+                (Item.dc_rights == _CLOSED)
+                | (Item.pdf_url.is_(None))
+                | (Item.pdf_url == "")
+            )
             .all()
         )
-        print(f"Items with a DOI still marked restrictedAccess: {len(candidates)}")
+        print(f"Items needing access status and/or a full-text URL: {len(candidates)}")
         if args.limit:
             candidates = candidates[: args.limit]
             print(f"Limited to first {len(candidates)} for this run")
@@ -99,20 +116,29 @@ def main():
             print("[DRY RUN] Would query Unpaywall for these. Re-run with --apply.")
             return 0
 
-        opened = checked = 0
+        opened = linked = checked = 0
         for it in candidates:
-            is_oa, oa_status = fetch_oa_status(it.doi)
+            is_oa, oa_status, pdf_url = fetch_oa_status(it.doi)
             checked += 1
             if is_oa:
-                it.dc_rights = _OA
+                if it.dc_rights != _OA:
+                    it.dc_rights = _OA
+                    opened += 1
                 # Keep any downloaded file's policy consistent with the item.
                 for f in session.query(File).filter_by(item_id=it.id).all():
                     f.access_policy = "Public"
-                opened += 1
+                # An open-access record with no full-text URL can't actually
+                # be fetched — fill it in while we have the answer.
+                if pdf_url and not (it.pdf_url or "").strip():
+                    it.pdf_url = pdf_url
+                    linked += 1
                 print(f"  OA   id={it.id} ({oa_status})  {(it.title or '')[:55]}")
             time.sleep(0.3)  # polite: Unpaywall asks for reasonable pacing
         session.commit()
-        print(f"\nDONE. Checked: {checked}   Marked open access: {opened}")
+        print(
+            f"\nDONE. Checked: {checked}   Newly open access: {opened}   "
+            f"Full-text URLs added: {linked}"
+        )
         return 0
     finally:
         session.close()
