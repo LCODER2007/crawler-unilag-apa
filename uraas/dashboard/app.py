@@ -51,6 +51,7 @@ from uraas.database import (
 )
 from uraas.production_config import ProductionConfig
 from uraas.utils.analytics_cache import analytics_cache
+from uraas.utils.pdf_downloader import stored_pdf_exists
 
 # Fail fast on insecure production config before the app even binds.
 config.validate()
@@ -691,20 +692,29 @@ def get_paper(item_id):
                     "description_provenance": item.dc_description_provenance or "",
                     "rights": item.dc_rights or "",
                 },
-                "file": (
-                    {
-                        "has_local_pdf": file_record is not None,
-                        "access_policy": (
-                            file_record.access_policy if file_record else None
-                        ),
-                        "download_url": (
-                            f"/api/papers/{item_id}/download" if file_record else None
-                        ),
-                        "sha256": file_record.sha256_hash if file_record else None,
-                    }
-                    if file_record
-                    else {"has_local_pdf": False}
-                ),
+                "file": {
+                    # has_local_pdf reflects the bytes actually being on disk,
+                    # not merely a File row existing — the two diverge on the
+                    # deployed Space, where storage doesn't survive a rebuild.
+                    "has_local_pdf": stored_pdf_exists(file_record),
+                    "access_policy": (
+                        file_record.access_policy if file_record else None
+                    ),
+                    # Present whenever the endpoint can serve something: a real
+                    # local file, or an open-access URL to redirect to.
+                    "download_url": (
+                        f"/api/papers/{item_id}/download"
+                        if (
+                            stored_pdf_exists(file_record)
+                            or (
+                                (item.pdf_url or "").strip()
+                                and _is_open_access(item, file_record)
+                            )
+                        )
+                        else None
+                    ),
+                    "sha256": file_record.sha256_hash if file_record else None,
+                },
                 "created_at": item.created_at.isoformat() if item.created_at else None,
             }
         )
@@ -725,14 +735,49 @@ def _is_open_access(item, file_record) -> bool:
     return False
 
 
+def _open_access_redirect(item, file_record):
+    """Fall back to the record's own open-access full-text URL.
+
+    URAAS only stores a PDF locally for a minority of records, and on the
+    deployed Space local files don't survive a rebuild at all (they live
+    under STORAGE_PATH, which is neither shipped in the image nor on a
+    persistent volume) — so a File row can outlive the bytes it points at.
+    Rather than 404 while holding a perfectly good OA link, redirect to it.
+    Only ever for open-access items: this must not become a way around the
+    copyright gate below.
+    """
+    pdf_url = (getattr(item, "pdf_url", "") or "").strip()
+    if pdf_url and _is_open_access(item, file_record):
+        return redirect(pdf_url)
+    return None
+
+
 @app.route("/api/papers/<int:item_id>/download")
 def download_paper(item_id):
     session = SessionLocal()
     try:
         file_record = session.query(File).filter_by(item_id=item_id).first()
-        if not file_record:
-            return jsonify({"error": "PDF not found"}), 404
         item = session.query(Item).filter_by(id=item_id).first()
+        if not item:
+            return jsonify({"error": "Paper not found"}), 404
+        if not file_record:
+            # No local copy was ever stored — most records are metadata-only.
+            # Still resolvable when the item is open access.
+            redirect_resp = _open_access_redirect(item, None)
+            if redirect_resp is not None:
+                return redirect_resp
+            return (
+                jsonify(
+                    {
+                        "error": "No full text available",
+                        "message": (
+                            "URAAS holds metadata only for this record and has "
+                            "no open-access link for it."
+                        ),
+                    }
+                ),
+                404,
+            )
 
         # Copyright gate: viewers may only download verified open-access files;
         # restricted items are admin-only (see PRIVACY_NOTICE / readiness doc).
@@ -771,6 +816,11 @@ def download_paper(item_id):
             )
             return jsonify({"error": "Access denied"}), 403
         if not os.path.exists(real_path):
+            # The File row outlived the bytes (see _open_access_redirect) —
+            # serve the open-access link rather than a dead end.
+            redirect_resp = _open_access_redirect(item, file_record)
+            if redirect_resp is not None:
+                return redirect_resp
             return jsonify({"error": "PDF file missing from storage"}), 404
 
         filename = (

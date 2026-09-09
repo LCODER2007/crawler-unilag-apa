@@ -124,3 +124,26 @@ class PDFDownloader:
 
 
 pdf_downloader = PDFDownloader()
+
+
+def stored_pdf_exists(file_record) -> bool:
+    """True only when the bytes a File row points at are actually on disk.
+
+    A File row can outlive its file: PDFs are written under STORAGE_PATH,
+    which is neither shipped in the deployed image nor on a persistent
+    volume, so a rebuild wipes them while the row (in the database) stays.
+    Reporting `has_local_pdf` straight from "a row exists" therefore told
+    API consumers a file was available when fetching it would 404.
+    """
+    if file_record is None or not file_record.file_path:
+        return False
+    path = file_record.file_path
+    if not os.path.isabs(path):
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        path = os.path.join(project_root, path)
+    try:
+        return os.path.exists(path)
+    except OSError:
+        return False

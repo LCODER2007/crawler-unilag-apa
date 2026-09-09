@@ -45,7 +45,16 @@ from uraas.utils.ai_classifier import (
     extract_trends_from_corpus,
 )
 from uraas.utils.analytics_cache import analytics_cache
+from uraas.utils.pdf_downloader import stored_pdf_exists as _stored_pdf_exists
 from uraas.utils.unilag_classifier import classifier
+
+
+def _has_oa_link(item) -> bool:
+    """The item is open access and carries a full-text URL we can redirect to."""
+    rights = (getattr(item, "dc_rights", "") or "").lower()
+    is_oa = "openaccess" in rights.replace("/", "").replace("-", "")
+    return bool(is_oa and (getattr(item, "pdf_url", "") or "").strip())
+
 
 logger = logging.getLogger(__name__)
 
@@ -299,10 +308,17 @@ class URAASAnalyticsEngine:
                                 "doi": p.doi or "",
                                 "url": p.url or "",
                                 "docid": p.docid or "",
-                                "has_local_pdf": f is not None,
+                                # Honest about the bytes, not just the row —
+                                # see uraas.utils.pdf_downloader.stored_pdf_exists.
+                                "has_local_pdf": _stored_pdf_exists(f),
                                 "access_policy": f.access_policy if f else None,
+                                # Resolvable whenever the download endpoint can
+                                # actually serve something: a real local file,
+                                # or an open-access URL it can redirect to.
                                 "download_url": (
-                                    f"/api/papers/{p.id}/download" if f else None
+                                    f"/api/papers/{p.id}/download"
+                                    if (_stored_pdf_exists(f) or _has_oa_link(p))
+                                    else None
                                 ),
                             }
                         )

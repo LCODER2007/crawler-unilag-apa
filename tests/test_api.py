@@ -172,6 +172,39 @@ def test_paper_detail_if_exists(admin_client):
     assert "title" in d
     assert "authors" in d
     assert "dc" in d
+    # "file" must always be present, even for metadata-only records — it used
+    # to collapse to a bare {"has_local_pdf": False} only when a File row
+    # existed, so consumers couldn't rely on the key's shape.
+    assert "file" in d
+    assert "has_local_pdf" in d["file"]
+
+
+def test_open_access_download_resolves(admin_client):
+    """An open-access record with a full-text URL must be fetchable.
+
+    Regression guard for the bug the Africa PID Alliance team hit: every
+    download 403'd because Item.dc_rights was never written by any code
+    path, and the ones that got past that 404'd because a File row can
+    outlive the bytes it points at. Either way the endpoint must not dead-end
+    while an open-access link is on the record.
+    """
+    session = SessionLocal()
+    try:
+        item = (
+            session.query(Item)
+            .filter(Item.dc_rights.like("%openAccess%"))
+            .filter(Item.pdf_url.isnot(None))
+            .filter(Item.pdf_url != "")
+            .first()
+        )
+    finally:
+        session.close()
+    if not item:
+        pytest.skip("no open-access item with a full-text URL in the database")
+    r = admin_client.get(f"/api/papers/{item.id}/download")
+    # 200 = served locally; 302 = redirected to the open-access URL. A 403
+    # (wrongly gated) or 404 (dead end despite having a link) is the bug.
+    assert r.status_code in (200, 302), f"unexpected {r.status_code}"
 
 
 # ── Keyword cloud / language ─────────────────────────────────────────────
