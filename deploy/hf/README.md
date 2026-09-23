@@ -1,6 +1,6 @@
 ---
 title: URAAS
-emoji:
+emoji: 📚
 colorFrom: green
 colorTo: blue
 sdk: docker
