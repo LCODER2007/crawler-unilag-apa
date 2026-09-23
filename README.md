@@ -2,7 +2,7 @@
 
 **World-class institutional repository intelligence system for African universities.** Built for the Africa PID Alliance, this platform provides strategic research intelligence, multi-institution comparison, and indigenous knowledge tracking.
 
-## 🎯 Core Features (APA Intelligence Platform)
+## Core Features (APA Intelligence Platform)
 
 ### Multi-Institution Comparator Engine
 - Compare 2-10 African institutions simultaneously
@@ -14,7 +14,7 @@
 ### Novel African-Focused Metrics
 - **TK Vitality Score**: Indigenous knowledge preservation tracking
 - **Linguistic Diversity Index**: African language research output measurement
-- **Patent Velocity Tracker**: 🚧 Roadmap — no patent data source integrated yet
+- **Patent Velocity Tracker**:  Roadmap - no patent data source integrated yet
 - **DocID Coverage**: Africa PID Alliance identifier adoption rate
 
 ### Research Intelligence
@@ -31,49 +31,49 @@
 - Faculty/department hierarchical navigation
 - Advanced Boolean search (Scopus-style operators)
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│           APA INTELLIGENCE & ANALYTICS PLATFORM             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Layer 1: Data Ingestion                                   │
-│  ├─ Multi-Source Crawlers (arXiv, Scholar, OpenAlex)      │
-│  ├─ DocID Repository Crawler (ir.unilag.edu.ng)           │
-│  ├─ Staff Validator (fuzzy name matching)                 │
-│  └─ Affiliation Filter (ROR-based)                        │
-│                                                             │
-│  Layer 2: Intelligence Engine                              │
-│  ├─ TK Vitality Score Calculator                          │
-│  ├─ Linguistic Diversity Analyzer                         │
-│  ├─ Patent Velocity Tracker                               │
-│  ├─ Multi-Institution Comparator                          │
-│  └─ Collaboration Network Builder                         │
-│                                                             │
-│  Layer 3: Strategic Reporting                              │
-│  ├─ Senate Report Generator                               │
-│  ├─ Rankings & Insights Engine                            │
-│  ├─ Gap Analysis (vs peer institutions)                   │
-│  └─ Recommendations Generator                             │
-│                                                             │
-│  Layer 4: Presentation                                     │
-│  ├─ Interactive Dashboard (Flask + D3.js)                 │
-│  ├─ REST API (JSON responses)                             │
-│  ├─ Export Formats (CSV, BibTeX, JSON, PDF)              │
-│  └─ Real-Time Updates (WebSocket)                         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|           APA INTELLIGENCE & ANALYTICS PLATFORM             |
++-------------------------------------------------------------+
+|                                                             |
+|  Layer 1: Data Ingestion                                   |
+|  +- Multi-Source Crawlers (arXiv, Scholar, OpenAlex)      |
+|  +- DocID Repository Crawler (ir.unilag.edu.ng)           |
+|  +- Staff Validator (fuzzy name matching)                 |
+|  +- Affiliation Filter (ROR-based)                        |
+|                                                             |
+|  Layer 2: Intelligence Engine                              |
+|  +- TK Vitality Score Calculator                          |
+|  +- Linguistic Diversity Analyzer                         |
+|  +- Patent Velocity Tracker                               |
+|  +- Multi-Institution Comparator                          |
+|  +- Collaboration Network Builder                         |
+|                                                             |
+|  Layer 3: Strategic Reporting                              |
+|  +- Senate Report Generator                               |
+|  +- Rankings & Insights Engine                            |
+|  +- Gap Analysis (vs peer institutions)                   |
+|  +- Recommendations Generator                             |
+|                                                             |
+|  Layer 4: Presentation                                     |
+|  +- Interactive Dashboard (Flask + D3.js)                 |
+|  +- REST API (JSON responses)                             |
+|  +- Export Formats (CSV, BibTeX, JSON, PDF)              |
+|  +- Real-Time Updates (WebSocket)                         |
+|                                                             |
++-------------------------------------------------------------+
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.9+
 - PostgreSQL 15+ (or SQLite for development)
 - 10GB+ free disk space for PDF storage
 - Modern web browser (Chrome, Firefox, Edge)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Clone and Setup
 
@@ -111,7 +111,7 @@ Open http://localhost:8080 in your browser.
 
 Press **5** or click the **Comparator** tab to access the Multi-Institution Comparison Engine.
 
-## 🎛️ Dashboard Features
+## Dashboard Features
 
 ### Tab 1: Crawler
 - Start/stop research paper mining
@@ -120,7 +120,7 @@ Press **5** or click the **Comparator** tab to access the Multi-Institution Comp
 - Recently harvested papers display
 
 ### Tab 2: Archive
-- Hierarchical view: Faculty → Department → Papers
+- Hierarchical view: Faculty -> Department -> Papers
 - 988 UNILAG papers indexed
 - CSV and BibTeX export
 - Full-text search
@@ -147,7 +147,7 @@ Press **5** or click the **Comparator** tab to access the Multi-Institution Comp
 - Collaboration mesh visualization
 - Strategic insights & recommendations
 
-## 🌍 Multi-Institution Comparator
+## Multi-Institution Comparator
 
 ### How to Use
 
@@ -187,13 +187,13 @@ Generate comprehensive reports for university leadership:
 
 **Export Formats**: JSON (implemented), CSV (TODO), PDF (TODO)
 
-## 📊 Novel African-Focused Metrics
+## Novel African-Focused Metrics
 
 ### TK Vitality Score
 
 Measures indigenous knowledge preservation efforts.
 
-**Formula**: Weighted sum of content types / total items × 100
+**Formula**: Weighted sum of content types / total items x 100
 
 **Content Type Weights**:
 - Indigenous Knowledge: 3.0
@@ -216,7 +216,7 @@ Measures indigenous knowledge preservation efforts.
 
 Tracks research outputs in African languages.
 
-**Formula**: African language outputs / total outputs × 100
+**Formula**: African language outputs / total outputs x 100
 
 **Supported Languages**: Yoruba, Igbo, Hausa, Swahili, Amharic, Somali, Kinyarwanda, Zulu, Xhosa, Afrikaans, and 10+ more
 
@@ -224,24 +224,24 @@ Tracks research outputs in African languages.
 
 **API Endpoint**: `GET /api/analytics/linguistic-diversity-index`
 
-### Patent Velocity Tracker — 🚧 Roadmap, not implemented
+### Patent Velocity Tracker -  Roadmap, not implemented
 
 Would analyze innovation commercialization timelines (patent date − publication date), but
 **no patent data source is integrated anywhere in this codebase.** `Item.patent_id`/`patent_date`
 exist as schema columns with no spider, API client, or backfill script that ever populates them.
 The comparator's `patent_rate` metric reports this honestly as "no data" rather than a fabricated
-0%. There is no `/api/analytics/patent-velocity` endpoint — that line below was aspirational, not
+0%. There is no `/api/analytics/patent-velocity` endpoint - that line below was aspirational, not
 built.
 
 ### DocID Coverage
 
 Tracks Africa PID Alliance identifier adoption.
 
-**Formula**: Papers with DocID / total papers × 100
+**Formula**: Papers with DocID / total papers x 100
 
 **API Endpoint**: `GET /api/analytics/docid-coverage`
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Comparator Endpoints
 
@@ -284,6 +284,52 @@ GET /api/analytics/publications-by-year
 GET /api/analytics/top-authors?limit=20
 ```
 
+### Keyword Endpoints
+
+```bash
+# Keywords for one record (extracted and persisted on first read if absent)
+GET /api/keywords/<id>
+
+# Records sharing the most keywords with this one
+GET /api/keywords/<id>/related?limit=10
+
+# Records carrying a keyword
+GET /api/keywords/search?q=indigenous%20knowledge&sc_only=1
+
+# Corpus-level TF-IDF keyword cloud
+GET /api/analytics/keyword-cloud?top_n=60
+
+# How much of the corpus has keywords at all
+GET /api/keywords/coverage
+
+# Fill in missing keywords (admin)
+POST /api/admin/keywords/backfill   { "limit": 500 }
+```
+
+### Citation Endpoints
+
+```bash
+# Counts, ARK, DOCiD and Pan-African citation share for one record
+GET /api/citations/<id>
+
+# The citation edge list, both directions
+GET /api/citations/<id>/graph?limit=200
+
+# How much of the corpus has a stored graph
+GET /api/citations/coverage
+
+# Fetch and store a record's graph from OpenAlex (admin)
+POST /api/admin/citations/sync-graph/<id>
+
+# Bulk graph sync, runs in the background (admin)
+POST /api/admin/citations/sync-graph   { "limit": 50, "sc_only": true }
+```
+
+Edges point mostly outside the corpus, so each carries its own DOI and
+OpenAlex id; `internal_id` is set only when URAAS also holds that work.
+Inbound edges are capped at 200 per record, so `edges_stored` is not
+`citation_count`.
+
 ### Search Endpoints
 
 ```bash
@@ -294,54 +340,60 @@ GET /api/search/advanced?q="machine learning" AND author:smith&sort=date&limit=5
 GET /api/analytics/search?q=covid&faculty=science&year_from=2020&oa_only=true
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-uraas/
-├── analytics/
-│   └── engine.py              # TK Vitality, Linguistic Diversity, Patent Velocity
-├── dashboard/
-│   ├── app.py                 # Flask app with comparator endpoints
-│   ├── templates/
-│   │   └── index.html         # Main dashboard (with comparator tab)
-│   └── static/
-│       └── css/
-│           └── professional.css  # Design system
-├── services/
-│   ├── comparator_engine.py   # Multi-institution comparison
-│   ├── citation_tracker.py    # Citation tracking & h-index
-│   └── advanced_search.py     # Boolean search engine
-├── spiders/
-│   └── sources/
-│       ├── arxiv_spider.py
-│       ├── scholar_spider.py
-│       ├── openalex_spider.py
-│       ├── crossref_spider.py
-│       ├── orcid_spider.py
-│       └── faculty_directory_spider.py
-├── pipelines/
-│   ├── affiliation_filter.py  # Staff validation
-│   ├── unpaywall.py           # OA status enrichment
-│   ├── gap_analysis.py        # Deduplication
-│   └── database.py            # Storage with ROR support
-├── utils/
-│   ├── unilag_classifier.py   # Faculty/dept classification
-│   ├── staff_validator.py     # Staff name validation
-│   ├── pdf_downloader.py      # PDF download & storage
-│   ├── docid_generator.py     # Africa PID Alliance DocID
-│   └── normalizer.py          # Text normalization
-├── config.py                   # Configuration
-└── database.py                 # SQLAlchemy models (with ROR)
+uraas/                          # The application package
++-- analytics/
+|   +-- engine.py               # TK Vitality, Linguistic Diversity, keyword cloud
++-- dashboard/
+|   +-- app.py                  # Flask app: every HTTP endpoint
+|   +-- auth.py                 # Session and API-key gate, endpoint allowlists
+|   +-- responses.py            # Shared JSON and CSV response helpers
+|   +-- templates/index.html    # The dashboard itself
+|   +-- static/                 # css/, js/
++-- services/
+|   +-- sc_engine.py            # Special Collections decision engine (SC_FILTER)
+|   +-- comparator_engine.py    # Multi-institution comparison
+|   +-- alignment_engine.py     # SDG / AU Agenda 2063 / UNESCO alignment
+|   +-- citation_tracker.py     # Citation counts, edge list, h-index
+|   +-- keyword_service.py      # Per-record keywords, backfill, related records
+|   +-- advanced_search.py      # Boolean search engine
+|   +-- docid_client.py         # Africa PID Alliance DOCiD client
+|   +-- ir_client.py            # DSpace REST client for the UNILAG IR
+|   +-- narratives.py           # Generated prose for the analytics views
+|   +-- batch_approval.py       # Deposit batch review
+|   +-- email_service.py        # Notification mail
++-- spiders/sources/            # 15 source spiders (OpenAlex, Crossref, OAI-PMH, ...)
++-- pipelines/
+|   +-- affiliation_filter.py   # Staff validation
+|   +-- unpaywall.py            # Open-access status enrichment
+|   +-- gap_analysis.py         # Deduplication
+|   +-- database.py             # Storage with ROR support
++-- utils/                      # Classifiers, PDF handling, DOCiD generation
++-- config/                     # Taxonomies and framework definitions
++-- config.py                   # Runtime configuration
++-- database.py                 # SQLAlchemy models and schema self-healing
 
-data/
-├── unilag_staff.json           # 946 staff names
-└── staff_department_map.json  # Department mappings
+deploy/                         # Everything about running it somewhere
++-- hf/                         # The live Hugging Face Space (Dockerfile, start.sh)
++-- k8s/, nginx/                # Reference configurations, not currently in use
++-- docker-compose*.yml
++-- gunicorn_config.py
++-- render.yaml
 
-storage/
-└── pdfs/                       # 127 downloaded PDFs
+scripts/                        # Operational entry points (init_db, migrations,
+|                               # backfills, push_to_hf.py, manage_api_keys.py)
+docs/                           # Partner API, deployment and policy documents
+tests/                          # pytest suite
 ```
 
-## 🗄️ Database Schema
+Not in version control, created at runtime or held locally: `storage/`
+(downloaded PDFs), `data/` (staff rosters, which carry personal data),
+`scratch/` (local working files), `.env`, and the SQLite database. On the
+live Space all of these live on the `/data` persistent volume instead.
+
+## Database Schema
 
 ### Multi-Institution Support
 
@@ -353,11 +405,11 @@ CREATE TABLE items (
     title VARCHAR(512),
     abstract TEXT,
     doi VARCHAR(255),
-    
+
     -- Multi-institution support
     ror VARCHAR(128),           -- Institution ROR ID
     institution VARCHAR(255),   -- Institution name
-    
+
     -- APA-specific fields
     content_type VARCHAR(50),   -- For TK Vitality
     tk_label VARCHAR(100),      -- Traditional Knowledge label
@@ -366,7 +418,7 @@ CREATE TABLE items (
     language_code VARCHAR(10),  -- For Linguistic Diversity
     is_african_language BOOLEAN,
     docid VARCHAR(128),         -- Africa PID Alliance DocID
-    
+
     -- Standard fields
     publication_date DATETIME,
     created_at DATETIME,
@@ -384,7 +436,7 @@ CREATE INDEX ix_items_ror ON items(ror);
 - **12 faculties**, **80+ departments**
 - **946 validated staff members**
 
-## 🎓 Adding More Institutions
+## Adding More Institutions
 
 ### Method 1: Manual Data Entry
 
@@ -411,7 +463,7 @@ Modify existing crawlers to accept ROR parameter and tag papers accordingly.
 
 Create CSV with ROR column and import using migration script.
 
-## 🚀 Deployment
+## Deployment
 
 ### Development
 
@@ -419,33 +471,54 @@ Create CSV with ROR column and import using migration script.
 python start_dashboard.py
 ```
 
-### Production (Render.com)
+### Live instance (Hugging Face Spaces)
+
+The live deployment is a Docker Space built from `deploy/hf/`. Deploying is a
+deliberate manual step, not something CI triggers:
 
 ```bash
-# Uses gunicorn with production config
-gunicorn -c gunicorn_config.py uraas.dashboard.app:app
+HF_TOKEN=hf_... python scripts/push_to_hf.py
 ```
 
-Configuration in `gunicorn_config.py`:
-- 4 workers
-- 120s timeout
-- Access logging
-- Error logging
+The script stages a clean copy of the repo, excluding secrets, the database,
+crawled PDFs and local working files, promotes `deploy/hf/Dockerfile` and
+`deploy/hf/README.md` to the Space root, and uploads it. The Space rebuilds in
+roughly five minutes. Runtime configuration lives in the Space's own Variables
+and Secrets, never in this repo.
 
-### Docker
+Live app: https://lordkiki-apa-uraas.hf.space
+
+The Space sleeps when idle, so the first request after a quiet period takes
+about 30 seconds while the container wakes.
+
+### Other targets
+
+`deploy/` also holds reference configurations that are not currently in use:
+Docker Compose, Kubernetes (`deploy/k8s/`), nginx (`deploy/nginx/`) and Render
+(`deploy/render.yaml`). Compose builds from the repo-root `Dockerfile`:
 
 ```bash
-docker-compose up -d
+docker compose -f deploy/docker-compose.prod.yml up -d
 ```
 
-## 🔐 Security Notes
+Gunicorn settings for those targets are in `deploy/gunicorn_config.py`:
+gthread workers to match the dashboard's SocketIO threading mode, 2 workers by
+default (`GUNICORN_WORKERS` overrides), 120s timeout, access and error logs to
+stdout and stderr.
 
-- Dashboard has NO authentication by default (add OAuth before production)
-- PDFs are stored locally (ensure adequate disk space)
+## Security Notes
+
+- Two authentication paths, both enforced by a `before_request` hook with
+  explicit public, admin and partner endpoint allowlists: session cookies for
+  human users, and `X-API-Key` for partner integrations
+- Secrets come from the environment. `.env` is git-ignored; `.env.example`
+  documents every variable without carrying a value
+- Crawled PDFs stay out of version control (`storage/` is ignored) and out of
+  the deployed image
 - Rate limiting enabled (2s delay between requests)
 - Respect publisher copyright (Unpaywall integration helps)
 
-## 📈 Roadmap
+## Roadmap
 
 ### High Priority
 - [ ] Collaboration Mesh D3.js visualization (geographic map)
@@ -464,7 +537,7 @@ docker-compose up -d
 - [ ] Performance optimization (Redis caching)
 - [ ] Lazy loading for large datasets
 
-## 🎯 UNESCO Presentation Readiness
+## UNESCO Presentation Readiness
 
 ### Key Strengths
 
@@ -493,26 +566,26 @@ docker-compose up -d
 - Built for Africa, by Africa
 - Complements DocID infrastructure without modifying it
 
-## 📝 License
+## License
 
-Licensed under the **Apache License 2.0** — see [LICENSE](LICENSE).
+Licensed under the **Apache License 2.0** - see [LICENSE](LICENSE).
 
-## 🔒 Privacy & Data Protection
+## Privacy & Data Protection
 
 URAAS processes already-published scholarly metadata in line with the Nigeria Data Protection Act
 2023. See the [Privacy Notice](PRIVACY_NOTICE.md) for the lawful basis, data handled, and how
 researchers can request access, correction, or removal of their data.
 
-## 🤝 Contributing
+## Contributing
 
 [Add contribution guidelines]
 
-## 📧 Contact
+## Contact
 
 For issues or questions, contact: library@unilag.edu.ng
 
 ---
 
-**Built with ❤️ for the Africa PID Alliance and UNESCO**
+**Built with  for the Africa PID Alliance and UNESCO**
 
 **Status**: Core platform implemented and functional. Comparator integrated. Ready for internal testing and stakeholder review.

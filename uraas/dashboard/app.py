@@ -79,7 +79,7 @@ logger = logging.getLogger(__name__)
 crawler_process = None
 crawler_lock = threading.Lock()
 
-# Rate limiter — in-memory storage (no Redis dep). Limits login to 10 attempts
+# Rate limiter - in-memory storage (no Redis dep). Limits login to 10 attempts
 # per minute to prevent brute-force attacks on admin/viewer credentials.
 limiter = Limiter(
     key_func=get_remote_address,
@@ -88,14 +88,14 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-# ── Access control (fail-closed) ───────────────────────────────────────────
+# -- Access control (fail-closed) -------------------------------------------
 # Everything is gated by default. Endpoints are authorised by *endpoint name*
 # (function name) so path params don't matter and any NEW route is protected
 # until explicitly listed here.
 #
-#   PUBLIC_ENDPOINTS — reachable without a session (login page, health, static).
-#   ADMIN_ENDPOINTS  — require role == admin (crawler, mutations, bulk exports,
-#                      staff directory PII). Everything else needs any login.
+# PUBLIC_ENDPOINTS - reachable without a session (login page, health, static).
+# ADMIN_ENDPOINTS - require role == admin (crawler, mutations, bulk exports,
+# staff directory PII). Everything else needs any login.
 PUBLIC_ENDPOINTS = {
     "login",
     "logout",
@@ -127,8 +127,10 @@ ADMIN_ENDPOINTS = {
     "admin_create_api_key",
     "admin_revoke_api_key",
     "admin_backfill_open_access",
-    # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) —
-    # that path is checked earlier in _enforce_authentication and returns
+    "admin_backfill_keywords",
+    "admin_sync_citation_graph",
+    "admin_sync_citation_graphs",
+    # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) - # that path is checked earlier in _enforce_authentication and returns
     # before this set is ever consulted. Listing them here only closes the
     # session-cookie path: without this, any logged-in VIEWER (meant to be
     # read-only) could trigger a crawl from a browser, which the API-key
@@ -140,10 +142,9 @@ ADMIN_ENDPOINTS = {
 
 # Read-only data endpoints external partners (e.g. Africa PID Alliance /
 # DOCiD) may reach with a server-to-server API key instead of a browser
-# session — see uraas.dashboard.app._check_api_key and
+# session - see uraas.dashboard.app._check_api_key and
 # scripts/manage_api_keys.py. Deliberately a small, explicit allowlist: a
-# valid key never grants anything outside it, including ADMIN_ENDPOINTS —
-# partner keys are read-only by construction, not just by convention.
+# valid key never grants anything outside it, including ADMIN_ENDPOINTS - # partner keys are read-only by construction, not just by convention.
 PARTNER_ENDPOINTS = {
     "get_stats",
     "papers_tree",
@@ -156,12 +157,24 @@ PARTNER_ENDPOINTS = {
     "institution_info",
     "partner_crawl_start",
     "partner_crawl_status",
+    # Keywords (uraas.services.keyword_service)
+    "keyword_cloud",
+    "keyword_search",
+    "keyword_coverage_stats",
+    "item_keywords",
+    "related_keywords",
+    # Citations (uraas.services.citation_tracker). The edge list and the
+    # per-record counts are reads; syncing the graph is an admin action and
+    # stays out of this set, because it fans out to OpenAlex and writes.
+    "get_citations",
+    "citation_graph",
+    "citation_coverage",
 }
 
 # Simple in-memory sliding-window limiter for API-key traffic, separate from
 # the IP-keyed `limiter` above (a partner integration calls from a small,
 # fixed set of IPs the per-IP limiter wasn't designed to distinguish from
-# abuse). Process-local only — fine for a handful of trusted partner keys on
+# abuse). Process-local only - fine for a handful of trusted partner keys on
 # a single dashboard instance; would need a shared store (e.g. Redis) behind
 # multiple worker processes.
 _API_KEY_RATE_LIMIT = 120  # requests per rolling 60s window, per key
@@ -170,7 +183,7 @@ _api_key_hits: dict[str, list] = {}
 # A crawl is nothing like a normal read: it fans out to a dozen third-party
 # APIs and can end in real, permanent DOCiD registrations via
 # _auto_register_docid(). The general per-key rate limit above (120/min) is
-# nowhere near strict enough for that — a separate, much longer per-key
+# nowhere near strict enough for that - a separate, much longer per-key
 # cooldown applies specifically to triggering one.
 _PARTNER_CRAWL_COOLDOWN_S = 600  # 10 minutes between partner-triggered crawls, per key
 _partner_crawl_last: dict[str, float] = {}
@@ -224,7 +237,7 @@ def _enforce_authentication():
 
     if request.headers.get("X-API-Key"):
         # Check the allowlist before touching the DB/rate-limit counter at
-        # all — an API key is never a path to an endpoint outside
+        # all - an API key is never a path to an endpoint outside
         # PARTNER_ENDPOINTS, so there's nothing to gain by validating first.
         if endpoint not in PARTNER_ENDPOINTS:
             return (
@@ -312,8 +325,7 @@ def _auto_register_docid():
     real Africa PID Alliance DOCiD platform after each crawl. Runs
     scripts/register_docid.py as a subprocess (reusing its tested
     login/publish flow rather than duplicating it) and streams its output
-    into the live terminal feed so a user watching a crawl can see it happen
-    — these are real, permanent, publicly-visible records, not something
+    into the live terminal feed so a user watching a crawl can see it happen - these are real, permanent, publicly-visible records, not something
     that should happen silently.
 
     Capped at --limit 5 per crawl on purpose: a single crawl finding dozens
@@ -332,7 +344,7 @@ def _auto_register_docid():
 
     if not config.ENABLE_DOCID_PUSH:
         logger.info(
-            "[auto-docid] push disabled (URAAS_ENABLE_DOCID_PUSH not set) — "
+            "[auto-docid] push disabled (URAAS_ENABLE_DOCID_PUSH not set) - "
             "DOCiD pulls from URAAS instead; skipping."
         )
         return
@@ -364,7 +376,7 @@ _LOG_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 # Scrapy's own startup banner (version dict, enabled-extensions/middlewares/
 # pipelines listings, "Overridden settings" dump) and Python's deprecation
 # warnings are real, expected, harmless internals with zero value to someone
-# watching a crawl — they're multi-line pprint() dumps that add nothing but
+# watching a crawl - they're multi-line pprint() dumps that add nothing but
 # noise to the live feed. Filtering them out here also fixes a real bug: the
 # frontend colors any forwarded line containing "error" red regardless of
 # meaning, and Scrapy's own middleware class names (e.g.
@@ -385,7 +397,7 @@ _LIVE_FEED_NOISE_MARKERS = (
 
 class _LiveFeedFilter:
     """Stateful line filter shared by every subprocess-output-to-terminal_output
-    monitor (crawl runs, test harvests) — see _LIVE_FEED_NOISE_MARKERS."""
+    monitor (crawl runs, test harvests) - see _LIVE_FEED_NOISE_MARKERS."""
 
     def __init__(self):
         self.suppressing = False
@@ -400,7 +412,7 @@ class _LiveFeedFilter:
         if self.suppressing:
             # Continuation lines of a suppressed multi-line dump (a
             # pprint'd dict/list, or a warning's source-line echo) have no
-            # leading timestamp — the block ends at the next real
+            # leading timestamp - the block ends at the next real
             # timestamped log line or one of our own known markers.
             if not (
                 _LOG_TIMESTAMP_RE.match(line_decoded)
@@ -459,7 +471,7 @@ def crawler_monitor(process):
         # Auto-register newly-found strong-affiliation Special Collections
         # items with the real DOCiD platform. Runs as its own subprocess
         # with its own DB session, independent of the citation-share
-        # backfill thread above — no shared state to race over.
+        # backfill thread above - no shared state to race over.
         threading.Thread(target=_auto_register_docid, daemon=True).start()
 
 
@@ -487,7 +499,7 @@ def index():
 @limiter.limit(
     "10 per minute",
     methods=["POST"],
-    error_message="Too many login attempts — wait 60 seconds.",
+    error_message="Too many login attempts - wait 60 seconds.",
 )
 def login():
     if request.method == "POST":
@@ -508,7 +520,7 @@ def login():
             if _parsed.scheme or _parsed.netloc or not dest.startswith("/"):
                 dest = url_for("index")
             return redirect(dest)
-        # Generic message — no user enumeration.
+        # Generic message - no user enumeration.
         return render_template("login.html", error="Invalid username or password"), 401
     if current_role():
         return redirect(url_for("index"))
@@ -573,8 +585,7 @@ def resolve_ark(naan, name):
             return jsonify({"error": "ARK not found", "ark": ark}), 404
         # ARK inflection: '?info' / '?json' returns the metadata record. (A bare
         # '?' is the spec's brief-metadata inflection, but Flask's full_path
-        # always appends '?', so it can't be told apart from a plain resolve —
-        # we require the explicit suffix.)
+        # always appends '?', so it can't be told apart from a plain resolve - # we require the explicit suffix.)
         wants_info = "info" in request.args or "json" in request.args
         if wants_info:
             return jsonify(
@@ -603,7 +614,7 @@ def resolve_ark(naan, name):
 
 @app.route("/api/methodology")
 def get_methodology():
-    """Full per-metric methodology dictionary — feeds the ⓘ tooltips.
+    """Full per-metric methodology dictionary - feeds the ⓘ tooltips.
 
     Every metric on the dashboard documents its formula, data source and
     caveats here so each number can be audited (open-methodology principle)."""
@@ -686,7 +697,7 @@ def get_paper(item_id):
                 # Without these a partner pulling records into staging can't
                 # tell which institution a paper is attributed to, how
                 # confidently that attribution was made, or which Special
-                # Collection it belongs to — the last being the whole reason
+                # Collection it belongs to - the last being the whole reason
                 # to ingest it. Previously all three were only reachable via
                 # separate aggregate endpoints.
                 "institution": item.institution or "",
@@ -710,7 +721,7 @@ def get_paper(item_id):
                 },
                 "file": {
                     # has_local_pdf reflects the bytes actually being on disk,
-                    # not merely a File row existing — the two diverge on the
+                    # not merely a File row existing - the two diverge on the
                     # deployed Space, where storage doesn't survive a rebuild.
                     "has_local_pdf": stored_pdf_exists(file_record),
                     "access_policy": (
@@ -757,7 +768,7 @@ def _open_access_redirect(item, file_record):
     URAAS only stores a PDF locally for a minority of records, and on the
     deployed Space local files don't survive a rebuild at all (they live
     under STORAGE_PATH, which is neither shipped in the image nor on a
-    persistent volume) — so a File row can outlive the bytes it points at.
+    persistent volume) - so a File row can outlive the bytes it points at.
     Rather than 404 while holding a perfectly good OA link, redirect to it.
     Only ever for open-access items: this must not become a way around the
     copyright gate below.
@@ -777,7 +788,7 @@ def download_paper(item_id):
         if not item:
             return jsonify({"error": "Paper not found"}), 404
         if not file_record:
-            # No local copy was ever stored — most records are metadata-only.
+            # No local copy was ever stored - most records are metadata-only.
             # Still resolvable when the item is open access.
             redirect_resp = _open_access_redirect(item, None)
             if redirect_resp is not None:
@@ -832,8 +843,7 @@ def download_paper(item_id):
             )
             return jsonify({"error": "Access denied"}), 403
         if not os.path.exists(real_path):
-            # The File row outlived the bytes (see _open_access_redirect) —
-            # serve the open-access link rather than a dead end.
+            # The File row outlived the bytes (see _open_access_redirect) - # serve the open-access link rather than a dead end.
             redirect_resp = _open_access_redirect(item, file_record)
             if redirect_resp is not None:
                 return redirect_resp
@@ -873,7 +883,7 @@ def export_single_bibtex(item_id):
         title = (item.title or "Untitled").replace("{", "").replace("}", "")
         doi_line = f"  doi = {{{item.doi}}},\n" if item.doi else ""
         url_line = f"  url = {{{item.url}}},\n" if item.url else ""
-        # Persistent identifiers — ARK is resolvable even without a DOI.
+        # Persistent identifiers - ARK is resolvable even without a DOI.
         note_bits = []
         if item.ark:
             note_bits.append(f"ARK: {item.ark}")
@@ -1307,6 +1317,90 @@ def keyword_cloud():
     return jsonify(analytics.get_keyword_cloud(top_n=top_n, institution=institution))
 
 
+# Keywords - per-record access and keyword-driven discovery
+
+
+@app.route("/api/keywords/search")
+def keyword_search():
+    """Records carrying a keyword. `sc_only=1` restricts to Special Collections."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return api_error("query parameter 'q' is required", 400)
+    limit = clamped_int("limit", 50, 1, 200)
+    sc_only = request.args.get("sc_only", "").lower() in ("1", "true", "yes")
+    try:
+        from uraas.services.keyword_service import search_by_keyword
+
+        results = search_by_keyword(q, limit=limit, sc_only=sc_only)
+        return jsonify({"keyword": q, "count": len(results), "results": results})
+    except Exception as e:
+        logger.error(f"keyword_search({q}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/keywords/coverage")
+def keyword_coverage_stats():
+    """How much of the corpus has keywords - says whether a backfill is due."""
+    try:
+        from uraas.services.keyword_service import keyword_coverage
+
+        return jsonify(keyword_coverage())
+    except Exception as e:
+        logger.error(f"keyword_coverage_stats: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/keywords/<int:item_id>")
+def item_keywords(item_id):
+    """Keywords for one record, extracted and persisted on first read if the
+    record predates keyword extraction."""
+    try:
+        from uraas.services.keyword_service import get_item_keywords
+
+        data = get_item_keywords(item_id)
+        if data.get("source") == "not_found":
+            return api_error("Paper not found", 404)
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"item_keywords({item_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/keywords/<int:item_id>/related")
+def related_keywords(item_id):
+    """Records sharing the most keywords with this one (thematic neighbours,
+    not citation neighbours - see /api/citations/<id>/graph for those)."""
+    limit = clamped_int("limit", 10, 1, 50)
+    try:
+        from uraas.services.keyword_service import related_by_keywords
+
+        results = related_by_keywords(item_id, limit=limit)
+        return jsonify({"item_id": item_id, "count": len(results), "related": results})
+    except Exception as e:
+        logger.error(f"related_keywords({item_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/keywords/backfill", methods=["POST"])
+def admin_backfill_keywords():
+    """Fill ai_keywords for records that have none (admin only)."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        limit = max(1, min(int(payload.get("limit", 500)), 5000))
+    except (TypeError, ValueError):
+        limit = 500
+    force = bool(payload.get("force"))
+    try:
+        from uraas.services.keyword_service import backfill_keywords
+
+        stats = backfill_keywords(limit=limit, force=force)
+        analytics_cache.invalidate_all()
+        return jsonify({"status": "ok", **stats})
+    except Exception as e:
+        logger.error(f"admin_backfill_keywords: {e}")
+        return api_error(str(e))
+
+
 @app.route("/api/analytics/institution-leaderboard")
 def institution_leaderboard():
     return jsonify(analytics.get_institution_leaderboard())
@@ -1323,8 +1417,8 @@ def flush_analytics_cache():
 def prune_non_sc():
     """Re-classify all items and delete non-SC papers (admin only).
 
-    POST body: {"apply": true}   — actually prune
-    POST body: {"apply": false}  — dry run (default), just return counts
+    POST body: {"apply": true} - actually prune
+    POST body: {"apply": false} - dry run (default), just return counts
     """
     from sqlalchemy import text as _text
 
@@ -1450,7 +1544,7 @@ def test_smtp():
             jsonify(
                 {
                     "status": "error",
-                    "message": "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in environment/secrets.",
+                    "message": "SMTP not configured - set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in environment/secrets.",
                     "smtp_host": config.SMTP_HOST or "(not set)",
                     "smtp_user": config.SMTP_USER or "(not set)",
                 }
@@ -1461,7 +1555,7 @@ def test_smtp():
     to_email = (request.get_json(silent=True) or {}).get("to", config.SMTP_USER)
     try:
         msg = MIMEText(
-            "URAAS SMTP test — configuration is working correctly.", "plain", "utf-8"
+            "URAAS SMTP test - configuration is working correctly.", "plain", "utf-8"
         )
         msg["Subject"] = "[URAAS] SMTP Test"
         msg["From"] = config.SMTP_FROM
@@ -1640,7 +1734,7 @@ def lecturer_profile():
         author = session.query(Author).filter(Author.name.ilike(f"%{name}%")).first()
         if not author:
             return jsonify({"error": "Author not found"}), 404
-        # Eager-load the relationships walked below (collections→community, authors)
+        # Eager-load the relationships walked below (collections->community, authors)
         # so the profile renders in a handful of queries instead of one-per-paper.
         items = (
             session.query(Item)
@@ -1698,7 +1792,7 @@ def lecturer_profile():
 
 @app.route("/api/analytics/language-research")
 def language_research():
-    """Language & Culture research — returns SC papers matched by language keywords."""
+    """Language & Culture research - returns SC papers matched by language keywords."""
     from uraas.config.language_research import score_item
     from uraas.services.sc_engine import SC_FILTER
 
@@ -1766,7 +1860,7 @@ def language_research():
         session.close()
 
 
-#  Multi-Institution Comparator (APA Core Feature)
+# Multi-Institution Comparator (APA Core Feature)
 
 
 @app.route("/api/comparator/compare", methods=["POST"])
@@ -1905,19 +1999,19 @@ def generate_senate_report():
         return jsonify({"error": str(e)}), 500
 
 
-#  Citation Tracking & Bibliometrics
+# Citation Tracking & Bibliometrics
 
 
 @app.route("/api/citations/<int:item_id>")
 def get_citations(item_id):
-    """Get citation data for a paper — enriched with ARK + Pan-African share (Phase 5).
+    """Get citation data for a paper - enriched with ARK + Pan-African share (Phase 5).
 
     Citation count resolution (highest trustworthy value wins, never clobbered
     to zero):
       1. cited_by_count captured at crawl time from OpenAlex (authoritative).
       2. CitationMetrics row, if a separate citation update has run.
       3. Lazy live fetch from OpenAlex/Crossref when we have a DOI but no count
-         yet — result is persisted back to cited_by_count for next time.
+         yet - result is persisted back to cited_by_count for next time.
     """
     session = SessionLocal()
     doi = None
@@ -1978,7 +2072,7 @@ def get_citations(item_id):
 
 @app.route("/api/citations/velocity/export.csv")
 def citations_velocity_csv():
-    """Phase 4 — Streaming CSV export of the citation velocity time-series.
+    """Phase 4 - Streaming CSV export of the citation velocity time-series.
 
     Columns: year, citations_received, pan_african_share_pct, items_covered
     Query param: ?institution=<short_name>
@@ -2011,6 +2105,48 @@ def citations_velocity_csv():
         return api_error(str(e))
 
 
+@app.route("/api/citations/<int:item_id>/graph")
+def citation_graph(item_id):
+    """The stored citation edge list for one record, both directions.
+
+    `citing` are works that cite this record, `references` are works it
+    cites. Most of both are external to the corpus, so each entry carries
+    its own DOI/OpenAlex id and an `internal_id` that is null unless URAAS
+    also holds that work. Empty until the graph has been synced for this
+    record (see /api/citations/coverage).
+    """
+    limit = clamped_int("limit", 200, 1, 500)
+    try:
+        from uraas.services.citation_tracker import get_paper_citations
+
+        data = get_paper_citations(item_id, limit=limit)
+        return jsonify(
+            {
+                "item_id": item_id,
+                "citation_count": data.get("citation_count", 0),
+                "last_updated": data.get("last_updated"),
+                "citing": data.get("citing_papers", []),
+                "references": data.get("references", []),
+                "edges_stored": data.get("edges_stored", {}),
+            }
+        )
+    except Exception as e:
+        logger.error(f"citation_graph({item_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/citations/coverage")
+def citation_coverage():
+    """How much of the corpus has a stored citation graph."""
+    try:
+        from uraas.services.citation_tracker import get_citation_graph_coverage
+
+        return jsonify(get_citation_graph_coverage())
+    except Exception as e:
+        logger.error(f"citation_coverage: {e}")
+        return api_error(str(e))
+
+
 @app.route("/api/citations/update/<int:item_id>", methods=["POST"])
 def update_citations(item_id):
     """Manually trigger citation update for a paper."""
@@ -2022,6 +2158,58 @@ def update_citations(item_id):
     except Exception as e:
         logger.error(f"update_citations {item_id}: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/citations/sync-graph/<int:item_id>", methods=["POST"])
+def admin_sync_citation_graph(item_id):
+    """Fetch and store one record's citation edge list (admin only)."""
+    try:
+        from uraas.services.citation_tracker import CitationTracker
+
+        return jsonify(CitationTracker.sync_citation_graph(item_id))
+    except Exception as e:
+        logger.error(f"admin_sync_citation_graph({item_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/citations/sync-graph", methods=["POST"])
+def admin_sync_citation_graphs():
+    """Bulk citation-graph sync (admin only).
+
+    Runs in the background: each record is several OpenAlex round trips, so
+    a batch of any useful size outlasts a request. Poll
+    /api/citations/coverage to watch it progress.
+    """
+    payload = request.get_json(silent=True) or {}
+    try:
+        limit = max(1, min(int(payload.get("limit", 50)), 1000))
+    except (TypeError, ValueError):
+        limit = 50
+    sc_only = payload.get("sc_only", True) is not False
+    force = bool(payload.get("force"))
+
+    def run():
+        from uraas.services.citation_tracker import CitationTracker
+
+        try:
+            stats = CitationTracker.sync_citation_graph_bulk(
+                limit=limit, sc_only=sc_only, force=force
+            )
+            logger.info("citation graph bulk sync finished: %s", stats)
+            analytics_cache.invalidate_all()
+        except Exception as exc:
+            logger.error("citation graph bulk sync failed: %s", exc)
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify(
+        {
+            "status": "started",
+            "limit": limit,
+            "sc_only": sc_only,
+            "force": force,
+            "poll": "/api/citations/coverage",
+        }
+    )
 
 
 @app.route("/api/admin/clear-half-recrawl", methods=["POST"])
@@ -2103,8 +2291,7 @@ def clear_half_and_recrawl():
 
 @app.route("/api/admin/api-keys", methods=["GET"])
 def admin_list_api_keys():
-    """List partner API keys (admin only). Never returns full key values —
-    only the prefix stored at creation, same as scripts/manage_api_keys.py."""
+    """List partner API keys (admin only). Never returns full key values - only the prefix stored at creation, same as scripts/manage_api_keys.py."""
     session_db = SessionLocal()
     try:
         rows = session_db.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
@@ -2135,7 +2322,7 @@ def admin_list_api_keys():
 @app.route("/api/admin/api-keys", methods=["POST"])
 def admin_create_api_key():
     """Issue a new partner API key (admin only). The plaintext value is
-    returned exactly once, in this response — only its hash is persisted, so
+    returned exactly once, in this response - only its hash is persisted, so
     it can never be retrieved again after this call."""
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -2161,7 +2348,7 @@ def admin_create_api_key():
                 "prefix": row.key_prefix,
                 "key": raw,
             },
-            narrative="Save this key now — it will not be shown again.",
+            narrative="Save this key now - it will not be shown again.",
         )
     finally:
         session_db.close()
@@ -2217,7 +2404,7 @@ def admin_backfill_open_access():
 
     Item.dc_rights was never written by any code path until 2026-09, so
     every record crawled before then sits at the restrictedAccess model
-    default regardless of its real licence — which zeroed every OA metric
+    default regardless of its real licence - which zeroed every OA metric
     and made /api/papers/<id>/download 403 for all non-admin callers. The
     spiders now set it at crawl time; this repairs the backlog. Runs in a
     background thread (it makes one Unpaywall call per record) and streams
@@ -2226,7 +2413,7 @@ def admin_backfill_open_access():
     threading.Thread(target=_run_open_access_backfill, daemon=True).start()
     return api_ok(
         {"started": True},
-        narrative="Open-access backfill started — progress is streaming to the live feed.",
+        narrative="Open-access backfill started - progress is streaming to the live feed.",
     )
 
 
@@ -2257,7 +2444,7 @@ def bulk_update_citations():
         return jsonify({"error": str(e)}), 500
 
 
-#  Advanced Search
+# Advanced Search
 
 
 @app.route("/api/search/advanced")
@@ -2323,7 +2510,7 @@ def search_suggestions():
         return jsonify({"suggestions": []}), 500
 
 
-#  APA Novel Metrics
+# APA Novel Metrics
 
 
 @app.route("/api/analytics/tk-vitality-score")
@@ -2395,9 +2582,9 @@ def export_special_collections_csv():
         return jsonify({"error": str(e)}), 500
 
 
-# ── Framework Alignment endpoints (AU charters / Agenda 2063 / blocs) ────────
+# -- Framework Alignment endpoints (AU charters / Agenda 2063 / blocs) --------
 # Scores are precomputed at ingest / by scripts/backfill_alignment.py and read
-# from alignment_aggregates — these endpoints never score at request time.
+# from alignment_aggregates - these endpoints never score at request time.
 
 
 def _resolve_inst_name():
@@ -2687,7 +2874,7 @@ def alignment_export_csv():
         session.close()
 
 
-# ── Intra-African collaboration endpoints ─────────────────────────────────────
+# -- Intra-African collaboration endpoints -------------------------------------
 
 
 @app.route("/api/collaboration/overview")
@@ -2854,7 +3041,7 @@ def citations_velocity():
 
 @app.route("/api/collaboration/export.csv")
 def collaboration_export_csv():
-    """CSV export — ?view=matrix (default) or ?view=countries."""
+    """CSV export - ?view=matrix (default) or ?view=countries."""
     try:
         institution = request.args.get("institution", "").strip().lower() or None
         view = request.args.get("view", "matrix")
@@ -2940,7 +3127,7 @@ def staff_directory():
     return jsonify(result)
 
 
-#  Export
+# Export
 
 
 @app.route("/api/export/papers.csv")
@@ -2963,7 +3150,7 @@ def export_csv():
                 "Open Access",
                 "Source",
             ]
-            # selectinload (not joinedload) is required with yield_per — joined
+            # selectinload (not joinedload) is required with yield_per - joined
             # eager loads against collections need row-uniquing, which yield_per
             # forbids.
             q = (
@@ -3027,17 +3214,17 @@ def export_bibtex():
         session.close()
 
 
-#  Crawler control
+# Crawler control
 
 # Discovery sources and the API key (if any) each one needs to run. A source
 # whose required key is unset is reported as unavailable by /api/crawler/sources
-# and rejected by start_crawler — the UI greys it out so it can't be selected.
+# and rejected by start_crawler - the UI greys it out so it can't be selected.
 # `config_attr` is the attribute on `config` that holds the key (empty string
 # when missing). Sources with config_attr=None need no key.
 CRAWLER_SOURCES = [
     {
         "id": "openalex",
-        "label": "OpenAlex (Default — 250M+ papers)",
+        "label": "OpenAlex (Default - 250M+ papers)",
         "config_attr": None,
     },
     {"id": "all", "label": "All Sources (Maximum Coverage)", "config_attr": None},
@@ -3081,7 +3268,7 @@ def crawler_sources():
 
     The dashboard uses this to disable any source whose key is missing so it
     can't be selected. Keeping the gating server-driven means adding a key in
-    the environment is all it takes to light a source back up — no code change.
+    the environment is all it takes to light a source back up - no code change.
     """
     sources = [
         {
@@ -3122,7 +3309,7 @@ def start_crawler():
                     ),
                     400,
                 )
-        # Default ON — heavy bias toward Special Collections in every crawl.
+        # Default ON - heavy bias toward Special Collections in every crawl.
         boost_special = bool(data.get("boost_special", True))
         sc_only = bool(data.get("sc_only", False))
         # Optional spider selection (allowlisted). "oai" = read-only harvest of
@@ -3157,12 +3344,12 @@ def start_crawler():
                 jsonify(
                     {
                         "status": "error",
-                        "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
+                        "message": f"Source '{spider}' is unavailable - {_src['config_attr']} is not configured.",
                     }
                 ),
                 400,
             )
-        # OAI date window — accept only a safe YYYY-MM-DD shape; ignore anything else.
+        # OAI date window - accept only a safe YYYY-MM-DD shape; ignore anything else.
         _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         from_date = data.get("from_date")
         until_date = data.get("until_date")
@@ -3253,17 +3440,16 @@ def crawler_status():
 
 @app.route("/api/partner/crawl/start", methods=["POST"])
 def partner_crawl_start():
-    """Let a partner (API key) trigger a UNILAG crawl for their own use —
-    deliberately a much narrower capability than the admin /api/crawler/start:
+    """Let a partner (API key) trigger a UNILAG crawl for their own use - deliberately a much narrower capability than the admin /api/crawler/start:
     institution is always "unilag" (a key can't point the crawler anywhere
     else), target is capped far lower, and each key can only trigger one
     crawl per _PARTNER_CRAWL_COOLDOWN_S. A crawl fans out to a dozen
-    third-party APIs and can end in real DOCiD registrations — nothing
+    third-party APIs and can end in real DOCiD registrations - nothing
     partner-triggered should be as unrestrained as the admin path.
 
     Shares crawler_process/crawler_lock/crawler_monitor with the admin
     trigger, so a partner crawl and an admin crawl can't run concurrently
-    either way — whichever started first just holds the lock.
+    either way - whichever started first just holds the lock.
     """
     global crawler_process
 
@@ -3278,7 +3464,7 @@ def partner_crawl_start():
             jsonify(
                 {
                     "status": "error",
-                    "message": f"Crawl cooldown active — try again in {wait}s",
+                    "message": f"Crawl cooldown active - try again in {wait}s",
                 }
             ),
             429,
@@ -3323,7 +3509,7 @@ def partner_crawl_start():
                 jsonify(
                     {
                         "status": "error",
-                        "message": f"Source '{spider}' is unavailable — {_src['config_attr']} is not configured.",
+                        "message": f"Source '{spider}' is unavailable - {_src['config_attr']} is not configured.",
                     }
                 ),
                 400,
@@ -3367,7 +3553,7 @@ def partner_crawl_start():
             return jsonify(
                 {
                     "status": "success",
-                    "message": f"Crawl started — target {target} papers (UNILAG, {spider})",
+                    "message": f"Crawl started - target {target} papers (UNILAG, {spider})",
                 }
             )
         except Exception as e:
@@ -3382,7 +3568,7 @@ def partner_crawl_status():
     return jsonify({"status": "running" if running else "idle"})
 
 
-#  Health Check Endpoint for Render
+# Health Check Endpoint for Render
 
 
 @app.route("/api/auth/role")
@@ -3467,11 +3653,11 @@ def health_check():
 def get_university_registry():
     """
     The African university registry (52 institutions across 17 countries as
-    of this writing) URAAS crawls against — name, ROR, country, sub-region.
+    of this writing) URAAS crawls against - name, ROR, country, sub-region.
 
     Previously read from data/university_registry.json, a file that never
     actually existed in this repo (a genuine pre-existing bug, not a
-    deployment gap — it 500'd locally too, live-verified 2026-09). The real
+    deployment gap - it 500'd locally too, live-verified 2026-09). The real
     registry has lived in uraas.config.institutions.InstitutionRegistry all
     along; serving it directly here means this endpoint can never drift out
     of sync with the registry the crawler itself uses.
@@ -3610,10 +3796,10 @@ def get_unilag_report():
         session.close()
 
 
-# ── Live IR connection + batch deposit ───────────────────────────────────────
+# -- Live IR connection + batch deposit ---------------------------------------
 # All write endpoints are admin-only (ADMIN_ENDPOINTS list at the top of this
 # file gates them automatically).  The approve/reject token endpoints are
-# intentionally PUBLIC — the token itself is the credential.
+# intentionally PUBLIC - the token itself is the credential.
 
 ADMIN_ENDPOINTS.update(
     {
@@ -3633,10 +3819,10 @@ def ir_test_harvest():
     """Dry-run OAI harvest: collect SC papers, send preview email, save JSON.
 
     Body JSON:
-      institution   – short name (default: "unilag")
-      count         – max SC papers to collect (default: 50, max: 100)
-      email         – confirmation address (required)
-      from_date     – OAI from date YYYY-MM-DD (optional)
+      institution   - short name (default: "unilag")
+      count         - max SC papers to collect (default: 50, max: 100)
+      email         - confirmation address (required)
+      from_date     - OAI from date YYYY-MM-DD (optional)
 
     DOES NOT save to DB. DOES NOT deposit to IR.
     Runs in a background thread; returns immediately with a job ID.
@@ -3784,10 +3970,10 @@ def ir_queue_batch():
     configured crawler credentials (DSPACE_USERNAME / DSPACE_PASSWORD).
 
     Body JSON:
-      item_ids         – list of local Item.id values to deposit
-      collection_uuid  – DSpace collection UUID (from /api/ir/collections)
-      collection_name  – display name (optional)
-      approval_email   – optional; recorded for audit only, no email is sent
+      item_ids         - list of local Item.id values to deposit
+      collection_uuid  - DSpace collection UUID (from /api/ir/collections)
+      collection_name  - display name (optional)
+      approval_email   - optional; recorded for audit only, no email is sent
     """
     from uraas.services.batch_approval import queue_batch
 
@@ -3831,7 +4017,7 @@ def ir_queue_batch():
 
 @app.route("/api/ir/batch/<token>/approve", methods=["GET"])
 def ir_approve_batch(token):
-    """Email approval link — no login required; token is the credential.
+    """Email approval link - no login required; token is the credential.
 
     Renders a plain HTML confirmation page so it works directly in a browser
     after the approver clicks the link in their email.
@@ -3875,7 +4061,7 @@ def ir_approve_batch(token):
 
 @app.route("/api/ir/batch/<token>/reject", methods=["GET"])
 def ir_reject_batch(token):
-    """Email rejection link — no login required; token is the credential."""
+    """Email rejection link - no login required; token is the credential."""
     import re as _re
 
     from uraas.services.batch_approval import reject_batch
@@ -3937,13 +4123,13 @@ def ir_batch_status(token):
 
 def _approval_html(title: str, message: str, ok: bool) -> str:
     colour = "#1a7a4a" if ok else "#c0392b"
-    icon = "✓" if ok else "✗"
+    icon = "" if ok else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>URAAS — {title}</title>
+  <title>URAAS - {title}</title>
   <style>
     body{{margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}}
     .card{{background:#fff;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.12);padding:48px 40px;max-width:480px;text-align:center}}
@@ -3964,7 +4150,7 @@ def _approval_html(title: str, message: str, ok: bool) -> str:
 </html>"""
 
 
-#  Error Handlers
+# Error Handlers
 
 
 @app.errorhandler(404)
@@ -3989,7 +4175,7 @@ def internal_error(error):
 
 @app.route("/api/version")
 def api_version():
-    """Version manifest — commit hash + phase badges for the dashboard UI."""
+    """Version manifest - commit hash + phase badges for the dashboard UI."""
     return jsonify(
         {
             "version": os.getenv("RENDER_GIT_COMMIT", "dev")[:8],
@@ -4005,7 +4191,7 @@ def api_version():
     )
 
 
-#  Run
+# Run
 
 if __name__ == "__main__":
     # Apply production configuration if on Render
@@ -4039,7 +4225,7 @@ if __name__ == "__main__":
     # Run with SocketIO
     socketio.run(
         app,
-        host="0.0.0.0",  # nosec B104 — required to be reachable from outside the container (HF Spaces/Docker); debug is already gated off in production below
+        host="0.0.0.0",  # nosec B104 - required to be reachable from outside the container (HF Spaces/Docker); debug is already gated off in production below
         port=port,
         debug=not is_production,
         use_reloader=not is_production,
