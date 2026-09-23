@@ -1,11 +1,11 @@
 """
-URAAS UNILAG Academic Classifier — Production Grade
+URAAS UNILAG Academic Classifier - Production Grade
 =====================================================
 Features:
-  - TF-IDF–style weighted keyword scoring (rare/specific keywords score higher)
+  - TF-IDF-style weighted keyword scoring (rare/specific keywords score higher)
   - Multi-word phrase detection with word boundary matching
   - Inverse-document-frequency (IDF) weighting across departments
-  - SDG (UN Sustainable Development Goals 1–17) alignment detection
+  - SDG (UN Sustainable Development Goals 1-17) alignment detection
   - classify_with_explanation() for transparency and debugging
   - Full 2024 UNILAG Faculty & Department structure
 """
@@ -14,7 +14,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-# ─── Complete UNILAG Faculty and Department Structure (2024) ───────────────────
+# --- Complete UNILAG Faculty and Department Structure (2024) -------------------
 UNILAG_STRUCTURE = {
     "Faculty of Arts": {
         "Creative Arts": [
@@ -913,9 +913,9 @@ UNILAG_STRUCTURE = {
     },
 }
 
-# ─── SDG Keyword Map (UN Sustainable Development Goals) ───────────────────────
+# --- SDG Keyword Map (UN Sustainable Development Goals) -----------------------
 SDG_MAP = {
-    "SDG 1 — No Poverty": [
+    "SDG 1 - No Poverty": [
         "poverty",
         "extreme poverty",
         "social protection",
@@ -925,7 +925,7 @@ SDG_MAP = {
         "livelihood",
         "subsistence",
     ],
-    "SDG 2 — Zero Hunger": [
+    "SDG 2 - Zero Hunger": [
         "food security",
         "hunger",
         "malnutrition",
@@ -936,7 +936,7 @@ SDG_MAP = {
         "stunting",
         "wasting",
     ],
-    "SDG 3 — Good Health & Well-being": [
+    "SDG 3 - Good Health & Well-being": [
         "health",
         "disease",
         "mortality",
@@ -954,7 +954,7 @@ SDG_MAP = {
         "covid",
         "universal health coverage",
     ],
-    "SDG 4 — Quality Education": [
+    "SDG 4 - Quality Education": [
         "education",
         "literacy",
         "school enrollment",
@@ -966,7 +966,7 @@ SDG_MAP = {
         "teacher training",
         "access to education",
     ],
-    "SDG 5 — Gender Equality": [
+    "SDG 5 - Gender Equality": [
         "gender equality",
         "women empowerment",
         "gender based violence",
@@ -977,7 +977,7 @@ SDG_MAP = {
         "gender disparity",
         "patriarchy",
     ],
-    "SDG 6 — Clean Water & Sanitation": [
+    "SDG 6 - Clean Water & Sanitation": [
         "water quality",
         "wastewater",
         "sanitation",
@@ -987,7 +987,7 @@ SDG_MAP = {
         "water pollution",
         "hygiene",
     ],
-    "SDG 7 — Affordable & Clean Energy": [
+    "SDG 7 - Affordable & Clean Energy": [
         "renewable energy",
         "solar energy",
         "wind energy",
@@ -999,7 +999,7 @@ SDG_MAP = {
         "energy poverty",
         "clean cooking",
     ],
-    "SDG 8 — Decent Work & Economic Growth": [
+    "SDG 8 - Decent Work & Economic Growth": [
         "economic growth",
         "employment",
         "unemployment",
@@ -1010,7 +1010,7 @@ SDG_MAP = {
         "productivity",
         "decent work",
     ],
-    "SDG 9 — Industry, Innovation & Infrastructure": [
+    "SDG 9 - Industry, Innovation & Infrastructure": [
         "infrastructure",
         "innovation",
         "industrialization",
@@ -1021,7 +1021,7 @@ SDG_MAP = {
         "smart city",
         "industry 4.0",
     ],
-    "SDG 10 — Reduced Inequalities": [
+    "SDG 10 - Reduced Inequalities": [
         "inequality",
         "income gap",
         "social exclusion",
@@ -1031,7 +1031,7 @@ SDG_MAP = {
         "refugee",
         "disability",
     ],
-    "SDG 11 — Sustainable Cities & Communities": [
+    "SDG 11 - Sustainable Cities & Communities": [
         "urban planning",
         "housing",
         "slum",
@@ -1042,7 +1042,7 @@ SDG_MAP = {
         "cultural heritage",
         "lagos",
     ],
-    "SDG 12 — Responsible Consumption & Production": [
+    "SDG 12 - Responsible Consumption & Production": [
         "sustainable consumption",
         "circular economy",
         "waste management",
@@ -1051,7 +1051,7 @@ SDG_MAP = {
         "life cycle assessment",
         "recycling",
     ],
-    "SDG 13 — Climate Action": [
+    "SDG 13 - Climate Action": [
         "climate change",
         "global warming",
         "carbon emission",
@@ -1064,7 +1064,7 @@ SDG_MAP = {
         "drought",
         "desertification",
     ],
-    "SDG 14 — Life Below Water": [
+    "SDG 14 - Life Below Water": [
         "marine",
         "ocean",
         "fisheries",
@@ -1076,7 +1076,7 @@ SDG_MAP = {
         "lagos lagoon",
         "atlantic",
     ],
-    "SDG 15 — Life on Land": [
+    "SDG 15 - Life on Land": [
         "biodiversity",
         "ecosystem",
         "deforestation",
@@ -1087,7 +1087,7 @@ SDG_MAP = {
         "soil erosion",
         "desertification",
     ],
-    "SDG 16 — Peace, Justice & Strong Institutions": [
+    "SDG 16 - Peace, Justice & Strong Institutions": [
         "governance",
         "corruption",
         "rule of law",
@@ -1099,7 +1099,7 @@ SDG_MAP = {
         "accountability",
         "institutional reform",
     ],
-    "SDG 17 — Partnerships for the Goals": [
+    "SDG 17 - Partnerships for the Goals": [
         "international cooperation",
         "development aid",
         "technology transfer",
@@ -1119,7 +1119,7 @@ UNILAG_EMAIL_PATTERN = r"[a-z]+@(unilag\.edu\.ng|cmul\.edu\.ng)"
 
 class UNILAGClassifier:
     """
-    Production-grade TF-IDF–style classifier for UNILAG research papers.
+    Production-grade TF-IDF-style classifier for UNILAG research papers.
 
     Features:
     - IDF weighting: keywords unique to one department score higher than
@@ -1153,13 +1153,13 @@ class UNILAGClassifier:
                         self._all_keywords[kw_lower] = []
                     self._all_keywords[kw_lower].append((faculty, dept))
 
-        # Compute IDF: log(N / df) — rarer keywords get higher weight
+        # Compute IDF: log(N / df) - rarer keywords get higher weight
         for kw, df in kw_doc_counts.items():
             self._idf_weights[kw] = math.log(total_depts / df) + 1.0
 
     def _score_keyword(self, kw: str, matches: int) -> float:
         """
-        Compute TF-IDF–style score for a keyword.
+        Compute TF-IDF-style score for a keyword.
         - Match count (TF proxy): log(1 + matches)
         - IDF weight: log(N/df) + 1
         - Length bonus: longer multi-word phrases are more specific

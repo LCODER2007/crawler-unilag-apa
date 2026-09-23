@@ -18,7 +18,7 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from uraas.config import config
 
-# Cache the dialect at import time — URL cannot change at runtime.
+# Cache the dialect at import time - URL cannot change at runtime.
 _IS_SQLITE: bool = (config.DATABASE_URL or "").lower().startswith("sqlite")
 
 
@@ -43,7 +43,7 @@ def db_year_month(col):
 
 Base = declarative_base()
 
-# ── Association Tables ────────────────────────────────────────────────────────
+# -- Association Tables --------------------------------------------------------
 
 item_authors = Table(
     "item_authors",
@@ -74,23 +74,23 @@ item_collections = Table(
     Column("confidence_score", Float, default=1.0),
 )
 
-# ── Core Models ───────────────────────────────────────────────────────────────
+# -- Core Models ---------------------------------------------------------------
 
 
 class Community(Base):
-    """Faculty / School — top-level organisational unit."""
+    """Faculty / School - top-level organisational unit."""
 
     __tablename__ = "communities"
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True, nullable=False)
 
-    # ── APA / ROR ─────────────────────────────────────────────────────────────
+    # -- APA / ROR -------------------------------------------------------------
     ror_id = Column(String(128))  # e.g. https://ror.org/03qcnxw14
     institution = Column(String(255))  # parent institution name
     ror = Column(String(128))  # Institution ROR for multi-tenant comparison
 
-    # ── Unit type + self-minted PID ──────────────────────────────────────────
+    # -- Unit type + self-minted PID ------------------------------------------
     # unit_type: "faculty" (default) | "ace" (Africa Centre of Excellence)
     unit_type = Column(String(30), default="faculty")
     pmd = Column(
@@ -102,7 +102,7 @@ class Community(Base):
 
 
 class Collection(Base):
-    """Department / Research Group — second-level unit."""
+    """Department / Research Group - second-level unit."""
 
     __tablename__ = "collections"
 
@@ -138,7 +138,7 @@ class Author(Base):
 
 class Item(Base):
     """
-    Research output — paper, thesis, dataset, cultural artefact, etc.
+    Research output - paper, thesis, dataset, cultural artefact, etc.
     Stores full Dublin Core + DocID™ + APA-specific metadata.
     """
 
@@ -153,33 +153,33 @@ class Item(Base):
     source_repository = Column(String(100))
     pdf_url = Column(String(512))
 
-    # ── Dublin Core ───────────────────────────────────────────────────────────
+    # -- Dublin Core -----------------------------------------------------------
     dc_title = Column(String(512))
     dc_date_issued = Column(String(50))
     dc_identifier_uri = Column(String(512))
     dc_identifier_doi = Column(String(255))
     dc_description_provenance = Column(Text)
     dc_rights = Column(String(255), default="info:eu-repo/semantics/restrictedAccess")
-    dc_type = Column(String(100))  # Article, Thesis, Dataset, CulturalHeritage …
+    dc_type = Column(String(100))  # Article, Thesis, Dataset, CulturalHeritage ...
     dc_language = Column(String(50))  # ISO 639-1 code, e.g. "en", "yo", "ig"
     dc_subject = Column(Text)  # comma-separated subject tags
 
-    # ── DocID™ (Africa PID Alliance) ─────────────────────────────────────────
+    # -- DocID™ (Africa PID Alliance) -----------------------------------------
     docid = Column(String(128), unique=True, index=True)  # 20.500.14351/[hash]
     docid_assigned_at = Column(DateTime)
 
     # How confidently this item's institutional affiliation was verified at
-    # crawl time — "strong" (ROR match, verified employer/employment record,
+    # crawl time - "strong" (ROR match, verified employer/employment record,
     # or a structured author-affiliation field literally naming the
     # institution) vs "weak" (only a title/abstract text mention, which
     # can't tell a paper authored AT the institution from one merely written
-    # ABOUT it/someone there — see scripts/register_docid.py). Gates
+    # ABOUT it/someone there - see scripts/register_docid.py). Gates
     # automatic DOCID registration; per-source logic lives in each spider.
     affiliation_confidence = Column(
         String(10), index=True
     )  # "strong" | "weak" | NULL (legacy rows)
 
-    # ── APA-specific fields ───────────────────────────────────────────────────
+    # -- APA-specific fields ---------------------------------------------------
     # Institution ROR for multi-tenant comparison
     ror = Column(String(128), index=True)  # e.g. https://ror.org/03qcnxw14
     institution = Column(String(255))  # Institution name
@@ -198,7 +198,7 @@ class Item(Base):
     patent_date = Column(DateTime)
 
     # Language metadata (Linguistic Diversity Index)
-    language_code = Column(String(10))  # ISO 639-1: "en", "yo", "ig", "ha", "sw" …
+    language_code = Column(String(10))  # ISO 639-1: "en", "yo", "ig", "ha", "sw" ...
     is_african_language = Column(Boolean, default=False)
 
     # SDG alignment (comma-separated SDG numbers, e.g. "3,4,13")
@@ -208,7 +208,7 @@ class Item(Base):
     ai_keywords = Column(Text)
 
     # Special Collections weighting (computed by
-    # uraas.services.sc_engine.is_special_collection() — NOT
+    # uraas.services.sc_engine.is_special_collection() - NOT
     # uraas.utils.ai_classifier.classify_special_collections, an older
     # unguarded keyword-hit-count gate no longer wired to ingestion).
     # score = sum of (matched_keywords * 3) across all SC categories; 0 = not SC.
@@ -216,34 +216,34 @@ class Item(Base):
     special_collection_score = Column(Float, default=0.0, index=True)
     special_collection_categories = Column(Text)
 
-    # ── Framework alignment (AU charters / Agenda 2063 / regional blocs) ─────
+    # -- Framework alignment (AU charters / Agenda 2063 / regional blocs) -----
     # JSON: {"banjul": {"overall": 42.1, "pillars": {"civil_political_rights":
     #   {"score": 61.0, "semantic": 0.55, "keyword": 0.71,
     #    "matched_keywords": ["human rights", ...]}}}, ...}
     alignment_scores = Column(Text)
     alignment_version = Column(Integer, default=0)
 
-    # ── Intra-African collaboration (from OpenAlex authorships) ──────────────
+    # -- Intra-African collaboration (from OpenAlex authorships) --------------
     coauthor_countries = Column(Text)  # sorted ISO2 csv, e.g. "KE,NG,ZA"
     african_country_count = Column(Integer, default=0)
     is_intra_african = Column(Boolean, default=False, index=True)
 
-    # ── Citation velocity (OpenAlex counts_by_year) ──────────────────────────
+    # -- Citation velocity (OpenAlex counts_by_year) --------------------------
     openalex_id = Column(String(64))  # e.g. "W2741809807"
     counts_by_year = Column(Text)  # JSON [{"year": 2023, "cited_by_count": 4}, ...]
     cited_by_count = Column(Integer, default=0)
     african_citation_share = Column(Float)  # 0-100; NULL = not yet computed
 
-    # ── Funders (OpenAlex funders/awards, Crossref funder) ───────────────────
+    # -- Funders (OpenAlex funders/awards, Crossref funder) -------------------
     # JSON [{"name": str, "ror": str|None, "award_id": str|None}, ...].
     # Feeds DOCiD publish's funders[i][name/other_name/type/country/ror_id]
     # FormData fields (see uraas/services/docid_client.py) once real
     # credentials exist. NULL/empty means no funder data was found for this
-    # item, not "not yet checked" — every spider that supports extraction
+    # item, not "not yet checked" - every spider that supports extraction
     # always sets the field (possibly to "[]").
     funders = Column(Text)
 
-    # ── ARK persistent identifier (Archival Resource Key) ────────────────────
+    # -- ARK persistent identifier (Archival Resource Key) --------------------
     ark = Column(String(128))  # e.g. "ark:/99999/u1x7kq2m9b4cz" (unique index below)
     ark_assigned_at = Column(DateTime)
 
@@ -333,7 +333,7 @@ class CrawlJob(Base):
 class DepositBatch(Base):
     """Tracks a staged batch of items queued for deposit to the real DSpace IR.
 
-    Flow: pending_approval → approved/rejected → depositing → completed/failed.
+    Flow: pending_approval -> approved/rejected -> depositing -> completed/failed.
     An approval token is emailed to the address the admin typed in; only
     clicking the link in that email advances the batch to 'approved'.
     """
@@ -375,11 +375,11 @@ class DepositBatch(Base):
 
 class ApiKey(Base):
     """Server-to-server credential for external partners (e.g. Africa PID
-    Alliance / DOCiD) reading URAAS data programmatically — distinct from the
+    Alliance / DOCiD) reading URAAS data programmatically - distinct from the
     dashboard's session-cookie login, which only suits a human in a browser.
 
     The plaintext key is shown exactly once at creation time (see
-    scripts/manage_api_keys.py) and never stored — only its SHA-256 hash is
+    scripts/manage_api_keys.py) and never stored - only its SHA-256 hash is
     persisted, so a stolen database dump can't be used to authenticate.
     """
 
@@ -397,7 +397,7 @@ class ApiKey(Base):
     )  # first chars only, for display/audit
     scope = Column(
         String(20), default="read", nullable=False
-    )  # "read" is the only scope for now — never admin
+    )  # "read" is the only scope for now - never admin
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100))  # admin session username that issued it
     last_used_at = Column(DateTime)
@@ -405,8 +405,8 @@ class ApiKey(Base):
     revoked_at = Column(DateTime)
 
 
-# ── Indexes for query performance ─────────────────────────────────────────────
-# ix_items_docid is auto-created by index=True on Item.docid — no duplicate needed
+# -- Indexes for query performance ---------------------------------------------
+# ix_items_docid is auto-created by index=True on Item.docid - no duplicate needed
 Index("ix_items_language", Item.language_code)
 Index("ix_items_content_type", Item.content_type)
 Index("ix_items_created_at", Item.created_at)
@@ -421,7 +421,7 @@ Index(
 )
 
 
-# ── Engine & Session ──────────────────────────────────────────────────────────
+# -- Engine & Session ----------------------------------------------------------
 def _build_engine():
     """SQLite needs check_same_thread=False; Postgres rejects that arg."""
     url = config.DATABASE_URL
@@ -445,7 +445,7 @@ def sync_schema_columns():
     """Add any column declared on an ORM model but missing from the actual
     database table.
 
-    create_all() only creates whole tables that don't exist yet — it never
+    create_all() only creates whole tables that don't exist yet - it never
     alters an existing table, so a database that predates some column
     (e.g. a persistent volume surviving across deploys) is silently left on
     its old schema forever, and the first query touching that column
@@ -453,7 +453,7 @@ def sync_schema_columns():
     entirely because its persistent DB predated Community.unit_type, and a
     synthetic even-older test schema also turned up a second, completely
     undocumented gap (Community.ror) with no dedicated migration script at
-    all — one-column-at-a-time migration scripts don't scale to catching
+    all - one-column-at-a-time migration scripts don't scale to catching
     every possible drift. This is generic instead: it walks every declared
     ORM column and ALTERs in whatever the live table is missing, so it
     self-heals regardless of which columns happen to be absent or when they
@@ -467,7 +467,7 @@ def sync_schema_columns():
     with engine.begin() as conn:
         for table in Base.metadata.sorted_tables:
             if table.name not in existing_tables:
-                continue  # brand new table — create_all() already made it correctly
+                continue  # brand new table - create_all() already made it correctly
             existing_cols = {c["name"] for c in insp.get_columns(table.name)}
             for column in table.columns:
                 if column.name in existing_cols:

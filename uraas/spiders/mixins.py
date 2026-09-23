@@ -1,5 +1,5 @@
 """
-Dedup-aware crawling mixin — fixes the "same papers every crawl" bug.
+Dedup-aware crawling mixin - fixes the "same papers every crawl" bug.
 
 Root cause: every web-discovery spider counted an item toward its `target`
 the moment it passed the Special-Collections gate, without ever checking
@@ -12,7 +12,7 @@ deeper in the source.
 
 DedupAwareSpiderMixin loads a snapshot of known DOIs/URLs/titles once per
 spider run and lets each spider skip (not count, but keep paginating past)
-items already in the DB — so `target` means "N genuinely new SC papers",
+items already in the DB - so `target` means "N genuinely new SC papers",
 and repeat runs actually make progress instead of asymptoting to zero.
 
 Normalization here MUST match uraas/pipelines/database.py's dedup checks
@@ -56,7 +56,7 @@ class DedupAwareSpiderMixin:
     counter and yielding:
 
         if self._is_known(doi=doi, url=url, title=title):
-            continue                      # already ingested — keep paginating
+            continue                      # already ingested - keep paginating
         self._accepted += 1
         ...
         yield item
@@ -67,7 +67,7 @@ class DedupAwareSpiderMixin:
         """Load a global snapshot of known DOIs/URLs/titles once per run.
 
         Global (not institution-scoped) to match the pipeline's own dedup,
-        which has no institution filter — an institution-scoped index here
+        which has no institution filter - an institution-scoped index here
         could let a spider "accept" a paper the pipeline still silently
         drops as a cross-institution duplicate.
         """
@@ -138,7 +138,7 @@ class DedupAwareSpiderMixin:
         """Call at the top of parse() once `self._accepted >= self.target_limit`.
 
         Every SC-seed-wave spider builds its full set of seed requests
-        up-front in `async def start()` — that generator runs to completion
+        up-front in `async def start()` - that generator runs to completion
         in a single event-loop tick (no `await` inside it), so it enqueues
         every wave's request with the scheduler before a single response has
         come back and `self._accepted` has had any chance to update. A plain
@@ -147,7 +147,7 @@ class DedupAwareSpiderMixin:
         the network regardless. With SC_SEED_KEYWORDS now covering the full
         (ambiguity-filtered) taxonomy (~300 seeds, up from ~20), that "keep
         firing queued requests we don't need" tail became the dominant cost
-        of a crawl — live-tested on openalex_spider.py: target=15 was
+        of a crawl - live-tested on openalex_spider.py: target=15 was
         satisfied by items found within the first ~2.5 minutes, but the run
         kept making network requests for another ~20+ minutes draining the
         rest of the queue. Raising CloseSpider here tells the engine to

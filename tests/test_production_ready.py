@@ -128,7 +128,7 @@ class TestMetadataExtraction:
                 assert paper.dc_title, "Paper should have Dublin Core title"
 
                 # dc_identifier_doi stores the repository handle (OAI/DocID),
-                # while paper.doi stores the scholarly DOI — these are distinct fields.
+                # while paper.doi stores the scholarly DOI - these are distinct fields.
                 # Both can coexist; just verify dc_identifier_doi is non-empty when doi is set.
                 if paper.doi and paper.dc_identifier_doi:
                     assert (
@@ -199,7 +199,7 @@ class TestStaffValidation:
 
 
 class TestAPIEndpoints:
-    """Test API endpoints — uses the admin_client fixture from
+    """Test API endpoints - uses the admin_client fixture from
     tests/conftest.py (every dashboard route except a small public
     allowlist requires an authenticated session)."""
 

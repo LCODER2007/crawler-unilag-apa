@@ -136,12 +136,12 @@ class InstitutionConfig:
     @property
     def staff_name_lookup(self) -> Dict[str, Dict]:
         """Normalized-name -> staff record, built once and cached (11,854
-        records for UNILAG as of the 2026-07-20 harvest — rebuilding this
+        records for UNILAG as of the 2026-07-20 harvest - rebuilding this
         per paper would be wasteful).
 
         Used to cross-check authors from sources that carry no real
         per-author affiliation data at all (arXiv, Semantic Scholar, CORE,
-        OpenAIRE) against our actual verified staff roster — a materially
+        OpenAIRE) against our actual verified staff roster - a materially
         stronger signal than "the institution's name appears somewhere in
         the title/abstract", which can't tell a paper genuinely authored at
         the institution apart from one merely written about it (the
@@ -161,7 +161,7 @@ class InstitutionConfig:
     def matches_staff_roster(self, author_names: List[str]) -> bool:
         """True if any given author name exactly matches a known staff
         member (normalized, case-insensitive). Deliberately exact-match
-        only, not fuzzy — a missed match just falls through to a weaker
+        only, not fuzzy - a missed match just falls through to a weaker
         signal (recall cost), while a fuzzy false match would silently
         misattribute a paper (a precision cost), which is the worse of the
         two mistakes here."""

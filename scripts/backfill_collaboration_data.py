@@ -47,7 +47,7 @@ def _norm_doi(doi: str) -> str:
 def fetch_batch_by_doi(dois):
     """One OpenAlex call for up to 50 DOIs. Returns {normalized_doi: work}.
 
-    DOIs are pipe-joined raw — requests URL-encodes the whole filter param;
+    DOIs are pipe-joined raw - requests URL-encodes the whole filter param;
     pre-quoting each DOI double-encodes and matches nothing."""
     flt = "doi:" + "|".join(dois)
     data = oa_get("/works", {"filter": flt, "select": SELECT, "per-page": BATCH})
@@ -168,7 +168,7 @@ def main():
 
         updated = intra = not_found = 0
 
-        # ── DOI batches ──────────────────────────────────────────────────
+        # -- DOI batches --------------------------------------------------
         doi_map = {_norm_doi(it.doi): it for it in by_doi}
         doi_keys = list(doi_map)
         for start in range(0, len(doi_keys), BATCH):
@@ -190,7 +190,7 @@ def main():
             )
             time.sleep(1.0)
 
-        # ── OpenAlex-ID batches (items without DOI) ──────────────────────
+        # -- OpenAlex-ID batches (items without DOI) ----------------------
         oaid_map = {}
         for it in by_oaid:
             wid = (it.url or "").rstrip("/").split("/")[-1]
@@ -223,7 +223,7 @@ def main():
         print(f"DONE. updated={updated}  not_found={not_found}")
         print(
             f"Repository intra-African collaboration: {total_ia}/{total} "
-            f"({(total_ia / total * 100) if total else 0:.1f}%) — continental baseline ~8.4%"
+            f"({(total_ia / total * 100) if total else 0:.1f}%) - continental baseline ~8.4%"
         )
         print("=" * 64)
         return 0

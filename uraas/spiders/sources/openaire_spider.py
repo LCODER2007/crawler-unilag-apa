@@ -1,12 +1,12 @@
 """
-OpenAIRE spider — queries the OpenAIRE Graph API.
+OpenAIRE spider - queries the OpenAIRE Graph API.
 
 OpenAIRE aggregates research from EU-funded projects, repositories across 150+
 countries, and African research networks (NREN partnerships, African university
 repositories). Particularly strong for:
-  • African development research
-  • Research from Nigerian/West African institutions
-  • Open access preprints and technical reports not in OpenAlex
+  - African development research
+  - Research from Nigerian/West African institutions
+  - Open access preprints and technical reports not in OpenAlex
 
 Free API, no key required. Rate limit: 7200 req/hour.
 Docs: graph.openaire.eu/docs/apis/
@@ -26,7 +26,7 @@ from uraas.config.special_collections import SC_SEED_KEYWORDS
 from uraas.services.sc_engine import sc_score_of
 from uraas.spiders.mixins import DedupAwareSpiderMixin
 
-# Graph API v1 — old search/publications v2 returns 400 for keyword+affiliation combos
+# Graph API v1 - old search/publications v2 returns 400 for keyword+affiliation combos
 _BASE = "https://api.openaire.eu/graph/v1/researchProducts"
 
 
@@ -77,7 +77,7 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
         free-text `search=` query is relevance-ranked, not a guaranteed
         phrase filter, so a hit isn't necessarily institution-authored. Same
         belt-and-suspenders text-match fallback as core_spider.py/
-        semantic_scholar_spider.py use for the same reason — a real but
+        semantic_scholar_spider.py use for the same reason - a real but
         bounded false-positive risk, preferable to accepting everything
         unconditionally (the prior behavior)."""
         combined = f"{title} {abstract}".lower()
@@ -141,7 +141,7 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 continue
 
             # The real OpenAIRE Graph API v1 field is "descriptions" (plural,
-            # a list) — "description" (singular) does not exist in live
+            # a list) - "description" (singular) does not exist in live
             # responses, so this was always falling through to "" and every
             # OpenAIRE-sourced item was stored with a blank abstract (also
             # starving sc_score_of() of half its input text). Handle both
@@ -173,8 +173,8 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             url_val = f"https://doi.org/{doi}" if doi else ""
 
             # Cross-check author names against the verified staff roster
-            # first — a materially stronger, independent signal than a
-            # title/abstract text mention — falling back to the text match
+            # first - a materially stronger, independent signal than a
+            # title/abstract text mention - falling back to the text match
             # for genuine staff not yet in our harvested roster.
             roster_ok = self.institution_config.matches_staff_roster(authors)
             if not roster_ok and not self._text_affiliation_match(title, abstract):
@@ -183,7 +183,7 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -202,7 +202,7 @@ class OpenAIRESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "raw_affiliation": self.institution_name,
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
-                # "strong" only via the staff-roster cross-check — OpenAIRE
+                # "strong" only via the staff-roster cross-check - OpenAIRE
                 # carries no author affiliation field to check instead.
                 "affiliation_confidence": "strong" if roster_ok else "weak",
             }

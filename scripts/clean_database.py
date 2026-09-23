@@ -38,7 +38,7 @@ def run_cleanup(dry_run: bool = False):
 
         removed = 0
 
-        # ── Rule 1: Remove items from removed institutions ────────────────────
+        # -- Rule 1: Remove items from removed institutions --------------------
         all_institutions_in_db = session.query(Item.institution).distinct().all()
         stale_insts = [
             r[0]
@@ -59,7 +59,7 @@ def run_cleanup(dry_run: bool = False):
                     session.commit()
                 removed += len(stale_items)
 
-        # ── Rule 2: Remove items with no title ────────────────────────────────
+        # -- Rule 2: Remove items with no title --------------------------------
         no_title = (
             session.query(Item)
             .filter(
@@ -74,7 +74,7 @@ def run_cleanup(dry_run: bool = False):
             session.commit()
         removed += len(no_title)
 
-        # ── Rule 3: Remove items with title < 10 chars and no DOI ────────────
+        # -- Rule 3: Remove items with title < 10 chars and no DOI ------------
         all_short = session.query(Item).filter(Item.doi == None).all()
         short_items = [i for i in all_short if i.title and len(i.title.strip()) < 10]
         log.info(
@@ -86,7 +86,7 @@ def run_cleanup(dry_run: bool = False):
             session.commit()
         removed += len(short_items)
 
-        # ── Rule 4: Remove exact DOI duplicates (keep lowest id) ─────────────
+        # -- Rule 4: Remove exact DOI duplicates (keep lowest id) -------------
         doi_subq = (
             session.query(Item.doi, func.min(Item.id).label("min_id"))
             .filter(Item.doi != None)
@@ -106,7 +106,7 @@ def run_cleanup(dry_run: bool = False):
             session.commit()
         removed += len(dup_dois)
 
-        # ── Rule 5: Remove items with no institution tag ──────────────────────
+        # -- Rule 5: Remove items with no institution tag ----------------------
         no_inst = (
             session.query(Item)
             .filter((Item.institution == None) | (Item.institution == ""))

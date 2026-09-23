@@ -15,26 +15,26 @@ def migrate():
             # Add ror column
             conn.execute(text("ALTER TABLE items ADD COLUMN ror VARCHAR(128)"))
             conn.execute(text("CREATE INDEX ix_items_ror ON items(ror)"))
-            print("✓ Added ror column and index")
+            print(" Added ror column and index")
         except Exception as e:
             if (
                 "duplicate column" in str(e).lower()
                 or "already exists" in str(e).lower()
             ):
-                print("✓ ROR column already exists")
+                print(" ROR column already exists")
             else:
                 print(f"Error: {e}")
 
         try:
             # Add institution column if not exists
             conn.execute(text("ALTER TABLE items ADD COLUMN institution VARCHAR(255)"))
-            print("✓ Added institution column")
+            print(" Added institution column")
         except Exception as e:
             if (
                 "duplicate column" in str(e).lower()
                 or "already exists" in str(e).lower()
             ):
-                print("✓ Institution column already exists")
+                print(" Institution column already exists")
             else:
                 print(f"Error: {e}")
 
@@ -54,7 +54,7 @@ def migrate():
             )
         )
         session.commit()
-        print(f"✓ Updated {count} papers with UNILAG ROR")
+        print(f" Updated {count} papers with UNILAG ROR")
     finally:
         session.close()
 

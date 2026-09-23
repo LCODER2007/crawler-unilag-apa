@@ -7,7 +7,7 @@ Why this exists: Item.dc_rights has a model default of
 the codebase ever wrote it*. Every OA metric in the dashboard
 (oa_percentage, open-access-breakdown, impact-metrics' oa_rate, the is_oa
 flag in search results, the OA column in CSV exports) filters on
-dc_rights LIKE '%openAccess%', so all of them silently reported 0% — not
+dc_rights LIKE '%openAccess%', so all of them silently reported 0% - not
 because the papers are closed, but because the field was never populated.
 It also made /api/papers/<id>/download return 403 for every non-admin
 caller, including partner API keys, since the download gate reads the same
@@ -32,7 +32,7 @@ import time
 import requests
 
 # This collection is full of Yoruba/Igbo/Hausa titles (ọ, ẹ, ṣ, à ...) and a
-# Windows console defaults to cp1252, which cannot encode them — printing a
+# Windows console defaults to cp1252, which cannot encode them - printing a
 # progress line for such a title raises UnicodeEncodeError and kills the run
 # mid-way (hit for real on "Gospel Àpàlà music ..."). Force UTF-8 with
 # replacement so progress output can never abort the backfill itself.
@@ -55,7 +55,7 @@ def fetch_oa_status(doi: str):
     None) on failure.
 
     None for is_oa means "couldn't determine" and is deliberately distinct
-    from False — an API failure must never downgrade a record we already
+    from False - an API failure must never downgrade a record we already
     believe is open access.
 
     The same response also carries best_oa_location, so the full-text URL
@@ -94,7 +94,7 @@ def main():
     try:
         # Two kinds of record need this: ones whose access level was never
         # resolved, and ones already known to be open access but with no
-        # full-text URL captured — the latter are open access yet still
+        # full-text URL captured - the latter are open access yet still
         # undownloadable, which is just as much a gap.
         candidates = (
             session.query(Item)
@@ -128,7 +128,7 @@ def main():
                 for f in session.query(File).filter_by(item_id=it.id).all():
                     f.access_policy = "Public"
                 # An open-access record with no full-text URL can't actually
-                # be fetched — fill it in while we have the answer.
+                # be fetched - fill it in while we have the answer.
                 if pdf_url and not (it.pdf_url or "").strip():
                     it.pdf_url = pdf_url
                     linked += 1

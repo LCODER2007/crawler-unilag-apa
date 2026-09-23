@@ -66,7 +66,7 @@ class DatabaseStoragePipeline:
                         self._ir_client = None
                 if self._ir_client:
                     _ir_log.info(
-                        "IR auto-deposit enabled → collection %s",
+                        "IR auto-deposit enabled -> collection %s",
                         self._ir_collection_uuid,
                     )
             except Exception as exc:
@@ -76,7 +76,7 @@ class DatabaseStoragePipeline:
     def _enrich_existing_item(self, existing, item, spider):
         """A fresh crawl re-found a paper already in the DB (matched by DOI,
         URL, or title). Rather than discarding the new data, backfill any
-        field the existing record is still missing — sources are often
+        field the existing record is still missing - sources are often
         partial (e.g. an OAI-harvested stub has no abstract/DOI; a later
         OpenAlex/Crossref hit for the same paper carries the abstract, an
         openalex_id, citation counts, or ORCID-tagged authors the stub never
@@ -85,8 +85,7 @@ class DatabaseStoragePipeline:
         we actually merge instead of skip.
 
         Conservative by design: only fills fields that are currently empty
-        on the existing row (except cited_by_count, where we keep the max —
-        a live re-crawl should never make a citation count go backwards).
+        on the existing row (except cited_by_count, where we keep the max - a live re-crawl should never make a citation count go backwards).
         Never touches identity fields (title/doi/url) that drove the dedup
         match in the first place.
         """
@@ -202,8 +201,7 @@ class DatabaseStoragePipeline:
                 spider.logger.error("Item missing title, skipping")
                 return item
 
-            # Sanitize title/abstract/subject BEFORE dedup/classification/storage —
-            # several sources (Crossref, PubMed, Europe PMC, CORE, DataCite,
+            # Sanitize title/abstract/subject BEFORE dedup/classification/storage - # several sources (Crossref, PubMed, Europe PMC, CORE, DataCite,
             # OpenAIRE) return raw JATS/HTML markup ("<jats:p>", "&amp;lt;i&amp;gt;")
             # embedded in these fields. Doing this once here (the single choke
             # point every spider's items pass through) fixes it for every
@@ -222,7 +220,7 @@ class DatabaseStoragePipeline:
 
             doi = item.get("doi") or None
 
-            # Validate DOI format — reject malformed ones
+            # Validate DOI format - reject malformed ones
             if doi and not _validate_doi(doi):
                 spider.logger.warning(f"Malformed DOI rejected: {doi!r}")
                 doi = None
@@ -250,7 +248,7 @@ class DatabaseStoragePipeline:
 
             # Deduplicate by normalised title (avoid same title from multiple sources).
             # Exact match on the full lowercased title (up to the column's max
-            # length) — NOT a fuzzy match. A prior version used
+            # length) - NOT a fuzzy match. A prior version used
             # Item.title.ilike(norm_title[:100]) with no wildcard characters,
             # which is actually a case-insensitive *equality* check truncated
             # to only the incoming title's first 100 chars, so it silently
@@ -292,11 +290,11 @@ class DatabaseStoragePipeline:
             institution_name = getattr(spider, "institution_name", None)
             institution_ror = getattr(spider, "ror_id", None)
 
-            # Special Collections scoring — heavy weight on indigenous knowledge,
+            # Special Collections scoring - heavy weight on indigenous knowledge,
             # cultural heritage, African literature, etc. Score>0 marks the item as
             # part of a special collection; drives ranking on the dashboard.
             #
-            # Uses uraas.services.sc_engine.is_special_collection — the guarded
+            # Uses uraas.services.sc_engine.is_special_collection - the guarded
             # 4-gate classifier (ambiguous-ethnonym guard, STEM/medical exclusion,
             # context corroboration), NOT uraas.utils.ai_classifier's unguarded
             # keyword-hit-count classifier, which every crawl used previously and
@@ -328,7 +326,7 @@ class DatabaseStoragePipeline:
                     f"Not a special collection: {(item.get('title') or '')[:60]}"
                 )
 
-            # Parse publication date — accept YYYY, YYYY-MM-DD, or full ISO timestamps.
+            # Parse publication date - accept YYYY, YYYY-MM-DD, or full ISO timestamps.
             pub_date_raw = item.get("publication_date") or ""
             pub_date = None
             if pub_date_raw:
@@ -339,13 +337,12 @@ class DatabaseStoragePipeline:
                     # BUG (found 2026-07-19, live-confirmed 0/54 items in
                     # production had publication_date set despite 40/54
                     # having a valid dc_date_issued string): this used to
-                    # slice the input to len(fmt) before parsing — but fmt is
+                    # slice the input to len(fmt) before parsing - but fmt is
                     # the *format string* ("%Y-%m-%d" is 8 chars), not the
                     # expected *data* length ("2024-06-15" is 10 chars), so
                     # every real date got truncated mid-token and every
                     # strptime call failed silently, for every format, for
-                    # every item, always. strptime doesn't need pre-slicing —
-                    # it already fails cleanly on a non-matching string.
+                    # every item, always. strptime doesn't need pre-slicing - # it already fails cleanly on a non-matching string.
                     for fmt in (
                         "%Y-%m-%dT%H:%M:%SZ",
                         "%Y-%m-%dT%H:%M:%S",
@@ -378,11 +375,11 @@ class DatabaseStoragePipeline:
             }
             doc_type = _type_map.get(raw_type.lower(), raw_type) if raw_type else None
 
-            # TK Vitality content_type — a *form* axis (paper/thesis/dataset/
+            # TK Vitality content_type - a *form* axis (paper/thesis/dataset/
             # patent), separate from dc_type's Dublin-Core display casing.
             # get_tk_vitality_score() (uraas/analytics/engine.py TK_WEIGHTS)
             # reads lowercase snake_case keys, which dc_type's Title-case
-            # values never matched — every item silently fell through to the
+            # values never matched - every item silently fell through to the
             # generic 0.5 weight regardless of its real type. Prefer the SC
             # category (already computed above, sorted by score) for content
             # that IS indigenous knowledge / cultural heritage / oral
@@ -408,7 +405,7 @@ class DatabaseStoragePipeline:
                 doc_type, "research_paper"
             )
 
-            # URL: fall back to None — never use a generic domain as unique URL
+            # URL: fall back to None - never use a generic domain as unique URL
             item_url = item.get("url") or None
 
             # Create Item with Dublin Core metadata
@@ -513,15 +510,15 @@ class DatabaseStoragePipeline:
             self.session.add(doc)
             self.session.flush()  # Get doc.id
 
-            # PID assignment — record only identifiers a real authority
+            # PID assignment - record only identifiers a real authority
             # actually assigned; never fabricate one locally. Items already
             # carrying a repository-native Handle (harvested from our own IR
             # via OAI-PMH) use that Handle. An ARK is stored only when the
             # source item itself supplied one (i.e. we found the paper BY an
             # ARK, or a source's metadata already carries a real ARK it was
-            # registered under elsewhere) — no source currently does this,
+            # registered under elsewhere) - no source currently does this,
             # so doc.ark will be NULL for most items until one does; that's
-            # correct, not a bug. DocID is likewise never minted here — only
+            # correct, not a bug. DocID is likewise never minted here - only
             # uraas.services.docid_client.DocIDClient (a real API call to the
             # Africa PID Alliance platform) ever sets Item.docid.
             is_own_ir_record = bool(item.get("is_own_repository")) and bool(
@@ -606,7 +603,7 @@ class DatabaseStoragePipeline:
                     )
                     if result["status"] == "ok":
                         _ir_log.info(
-                            "IR deposit OK → dspace_id=%s  title=%s",
+                            "IR deposit OK -> dspace_id=%s  title=%s",
                             result.get("dspace_id"),
                             (doc.title or "")[:60],
                         )
@@ -620,7 +617,7 @@ class DatabaseStoragePipeline:
                         )
                     else:
                         _ir_log.warning(
-                            "IR deposit failed: %s — %s",
+                            "IR deposit failed: %s - %s",
                             (doc.title or "")[:60],
                             result.get("message"),
                         )

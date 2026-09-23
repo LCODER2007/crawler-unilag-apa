@@ -3,7 +3,7 @@ Backfill framework alignment scores for existing items and rebuild the
 AlignmentAggregate table (per institution + global).
 
 Usage:
-    python scripts/backfill_alignment.py            # DRY RUN — counts only
+    python scripts/backfill_alignment.py            # DRY RUN - counts only
     python scripts/backfill_alignment.py --apply
     python scripts/backfill_alignment.py --apply --force   # re-score current-version items
 

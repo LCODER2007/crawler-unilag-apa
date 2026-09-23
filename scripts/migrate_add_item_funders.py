@@ -1,7 +1,7 @@
 """
 Schema migration: add funders column to items table. Idempotent.
 
-No backfill of existing rows here — populating funders for already-crawled
+No backfill of existing rows here - populating funders for already-crawled
 items needs a live re-fetch per item (OpenAlex work lookup by openalex_id),
 which belongs in a separate backfill script, not this migration.
 """

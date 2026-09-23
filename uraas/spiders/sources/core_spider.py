@@ -1,5 +1,5 @@
 """
-CORE spider — queries core.ac.uk (250M+ open-access papers from repos worldwide).
+CORE spider - queries core.ac.uk (250M+ open-access papers from repos worldwide).
 
 CORE aggregates content from thousands of institutional repositories and OA journals
 globally, including many African university repositories. For URAAS it surfaces grey
@@ -8,20 +8,20 @@ literature and theses that are not yet indexed by OpenAlex or Crossref.
 A free CORE API key (https://core.ac.uk/api-keys/register, set CORE_API_KEY
 in .env) raises the rate limit, but live-tested 2026-07-18: the /v3/search/
 works endpoint returns full 200 OK results with no Authorization header at
-all (only an invalid/garbage key gets 401) — so this now runs keyless with a
+all (only an invalid/garbage key gets 401) - so this now runs keyless with a
 lower throughput ceiling rather than refusing to run at all.
 
 Precision note: CORE's `q=` search does NOT do phrase/AND matching the way
-`"A" "B"` quoting implies for most search engines — live-verified the quoted
+`"A" "B"` quoting implies for most search engines - live-verified the quoted
 query `"University of Lagos"` returns totalHits=4,482,856 (300x MORE than
 the unquoted `University of Lagos`, 14,834), and a completely made-up quoted
-phrase returns a comparable multi-million count — quoting provides ~zero
+phrase returns a comparable multi-million count - quoting provides ~zero
 restriction, and CORE's author objects carry no affiliation field at all to
 verify against client-side. Since there's no reliable way to confirm a
 result is actually institution-affiliated, this spider requires the
 institution name to literally appear in the title/abstract text (same
 belt-and-suspenders fallback semantic_scholar_spider.py uses for the same
-reason) — a real but bounded false-positive risk (a paper merely mentioning
+reason) - a real but bounded false-positive risk (a paper merely mentioning
 the institution, not authored there), preferable to accepting everything
 unconditionally.
 """
@@ -77,7 +77,7 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
         if not self.api_key:
             self.logger.warning(
-                "CORE_API_KEY not set — running keyless (lower rate limit). "
+                "CORE_API_KEY not set - running keyless (lower rate limit). "
                 "Get a free key at https://core.ac.uk/api-keys/register for higher throughput."
             )
 
@@ -107,7 +107,7 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
     def _text_affiliation_match(self, title: str, abstract: str) -> bool:
         """CORE's author objects carry no affiliation field, and the `q=`
         query itself doesn't reliably restrict to the institution (see
-        module docstring) — this is the only verification available."""
+        module docstring) - this is the only verification available."""
         combined = f"{title} {abstract}".lower()
         return any(p.lower() in combined for p in self._affiliation_patterns)
 
@@ -158,7 +158,7 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             abstract = (r.get("abstract") or "").strip()
             pub_year = r.get("yearPublished") or ""
             # `.get("sourceFulltextUrls", [None])` only falls back to [None]
-            # when the KEY is missing — when CORE returns the key present
+            # when the KEY is missing - when CORE returns the key present
             # but as an empty list (common), .get() returns that empty list
             # and [0] raises IndexError, crashing the whole parse() callback
             # for the response (confirmed live 2026-07-19/20: killed CORE
@@ -170,7 +170,7 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             pdf_url = r.get("downloadUrl") or None
             doc_type = r.get("documentType") or ""
 
-            # Affiliation gate — see module docstring: CORE's query doesn't
+            # Affiliation gate - see module docstring: CORE's query doesn't
             # reliably restrict to the institution and there's no author
             # affiliation field to check. Cross-check author names against
             # the verified staff roster first (a much stronger, independent
@@ -181,12 +181,12 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
             if not roster_ok and not self._text_affiliation_match(title, abstract):
                 continue
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -206,7 +206,7 @@ class CORESpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "content_type": doc_type,
-                # "strong" only via the staff-roster cross-check — the
+                # "strong" only via the staff-roster cross-check - the
                 # title/abstract text fallback can't distinguish
                 # authored-there from written-about (CORE has no author
                 # affiliation field at all to check instead).

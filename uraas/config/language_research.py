@@ -1,5 +1,5 @@
 """
-Language & Culture research detector — shared regex blueprints (Phase 7 cleanup).
+Language & Culture research detector - shared regex blueprints (Phase 7 cleanup).
 
 Extracted from uraas/dashboard/app.py language_research() route to:
   1. Allow unit-testing the classifier in isolation.
@@ -43,7 +43,7 @@ LANG_EXCLUDE = re.compile(
     re.IGNORECASE,
 )
 
-# Minimum relevance threshold: 2 combined tier-1/2 points, with ≥1 tier-1 hit
+# Minimum relevance threshold: 2 combined tier-1/2 points, with >=1 tier-1 hit
 # or 3+ tier-2 hits.
 LANG_MIN_SCORE = 2
 

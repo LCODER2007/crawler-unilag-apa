@@ -4,9 +4,9 @@ Lightweight authentication for the URAAS dashboard.
 Zero external auth dependencies: Flask `session` cookies (signed with
 DASHBOARD_SECRET_KEY) + Werkzeug password hashing. Two roles:
 
-    admin  — full control: crawler, mutations, bulk exports, staff directory,
+    admin - full control: crawler, mutations, bulk exports, staff directory,
              and download of any stored file regardless of rights.
-    viewer — read access to the dashboard and analytics; may download only
+    viewer - read access to the dashboard and analytics; may download only
              open-access files.
 
 Credentials come from the environment (see uraas.config.Config). Passwords are

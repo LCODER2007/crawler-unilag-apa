@@ -1,12 +1,12 @@
 """
-DOAJ spider — Directory of Open Access Journals API v3.
+DOAJ spider - Directory of Open Access Journals API v3.
 
 DOAJ indexes 20,000+ OA journals and is particularly strong for African
 humanities, social sciences, and indigenous knowledge journals. Many
 AJOL-listed journals appear in DOAJ.
 
 Free API, no key required. Docs: doaj.org/api/v3/docs
-Rate limit: 60 req/min — we use 1.5s delay.
+Rate limit: 60 req/min - we use 1.5s delay.
 """
 
 import os
@@ -78,11 +78,11 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
     def _build_url(self, query: str, page: int = 1) -> str:
         # DOAJ v3: query is a path segment, must be URL-encoded.
-        # Avoid field:value syntax — DOAJ rejects compound field queries (400).
+        # Avoid field:value syntax - DOAJ rejects compound field queries (400).
         # Free-text AND/quoted-phrase combos are fine, though (live-verified
         # 2026-07-18: `"University of Lagos" AND "indigenous knowledge"` ->
-        # 200, total=3 — see start()).
-        # sort must be "field:direction" (e.g. "created_date:desc") — a bare
+        # 200, total=3 - see start()).
+        # sort must be "field:direction" (e.g. "created_date:desc") - a bare
         # "relevance" value is rejected with a 400 by the current API, so we
         # simply omit sort and take the engine's default relevance ranking.
         encoded_q = quote(query, safe="")
@@ -93,7 +93,7 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
         seen: set = set()
 
         if not self.sc_only:
-            # Simple affiliation free-text — no field: syntax
+            # Simple affiliation free-text - no field: syntax
             q = f'"{self.institution_name}"'
             seen.add(q)
             yield scrapy.Request(
@@ -107,7 +107,7 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 s for s in SC_SEED_KEYWORDS if any(k in s.lower() for k in _SC_AFFINITY)
             ][:6]
             for seed in priority_seeds:
-                # Query institution AND seed together — a keyword-only query
+                # Query institution AND seed together - a keyword-only query
                 # was previously used here on the (stale, live-refuted) belief
                 # that DOAJ 400s on compound queries. Live-tested: the plain
                 # keyword-only wave got 0/50 UNILAG matches on page 1 of 3341
@@ -130,7 +130,7 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def _on_compound_query_error(self, failure):
         """Fall back to the keyword-only query if DOAJ ever rejects the
         compound institution+seed form for a particular seed (belt-and-
-        suspenders — not observed live, but the original code assumed it
+        suspenders - not observed live, but the original code assumed it
         would happen for every seed, so keep a path for it happening for some)."""
         request = failure.request
         seed = request.meta.get("fallback_seed")
@@ -203,12 +203,12 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
             year = str(bib.get("year") or "")
             journal = (bib.get("journal") or {}).get("title", "")
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -228,11 +228,11 @@ class DOAJSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # "strong" only when DOAJ's own structured author.affiliation
-                # field named the institution — a bare title/abstract mention
+                # field named the institution - a bare title/abstract mention
                 # can't distinguish a paper authored there from one merely
                 # written about it/someone there.
                 "affiliation_confidence": "strong" if affil_strong else "weak",
-                # DOAJ is the Directory of *Open Access* Journals — every
+                # DOAJ is the Directory of *Open Access* Journals - every
                 # article it indexes is open access by definition, so this is
                 # a fact about the source, not a per-record flag to look up.
                 "dc_rights": "info:eu-repo/semantics/openAccess",

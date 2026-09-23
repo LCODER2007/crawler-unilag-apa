@@ -1,5 +1,5 @@
 """
-Special Collections Decision Engine — the single source of truth for deciding
+Special Collections Decision Engine - the single source of truth for deciding
 whether a paper belongs to URAAS's Special Collections (SC).
 
 This is an in-process decision engine (no Elasticsearch/Celery): it layers
@@ -13,8 +13,7 @@ It is consumed by:
   - the comparator (uraas/services/comparator_engine.py) via SC_FILTER
   - the re-classify/prune script (scripts/reclassify_and_prune_sc.py)
 
-The keyword taxonomy itself lives in uraas.utils.ai_classifier.SPECIAL_COLLECTIONS
-— we import it rather than redefine it.
+The keyword taxonomy itself lives in uraas.utils.ai_classifier.SPECIAL_COLLECTIONS - we import it rather than redefine it.
 """
 
 import re
@@ -27,15 +26,15 @@ from uraas.utils.ai_classifier import (
     _keyword_score,
 )
 
-# ── SQLAlchemy predicate: after re-scoring, score>0 ≡ Special Collection ──────
+# -- SQLAlchemy predicate: after re-scoring, score>0 ≡ Special Collection ------
 # Defined once here so every query (analytics, comparator) filters identically.
 SC_FILTER = Item.special_collection_score > 0
 
-# ── Category weighting ────────────────────────────────────────────────────────
+# -- Category weighting --------------------------------------------------------
 # "Strong" categories can qualify a paper on their own. "Ethnic Languages &
 # Groups" is support-only: it corroborates but cannot solely qualify a paper,
 # because it contains bare ethnonym/language tokens that are false-positive
-# magnets (e.g. "ss" → stainless steel, "ewe" → sheep).
+# magnets (e.g. "ss" -> stainless steel, "ewe" -> sheep).
 STRONG_CATEGORIES: Set[str] = {
     "Indigenous Knowledge",
     "African Literature",
@@ -83,7 +82,7 @@ AMBIGUOUS_TOKENS: Set[str] = {
     "bambara",
     "setswana",
     "sesotho",
-    # Generic academic phrases, not ethnonyms — but listed as keywords in the
+    # Generic academic phrases, not ethnonyms - but listed as keywords in the
     # "Ethnic Languages & Groups" taxonomy, and just as prone to false
     # positives: "ethnic group(s)" is routine vocabulary in ANY demographic/
     # epidemiological/genetics paper studying multiple populations (GWAS
@@ -92,10 +91,10 @@ AMBIGUOUS_TOKENS: Set[str] = {
     # two purely biomedical-genetics UNILAG papers ("A multi-ethnic genome-
     # wide association study...", "22q11.2 deletion syndrome in diverse
     # populations") were wrongly classified Special Collections on this
-    # alone — worse, since "ethnic group(s)" was ALSO listed in SC_CONTEXT
+    # alone - worse, since "ethnic group(s)" was ALSO listed in SC_CONTEXT
     # below, it was self-corroborating (the same phrase supplying both the
     # keyword hit AND the "context" that's supposed to be independent
-    # confirmation) — see the SC_CONTEXT comment.
+    # confirmation) - see the SC_CONTEXT comment.
     "ethnic group",
     "ethnic groups",
     "ethnic language",
@@ -105,7 +104,7 @@ AMBIGUOUS_TOKENS: Set[str] = {
 # *methods* or *regions* in otherwise non-SC papers (e.g. "ethnography" as a method,
 # "ecowas"/"african union" as a study region, the homonym "african literature" =
 # academic literature). A lone match from one of these needs SC context or a second
-# corroborating category — same treatment as ambiguous ethnonyms.
+# corroborating category - same treatment as ambiguous ethnonyms.
 AMBIGUOUS_STRONG: Set[str] = {
     "ethnography",
     "ecowas",
@@ -132,7 +131,7 @@ SC_CONTEXT = re.compile(
     r"griot|drumming|ethnomusicolog)\b",
     re.IGNORECASE,
 )
-# "ethnic group"/"ethnic groups" deliberately excluded from this list — it's
+# "ethnic group"/"ethnic groups" deliberately excluded from this list - it's
 # also a matchable AMBIGUOUS_TOKENS keyword in the "Ethnic Languages &
 # Groups" taxonomy, and having it here too let it self-corroborate (the
 # ambiguous-token guard's "has_context" check would see the *same* phrase
@@ -182,11 +181,11 @@ def is_special_collection(
       - categories = list of matched SC category names (only meaningful when is_sc).
 
     Decision gates (in order):
-      1. Empty-text reject — require real title/abstract text.
-      2. Ambiguous-token guard — bare ethnonym tokens only count via a multi-word
+      1. Empty-text reject - require real title/abstract text.
+      2. Ambiguous-token guard - bare ethnonym tokens only count via a multi-word
          phrase or a second independent category.
-      3. STEM exclusion — EXCLUDE hit drops the paper unless a strong signal exists.
-      4. Confidence — keep iff (>=1 strong category) OR (>=1 strong multi-word
+      3. STEM exclusion - EXCLUDE hit drops the paper unless a strong signal exists.
+      4. Confidence - keep iff (>=1 strong category) OR (>=1 strong multi-word
          phrase and not excluded) OR (>=2 distinct categories).
     """
     # Gate 1: require title/abstract text (concept tags alone don't qualify).
@@ -224,8 +223,7 @@ def is_special_collection(
 
     # Gate 2: filter ambiguous matches in BOTH strong and support categories.
     # Bare ethnonyms ("igbo") and homonym method/region terms ("ethnography",
-    # "ecowas", "african literature") only count alone when context corroborates —
-    # this separates real ethnic/cultural studies from incidental token collisions.
+    # "ecowas", "african literature") only count alone when context corroborates - # this separates real ethnic/cultural studies from incidental token collisions.
     strong_hits = []
     for cat, count, matched in all_hits:
         if cat not in STRONG_CATEGORIES:
@@ -248,7 +246,7 @@ def is_special_collection(
 
     categories = [c for c, _, _ in qualifying]
     # A "qualifying phrase" is a multi-word matched keyword from a STRONG
-    # category only — e.g. "yoruba cosmology" (African Philosophy), "swahili
+    # category only - e.g. "yoruba cosmology" (African Philosophy), "swahili
     # coast" (Ethnic Languages & Groups... wait, no: multi-word phrases from
     # SUPPORT categories must NOT independently qualify a paper, or the
     # documented "support categories corroborate but cannot solely qualify"
@@ -257,16 +255,16 @@ def is_special_collection(
     # happening: "ethnic group" (2 words, support-only category) alone was
     # qualifying purely biomedical-genetics papers as Special Collections.
     # Genuine multi-word ethnonym phrases (e.g. "yoruba cosmology") aren't
-    # lost by this — they still qualify via has_context_support below, since
+    # lost by this - they still qualify via has_context_support below, since
     # they're also backed by an independent SC_CONTEXT word ("cosmology").
     has_qualifying_phrase = any(
         _is_multiword(kw) for _, _, matched in strong_hits for kw in matched
     )
     # A bare ethnonym that survived Gate 2 (i.e. context present) qualifies the
-    # paper on its own — distinguishes "Igbo Culture" from "SS2".
+    # paper on its own - distinguishes "Igbo Culture" from "SS2".
     has_context_support = bool(support_hits) and has_context
 
-    # Gate 3: STEM exclusion — needs a strong signal to survive.
+    # Gate 3: STEM exclusion - needs a strong signal to survive.
     excluded = bool(EXCLUDE.search(full))
     if excluded and not strong_hits:
         return (False, 0.0, [])
@@ -327,10 +325,10 @@ def sc_score_of(title: str, abstract: str, dc_subject: str = "") -> float:
     storage pipeline applies before saving (see uraas/pipelines/database.py).
 
     Spiders call this to count ONLY genuine SC papers toward their crawl
-    target — otherwise the target fills up with papers the pipeline later
+    target - otherwise the target fills up with papers the pipeline later
     drops, and the crawl halts early. Backed by ``is_special_collection``'s
     guarded 4-gate logic (ambiguous-token guard, STEM exclusion, context
-    corroboration) — NOT the unguarded keyword-hit-count classifier in
+    corroboration) - NOT the unguarded keyword-hit-count classifier in
     uraas.utils.ai_classifier, which every spider used prior to this fix.
     """
     _, score, _ = is_special_collection(title or "", abstract or "", dc_subject or "")

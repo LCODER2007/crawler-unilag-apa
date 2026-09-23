@@ -1,5 +1,5 @@
 """
-Deterministic narrative templates — one human-readable insight sentence per
+Deterministic narrative templates - one human-readable insight sentence per
 chart, generated server-side from the precomputed metrics and returned in the
 API envelope's `narrative` field. No LLM dependency; failures return "" so a
 narrative can never break an endpoint.
@@ -11,16 +11,16 @@ logger = logging.getLogger(__name__)
 
 NARRATIVE_TEMPLATES = {
     "alignment_profile": (
-        "{institution} shows strongest alignment with “{top_pillar}” "
+        "{institution} shows strongest alignment with '{top_pillar}' "
         "({top_score}/100 across {top_count} papers); {gap_count} of "
         "{pillar_count} pillars fall below the gap threshold of {threshold}."
     ),
     "alignment_gaps": (
-        "{gap_count} research gaps identified across {framework_count} frameworks — "
-        "the weakest area is “{worst_pillar}” ({worst_framework}) at {worst_score}/100."
+        "{gap_count} research gaps identified across {framework_count} frameworks - "
+        "the weakest area is '{worst_pillar}' ({worst_framework}) at {worst_score}/100."
     ),
     "intra_african": (
-        "Intra-African collaboration is {pct}% — {ratio}× the continental "
+        "Intra-African collaboration is {pct}% - {ratio}x the continental "
         "average of {baseline}% (Research Policy, 2022). Top partner: {top_partner}."
     ),
     "intra_african_no_partner": (
@@ -29,7 +29,7 @@ NARRATIVE_TEMPLATES = {
     ),
     "country_pairs": (
         "{pair_count} active country pairs; the strongest link is "
-        "{country_a}–{country_b} with {count} co-publications."
+        "{country_a}-{country_b} with {count} co-publications."
     ),
     "citation_velocity": (
         "Citations are accruing at {recent_rate} per year; on average papers "

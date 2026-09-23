@@ -18,11 +18,11 @@ commit hash so it can be re-verified against the repo.
 
 | Problem | Fix |
 |---|---|
-| OpenAlex's polite pool allows ~10 req/s **per IP**, shared across all institution spiders running in parallel — this caused 429 (rate limit) responses. | Raised `DOWNLOAD_DELAY` to 2.0s, `CONCURRENT_REQUESTS` to 1, `AUTOTHROTTLE_MAX_DELAY` to 60s, `RETRY_TIMES` to 5 on `[429,500,502,503,504]`, and allowed 429 through as a handled (not fatal) status so it's logged and backed off gracefully instead of exhausting retries (`openalex_spider.py:31-46`). |
+| OpenAlex's polite pool allows ~10 req/s **per IP**, shared across all institution spiders running in parallel - this caused 429 (rate limit) responses. | Raised `DOWNLOAD_DELAY` to 2.0s, `CONCURRENT_REQUESTS` to 1, `AUTOTHROTTLE_MAX_DELAY` to 60s, `RETRY_TIMES` to 5 on `[429,500,502,503,504]`, and allowed 429 through as a handled (not fatal) status so it's logged and backed off gracefully instead of exhausting retries (`openalex_spider.py:31-46`). |
 | `concepts.display_name.search` is not a valid OpenAlex filter (only `concepts.id` is supported). | Free-text concept search uses `title_and_abstract.search` instead (`openalex_spider.py:128-129`). |
-| OpenAlex returns abstracts as a word→position **inverted index**, not plain text. | `_reconstruct_abstract()` rebuilds the string by sorting tokens back into position order (`openalex_spider.py:325-334`). |
-| Papers from different institutions were getting mixed together when only relying on the API's institution filter. | Added a 3-gate precision design: (1) ROR-filtered query, (2) per-author ROR verification, (3) affiliation-string pattern matching as a belt-and-suspenders check — papers failing any gate are dropped (`openalex_spider.py:19-27`, gates at `184-187`, `230-235`). |
-| Spiders counted every API result toward their crawl `target`, but the storage pipeline later silently dropped non-Special-Collections (SC) papers — crawls halted early having "hit target" with mostly-discarded items. | Added `sc_score_of()`, mirroring the pipeline's own SC gate, and call it **inside the spider** before counting an item toward target (`openalex_spider.py:244-248`; gate added in commit `f6038f1`). An earlier inline gate (`is_special_collection()`) was tried and later removed as redundant/inconsistent with other spiders (commit `94a4707`). |
+| OpenAlex returns abstracts as a word->position **inverted index**, not plain text. | `_reconstruct_abstract()` rebuilds the string by sorting tokens back into position order (`openalex_spider.py:325-334`). |
+| Papers from different institutions were getting mixed together when only relying on the API's institution filter. | Added a 3-gate precision design: (1) ROR-filtered query, (2) per-author ROR verification, (3) affiliation-string pattern matching as a belt-and-suspenders check - papers failing any gate are dropped (`openalex_spider.py:19-27`, gates at `184-187`, `230-235`). |
+| Spiders counted every API result toward their crawl `target`, but the storage pipeline later silently dropped non-Special-Collections (SC) papers - crawls halted early having "hit target" with mostly-discarded items. | Added `sc_score_of()`, mirroring the pipeline's own SC gate, and call it **inside the spider** before counting an item toward target (`openalex_spider.py:244-248`; gate added in commit `f6038f1`). An earlier inline gate (`is_special_collection()`) was tried and later removed as redundant/inconsistent with other spiders (commit `94a4707`). |
 | OpenAlex announced deprecation of keyless (anonymous) access. | Added `OPENALEX_API_KEY` configuration for production use (`config/__init__.py:88-90`). |
 | Citations always showed 0 downstream. | Root cause: the spider never requested `counts_by_year`/`cited_by_count` fields from the API. Fixed by requesting those fields and persisting them (see §3 Citation Pipeline, commit `7dd86da`). |
 
@@ -31,7 +31,7 @@ commit hash so it can be re-verified against the repo.
 | Problem | Fix |
 |---|---|
 | Anonymous/non-descriptive requests are throttled harder by Crossref. | Sets a descriptive `USER_AGENT` with a `mailto` contact to qualify for Crossref's "polite pool" (`crossref_spider.py:19-24`). |
-| **False positives**: the spider originally accepted any result matching the institution query string, without checking whether an author was actually affiliated with the institution. | Added real affiliation verification — parses `author[].affiliation[].name` and rejects items where none match `matches_affiliation()`, tracking rejections via a `_rejected_aff` counter logged at spider close (commit `94a4707`). Because Crossref's affiliation field is often empty, items with *no* affiliation data are still accepted rather than rejected, relying on the query-level filter instead (`crossref_spider.py:124-126,139-144`). |
+| **False positives**: the spider originally accepted any result matching the institution query string, without checking whether an author was actually affiliated with the institution. | Added real affiliation verification - parses `author[].affiliation[].name` and rejects items where none match `matches_affiliation()`, tracking rejections via a `_rejected_aff` counter logged at spider close (commit `94a4707`). Because Crossref's affiliation field is often empty, items with *no* affiliation data are still accepted rather than rejected, relying on the query-level filter instead (`crossref_spider.py:124-126,139-144`). |
 | Unbounded pagination risk. | Hard cap at `offset < 500` (`crossref_spider.py:173-179`). |
 
 ### arXiv (`uraas/spiders/sources/arxiv_spider.py`)
@@ -58,14 +58,14 @@ commit hash so it can be re-verified against the repo.
 
 | Problem | Fix |
 |---|---|
-| DOAJ's v3 API returns HTTP 400 on compound `field:value` queries (e.g. combining institution + keyword). | Avoids `field:value` syntax entirely — uses plain free-text query segments and does affiliation filtering post-hoc in `parse()` instead (`doaj_spider.py:66-68,90-93,122-127`). |
+| DOAJ's v3 API returns HTTP 400 on compound `field:value` queries (e.g. combining institution + keyword). | Avoids `field:value` syntax entirely - uses plain free-text query segments and does affiliation filtering post-hoc in `parse()` instead (`doaj_spider.py:66-68,90-93,122-127`). |
 | Occasional malformed JSON responses. | Wrapped `response.json()` in `try/except`, logging and returning instead of raising (`doaj_spider.py:104-108`). |
 
 ### OAI-PMH / DSpace (`uraas/spiders/sources/oai_spider.py`)
 
 | Problem | Fix |
 |---|---|
-| Some DSpace servers — **including UNILAG's own repository** — return HTTP 500 on the `ListRecords` verb, while `ListIdentifiers` and `GetRecord` work correctly. | The entire spider is architected around `ListIdentifiers` (paginated via resumption token) + a per-record `GetRecord` call, instead of the more efficient but broken `ListRecords` (`oai_spider.py:1-9,36-42`). |
+| Some DSpace servers - **including UNILAG's own repository** - return HTTP 500 on the `ListRecords` verb, while `ListIdentifiers` and `GetRecord` work correctly. | The entire spider is architected around `ListIdentifiers` (paginated via resumption token) + a per-record `GetRecord` call, instead of the more efficient but broken `ListRecords` (`oai_spider.py:1-9,36-42`). |
 | Large default harvest date-ranges also triggered 500s on DSpace (servers struggle with very large ranges). | Widened the default lookback window to ~5 years (`_DEFAULT_LOOKBACK_DAYS = 1825`) and added an `oai_set` parameter to scope harvests to a specific DSpace community/collection, cutting request volume (`oai_spider.py:33`; commit `94a4707`). |
 | 500 responses on individual `GetRecord` calls are common/expected for stale identifiers and would otherwise crash the spider. | `HTTPERROR_ALLOWED_CODES: [500]` allows them through; listing-call 500s are logged at error level, individual record 500s at debug level since they're expected noise (`oai_spider.py:59,146-148,183-185`). |
 | OAI protocol-level error responses (e.g. `badResumptionToken`). | Checks `//oai:error/@code` and logs a warning rather than crashing (`oai_spider.py:154-157`). |
@@ -78,15 +78,15 @@ commit hash so it can be re-verified against the repo.
 | Problem | Fix |
 |---|---|
 | The older `search/publications` (v2) endpoint returns HTTP 400 for combined keyword+affiliation queries. | Migrated to the Graph API v1 (`researchProducts`) endpoint instead (`openaire_spider.py:28-29`). |
-| Inconsistent field typing across records — `description` can be a string or a list; title appears under either `title` or `mainTitle`; `results` is sometimes not a list. | Defensive `isinstance` branching to normalize `description`; fallback chain for title key; `results` coerced to `[]` if not already a list (`openaire_spider.py:83-85,91,95-96`). |
+| Inconsistent field typing across records - `description` can be a string or a list; title appears under either `title` or `mainTitle`; `results` is sometimes not a list. | Defensive `isinstance` branching to normalize `description`; fallback chain for title key; `results` coerced to `[]` if not already a list (`openaire_spider.py:83-85,91,95-96`). |
 | Inconsistent publication-date fields. | Falls back from `publicationYear` to `publicationDate` (truncated to 4 chars) (`openaire_spider.py:112`). |
 
 ### Semantic Scholar (`uraas/spiders/sources/semantic_scholar_spider.py`)
 
 | Problem | Fix |
 |---|---|
-| Aggressive rate limiting causing frequent 429s. | Doubled `DOWNLOAD_DELAY` (3→6s), doubled `AUTOTHROTTLE_MAX_DELAY` (30→120s), raised `RETRY_TIMES` (3→5), added `RETRY_BACKOFF_BASE/MAX` (commit `f6038f1`). |
-| `fieldsOfStudy` items were assumed to always be dicts (`f.get("category")`), but the API sometimes returns raw strings — this crashed the spider. | Now handles both string and dict entries (commit `f6038f1`). |
+| Aggressive rate limiting causing frequent 429s. | Doubled `DOWNLOAD_DELAY` (3->6s), doubled `AUTOTHROTTLE_MAX_DELAY` (30->120s), raised `RETRY_TIMES` (3->5), added `RETRY_BACKOFF_BASE/MAX` (commit `f6038f1`). |
+| `fieldsOfStudy` items were assumed to always be dicts (`f.get("category")`), but the API sometimes returns raw strings - this crashed the spider. | Now handles both string and dict entries (commit `f6038f1`). |
 
 ---
 
@@ -148,7 +148,7 @@ Additional related fixes:
   / `fetch_african_citation_share`, but those methods didn't exist yet,
   crashing the script; and `citation_tracker` was never imported in
   `scripts/init_db.py`, so SQLAlchemy never registered the `citations`,
-  `citation_metrics`, and `author_metrics` tables — they were silently
+  `citation_metrics`, and `author_metrics` tables - they were silently
   absent on fresh databases (commit `7a7dbb2`).
 - The dashboard's `get_citations` logic let a live `CitationMetrics` lookup
   overwrite the authoritative crawl-time `cited_by_count` down to 0; fixed to
@@ -161,7 +161,7 @@ Additional related fixes:
 ## 6. IR (Institutional Repository) Deposit Workflow
 
 **Problem:** An SMTP email-approval gate blocked automatic deposit of
-harvested items into the DSpace institutional repository — deposits sat
+harvested items into the DSpace institutional repository - deposits sat
 waiting on a manual email step that wasn't reliably actioned.
 
 **Fix:** Removed the SMTP gate; `queue_batch` now auto-approves and deposits
@@ -178,7 +178,7 @@ crawl/data-quality issues, included here to show the full impact chain:
 - Open Science Health Score rendered as `[object Object]%` (frontend read the
   wrong nested field from the analytics response).
 - KRI classification defaulted every record to "Unclassified" when
-  `coauthor_countries` was `NULL` — added an Africa-led fallback.
+  `coauthor_countries` was `NULL` - added an Africa-led fallback.
 - Charter Alignment scores were always zero because the scoring function had
   never been wired into the ingest pipeline.
 - The CARTO tile server the map relied on stopped loading (blank canvas) and

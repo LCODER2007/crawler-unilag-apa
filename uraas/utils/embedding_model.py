@@ -5,7 +5,7 @@ Uses minishlab/potion-base-8M (~30MB static embeddings, numpy-only) so the
 semantic half of alignment scoring runs comfortably inside the Flask process
 on a small Render instance. If the model can't load (no network on first
 boot, missing dependency), the alignment engine silently falls back to
-keyword-only scoring — the dashboard never 500s.
+keyword-only scoring - the dashboard never 500s.
 """
 
 import logging

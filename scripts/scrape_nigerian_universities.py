@@ -92,7 +92,7 @@ class UniversityStaffScraper:
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
 
-        print(f"\n✓ Saved {len(self.staff_names)} staff members to {filename}")
+        print(f"\n Saved {len(self.staff_names)} staff members to {filename}")
 
     def scrape(self):
         """Override in subclass"""
@@ -567,7 +567,7 @@ def main():
 
             # If scraping didn't yield enough results, generate sample data
             if len(scraper.staff_names) < 50:
-                print(f"\n  ⚠ Warning: Only {len(scraper.staff_names)} names collected")
+                print(f"\n   Warning: Only {len(scraper.staff_names)} names collected")
                 print(f"  Generating sample Nigerian academic names for testing...")
 
                 sample_names = generate_sample_names(scraper.institution_name, 300)
@@ -582,13 +582,13 @@ def main():
                         }
                     )
 
-                print(f"  ✓ Added {len(sample_names)} sample names")
+                print(f"   Added {len(sample_names)} sample names")
 
             scraper.save_to_json(filename)
             results[scraper.institution_name] = len(scraper.staff_names)
 
         except Exception as e:
-            print(f"\n✗ Error scraping {scraper.institution_name}: {e}")
+            print(f"\n Error scraping {scraper.institution_name}: {e}")
             import traceback
 
             traceback.print_exc()
@@ -606,7 +606,7 @@ def main():
     print(f"\n  TOTAL: {total} staff members across 4 universities")
     print("=" * 60)
 
-    print("\n✓ Data collection complete!")
+    print("\n Data collection complete!")
     print("\nNext steps:")
     print("  1. Review generated JSON files in data/ directory")
     print("  2. Manually verify sample of names")

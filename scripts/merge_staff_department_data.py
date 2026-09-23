@@ -4,8 +4,8 @@ actually points at) from data/unilag_staff_detailed.json (an older scrape
 that has department/faculty for ~3100 people but no reliable ORCID linkage
 for most of them, and isn't wired into any current script).
 
-harvest_staff_openalex.py — the script that actually (re)populates
-unilag_staff.json — deliberately leaves department/faculty as None (see its
+harvest_staff_openalex.py - the script that actually (re)populates
+unilag_staff.json - deliberately leaves department/faculty as None (see its
 own comment: "We can't get concepts easily from works authorships without
 extra queries, so we will leave faculty and department empty for now").
 That's why every one of the 500 records currently has null department/faculty

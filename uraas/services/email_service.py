@@ -36,14 +36,14 @@ def send_batch_approval_request(
     """Send the approval-request email and return True on success."""
     if not _is_smtp_configured():
         logger.warning(
-            "SMTP not configured — skipping approval email for batch %s. "
+            "SMTP not configured - skipping approval email for batch %s. "
             "Admin can approve at: %s",
             batch_id,
             approve_url,
         )
         return False
 
-    subject = f"[URAAS] Approve IR deposit — Batch #{batch_id} ({item_count} papers)"
+    subject = f"[URAAS] Approve IR deposit - Batch #{batch_id} ({item_count} papers)"
     html = _build_html(
         batch_id=batch_id,
         item_count=item_count,
@@ -84,14 +84,14 @@ def send_batch_approval_request(
         envelope_from = parseaddr(config.SMTP_FROM)[1] or config.SMTP_USER
         server.sendmail(envelope_from, [to_email], msg.as_bytes())
         server.quit()
-        logger.info("Approval email sent for batch %s → %s", batch_id, to_email)
+        logger.info("Approval email sent for batch %s -> %s", batch_id, to_email)
         return True
     except Exception as exc:
         logger.error("Failed to send approval email for batch %s: %s", batch_id, exc)
         return False
 
 
-# ── Email templates ───────────────────────────────────────────────────────────
+# -- Email templates -----------------------------------------------------------
 
 
 def _build_html(
@@ -113,7 +113,7 @@ def _build_html(
       <!-- Header -->
       <tr><td style="background:#1a3a5c;padding:28px 32px;">
         <p style="margin:0;font-size:11px;color:#7eb3d4;letter-spacing:2px;text-transform:uppercase;">University of Lagos</p>
-        <h1 style="margin:6px 0 0;font-size:22px;color:#ffffff;font-weight:700;">URAAS — IR Deposit Approval</h1>
+        <h1 style="margin:6px 0 0;font-size:22px;color:#ffffff;font-weight:700;">URAAS - IR Deposit Approval</h1>
       </td></tr>
       <!-- Body -->
       <tr><td style="padding:32px;">
@@ -198,7 +198,7 @@ def _build_plain(
     reject_url,
     expires_hours,
 ) -> str:
-    return f"""URAAS — IR Deposit Approval Request
+    return f"""URAAS - IR Deposit Approval Request
 University of Lagos Institutional Repository
 =============================================
 
@@ -220,7 +220,7 @@ REJECT (cancels the batch):
 {reject_url}
 
 --
-URAAS — APA Intelligence & Analytics Platform
+URAAS - APA Intelligence & Analytics Platform
 University of Lagos
 This is an automated message. Do not reply.
 """

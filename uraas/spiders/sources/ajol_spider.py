@@ -1,5 +1,5 @@
 """
-AJOL spider — African Journals Online (ajol.info).
+AJOL spider - African Journals Online (ajol.info).
 
 AJOL is the most important African-specific journal aggregator, hosting
 2,000+ peer-reviewed journals from 40+ African countries. It is the
@@ -29,7 +29,7 @@ from uraas.config.special_collections import SC_SEED_KEYWORDS
 from uraas.services.sc_engine import sc_score_of
 from uraas.spiders.mixins import DedupAwareSpiderMixin
 
-# OJS 3.x — old index.php/ajol/search/results path 404s; the current live
+# OJS 3.x - old index.php/ajol/search/results path 404s; the current live
 # search form (verified against the site) posts to index.php/ajol/search/search.
 # A bare /search/search (no index.php/ajol prefix) 302-redirects to the
 # homepage regardless of query, so every request collapses to one dupefiltered URL.
@@ -148,14 +148,14 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def parse_list(self, response):
         if response.status in (403, 429):
             self.logger.warning(
-                f"AJOL blocked ({response.status}) — skipping: {response.url[:80]}"
+                f"AJOL blocked ({response.status}) - skipping: {response.url[:80]}"
             )
             return
         if self._accepted >= self.target_limit:
             self._stop_if_target_reached()
 
         # Each result is a div with class "article-summary" (verified against
-        # the live markup — note hyphen, not underscore).
+        # the live markup - note hyphen, not underscore).
         results = response.css("div.article-summary, li.article, .search-result")
         if not results:
             # Fallback: any heading-linked article
@@ -178,7 +178,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             self._seen_urls.add(full_url)
             title = item.css("a::text").get("").strip()
             # The listing card already has the full comma-separated author
-            # string (div.meta div.authors) — simpler and more reliable than
+            # string (div.meta div.authors) - simpler and more reliable than
             # the article detail page's per-author markup, so grab it here
             # and pass it through rather than re-deriving it per-article.
             authors_str = item.css("div.meta div.authors::text").get("") or ""
@@ -193,12 +193,11 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 },
             )
 
-        # Pagination — AJOL's own `page=N` query param is silently ignored
+        # Pagination - AJOL's own `page=N` query param is silently ignored
         # (confirmed live: page=1 vs page=2 return byte-identical results),
         # and the `a.next`/`a[rel=next]` selectors never match anything on
         # live pages either. The real mechanism is a `searchPage=N` param
-        # embedded in a `<select name="paging">` widget's option values —
-        # follow that option's href directly instead of guessing the URL
+        # embedded in a `<select name="paging">` widget's option values - # follow that option's href directly instead of guessing the URL
         # shape, since AJOL's full query string (searchJournal, orderBy,
         # date-range fields, etc.) isn't reproducible by hand reliably.
         page = response.meta.get("page", 1)
@@ -207,7 +206,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             f'//select[@name="paging"]/option[normalize-space(text())="{page + 1}"]/@value'
         ).get()
         # A same-page-number option's value is just the literal page number
-        # (no href) — only follow it if it's an actual URL (i.e. any later page).
+        # (no href) - only follow it if it's an actual URL (i.e. any later page).
         if (
             next_page_href
             and next_page_href.startswith("http")
@@ -223,10 +222,10 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
         """Extract metadata from an AJOL article detail page (OJS-based)."""
         if response.status in (403, 429):
             self.logger.warning(
-                f"AJOL blocked ({response.status}) on article — skipping"
+                f"AJOL blocked ({response.status}) on article - skipping"
             )
             return
-        # h1.page-title/.article-title/h3.title never match live pages — the
+        # h1.page-title/.article-title/h3.title never match live pages - the
         # real heading is h1.page-header (live-verified 2026-07-18). Keep the
         # old selectors as a harmless fallback chain in case AJOL varies by
         # journal template, but the listing-page title (already known-good,
@@ -242,8 +241,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
         if not title:
             return
 
-        # Needs the descendant combinator ("p ::text", space before ::text) —
-        # abstract text on live pages sits inside nested <em>/<i> tags, and
+        # Needs the descendant combinator ("p ::text", space before ::text) - # abstract text on live pages sits inside nested <em>/<i> tags, and
         # "p::text" (no space) only grabs direct child text nodes so it
         # returns nothing whenever any inline formatting wraps the text.
         # Real class is "article-abstract", not "abstract".
@@ -256,7 +254,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
         ).strip()
 
         # Prefer the author string already captured from the search-listing
-        # card (comma-separated, confirmed reliable) — the detail page's own
+        # card (comma-separated, confirmed reliable) - the detail page's own
         # markup needs a different, more specific selector per journal
         # template and duplicating that per-article is unnecessary when the
         # listing already has it.
@@ -268,7 +266,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             ).getall()
             authors = [a.strip() for a in authors if a.strip()]
 
-        # DOI — look for the canonical DOI link or meta tag
+        # DOI - look for the canonical DOI link or meta tag
         doi = (
             response.css("meta[name='DC.Identifier.DOI']::attr(content)").get()
             or response.css("a[href*='doi.org']::text").re_first(r"10\.\d{4,}/\S+")
@@ -304,14 +302,14 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
         if not matches:
             return
 
-        # SC gate — only count papers the storage pipeline will keep, so the
+        # SC gate - only count papers the storage pipeline will keep, so the
         # crawl keeps following links until `target` real SC papers are found.
         if sc_score_of(title, abstract) <= 0.0:
             return
 
         item_url = response.meta.get("url", response.url)
 
-        # Dedup gate — skip papers already in the DB.
+        # Dedup gate - skip papers already in the DB.
         if self._is_known(doi=doi, url=item_url, title=title):
             return
 
@@ -330,7 +328,7 @@ class AJOLSpider(DedupAwareSpiderMixin, scrapy.Spider):
             "institution": self.institution_name,
             "institution_ror": self.ror_id,
             # "strong" only when AJOL's own structured affiliation
-            # field/meta tag named the institution — the whole-page-text
+            # field/meta tag named the institution - the whole-page-text
             # fallback can't distinguish authored-there from written-about.
             "affiliation_confidence": "strong" if affil_strong else "weak",
         }

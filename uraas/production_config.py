@@ -91,7 +91,7 @@ class ProductionConfig:
             f"Database: {database_url[:50] if database_url else 'Not configured'}..."
         )
         app.logger.info(f"Storage: {storage_path}")
-        app.logger.info(f"Secret key: {'✓ Set' if secret_key else '⚠ Generated'}")
+        app.logger.info(f"Secret key: {'set' if secret_key else 'generated'}")
         app.logger.info("=" * 70)
 
     @staticmethod

@@ -165,7 +165,7 @@ def main():
 
     if args.spider == "all":
         spider_names_to_run = ALL_WEB_SPIDERS
-        # Divide target across spiders so total ≈ requested target
+        # Divide target across spiders so total ~ requested target
         per_spider_target = max(1, args.target // len(spider_names_to_run))
     else:
         spider_names_to_run = [args.spider]
@@ -198,7 +198,7 @@ def main():
     print(f"\n{len(valid_institutions)} institution(s) validated", flush=True)
     print("=" * 60, flush=True)
 
-    # Schedule crawls — ONE CrawlerProcess for ALL institutions
+    # Schedule crawls - ONE CrawlerProcess for ALL institutions
     print(f"\nScheduling crawls...", flush=True)
     settings = get_project_settings()
     settings.set(
@@ -231,8 +231,7 @@ def main():
                     until_date=args.until_date,
                 )
             elif sname == "isni":
-                # Identity-enrichment spider: no target/boost_special/sc_only —
-                # it writes directly to Author.isni and yields no pipeline items.
+                # Identity-enrichment spider: no target/boost_special/sc_only - # it writes directly to Author.isni and yields no pipeline items.
                 process.crawl(scls, institution=inst)
             else:
                 process.crawl(

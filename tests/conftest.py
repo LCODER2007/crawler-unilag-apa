@@ -1,7 +1,7 @@
 """Shared pytest fixtures.
 
 Sets admin/viewer credentials as env vars BEFORE any uraas module is
-imported — uraas.config.Config reads them at class-definition time via
+imported - uraas.config.Config reads them at class-definition time via
 os.getenv(), so setting them later (e.g. inside a fixture) is too late.
 This is why test_api.py's endpoint tests all failed with 401 once the
 session-auth gate was added to the dashboard: the test client was never
@@ -11,7 +11,7 @@ able to log in at all.
 import os
 import sys
 
-# Every other test file in this suite has this same sys.path.insert — this
+# Every other test file in this suite has this same sys.path.insert - this
 # file didn't, and it worked locally by accident: `python -m pytest` (what
 # was used for all local verification) prepends the current directory to
 # sys.path automatically, but CI's plain `pytest tests/ ...` does not.
@@ -43,11 +43,11 @@ from uraas.dashboard.app import limiter as _limiter  # noqa: E402
 
 flask_app.config["TESTING"] = True
 # The login route is deliberately rate-limited (10/min) against real brute-
-# force attempts — a real, wanted production behavior, not something the
+# force attempts - a real, wanted production behavior, not something the
 # test suite should trip over just because admin_client logs in fresh once
 # per test. flask_app.config["RATELIMIT_ENABLED"] = False alone did not take
 # effect (Flask-Limiter reads its own .enabled attribute, set at
-# construction, not a live app.config lookup) — disable the limiter object
+# construction, not a live app.config lookup) - disable the limiter object
 # directly instead.
 _limiter.enabled = False
 
@@ -58,12 +58,12 @@ _limiter.enabled = False
 # module fixtures caused a real, reproducible
 # "AssertionError: Popped wrong request context" whenever tests using
 # different fixtures interleaved. A fresh client per test avoids any overlap
-# — login is cheap enough that the extra round-trip per test doesn't matter.
+# - login is cheap enough that the extra round-trip per test doesn't matter.
 
 
 @pytest.fixture
 def client():
-    """An unauthenticated test client — for testing the public surface
+    """An unauthenticated test client - for testing the public surface
     (login, health, 401 behavior) itself."""
     with flask_app.test_client() as c:
         yield c

@@ -6,7 +6,7 @@ African country reference data (AU member states).
 - COUNTRY_NAMES: ISO2 -> display name (matches Natural Earth admin-0 names
   where possible so the choropleth join works both ways).
 - COUNTRY_CENTROIDS: ISO2 -> (lat, lon) display anchors for collaboration
-  arcs and map labels. Approximate visual centroids — chosen to sit inside
+  arcs and map labels. Approximate visual centroids - chosen to sit inside
   each country's land area, not geodetic centroids.
 """
 
@@ -71,7 +71,7 @@ COUNTRY_NAMES = {
 
 AFRICAN_ISO2 = frozenset(COUNTRY_NAMES)
 
-# (lat, lon) — display anchors for arcs/labels.
+# (lat, lon) - display anchors for arcs/labels.
 COUNTRY_CENTROIDS = {
     "DZ": (28.0, 2.6),
     "AO": (-12.3, 17.5),

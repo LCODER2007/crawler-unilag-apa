@@ -1,5 +1,5 @@
 """
-Faculty Directory Spider — crawls UNILAG staff pages and extracts
+Faculty Directory Spider - crawls UNILAG staff pages and extracts
 name + faculty + department for each staff member.
 Saves to data/unilag_staff_detailed.json for accurate classification.
 """
@@ -17,7 +17,7 @@ DETAILED_CACHE = os.path.join(
     os.path.dirname(__file__), "..", "..", "..", "data", "unilag_staff_detailed.json"
 )
 
-# Known UNILAG faculty URLs — direct seeds so we don't rely on the homepage nav
+# Known UNILAG faculty URLs - direct seeds so we don't rely on the homepage nav
 FACULTY_SEEDS = [
     ("College of Medicine", "https://medicine.unilag.edu.ng/academic-staff/"),
     ("Faculty of Engineering", "https://engineering.unilag.edu.ng/staff/"),
@@ -67,7 +67,7 @@ class FacultyDirectorySpider(scrapy.Spider):
     name = "unilag_faculty_directory"
     custom_settings = {
         "DOWNLOAD_DELAY": 1.5,
-        # Honor robots.txt — the institution's machine-readable usage signal.
+        # Honor robots.txt - the institution's machine-readable usage signal.
         "ROBOTSTXT_OBEY": True,
         "RETRY_ENABLED": True,
         "RETRY_TIMES": 2,
@@ -180,7 +180,7 @@ class FacultyDirectorySpider(scrapy.Spider):
     def closed(self, reason):
         if not self.staff_records:
             self.logger.warning(
-                "No staff found — UNILAG site structure may have changed."
+                "No staff found - UNILAG site structure may have changed."
             )
             return
 
@@ -193,7 +193,7 @@ class FacultyDirectorySpider(scrapy.Spider):
         # populates it with rich records ({name, orcid, openalex_id, ...}) that
         # uraas/spiders/sources/orcid_spider.py depends on for its entire staff
         # roster. This spider used to unconditionally overwrite that same path
-        # with a bare JSON array of name strings — any re-run would silently
+        # with a bare JSON array of name strings - any re-run would silently
         # destroy every harvested ORCID/openalex_id, breaking the ORCID spider
         # with no error (staff_with_orcid would just quietly become empty).
         existing_records = []
@@ -204,7 +204,7 @@ class FacultyDirectorySpider(scrapy.Spider):
                 if isinstance(raw, list) and raw and isinstance(raw[0], dict):
                     existing_records = raw
                 elif isinstance(raw, list):
-                    # Legacy flat-name-list format — nothing rich to preserve.
+                    # Legacy flat-name-list format - nothing rich to preserve.
                     existing_records = [{"name": n} for n in raw if isinstance(n, str)]
             except Exception as e:
                 self.logger.warning(f"Could not read existing {STAFF_CACHE}: {e}")

@@ -95,7 +95,7 @@ GET /api/analytics/linguistic-diversity-index
 ```
 
 `patent-velocity` and `docid-coverage` are documented above/elsewhere but are **not** registered
-Flask routes in `uraas/dashboard/app.py` — patent-velocity is confirmed roadmap (see below);
+Flask routes in `uraas/dashboard/app.py` - patent-velocity is confirmed roadmap (see below);
 docid-coverage's status was not verified in this pass.
 
 ## Database Schema
@@ -108,11 +108,11 @@ CREATE TABLE items (
     title VARCHAR(512),
     abstract TEXT,
     doi VARCHAR(255),
-    
+
     -- Multi-institution support
     ror VARCHAR(128),  -- Institution ROR ID
     institution VARCHAR(255),  -- Institution name
-    
+
     -- APA-specific fields
     content_type VARCHAR(50),  -- For TK Vitality
     tk_label VARCHAR(100),  -- Traditional Knowledge label
@@ -121,7 +121,7 @@ CREATE TABLE items (
     language_code VARCHAR(10),  -- For Linguistic Diversity
     is_african_language BOOLEAN,
     docid VARCHAR(128),  -- Africa PID Alliance DocID
-    
+
     -- Standard fields
     publication_date DATETIME,
     created_at DATETIME,
@@ -169,7 +169,7 @@ Create CSV with ROR column and import using migration script.
 
 ### 1. TK Vitality Score
 
-**Formula**: Weighted sum of content types / total items × 100
+**Formula**: Weighted sum of content types / total items x 100
 
 **Weights**:
 - Indigenous Knowledge: 3.0
@@ -188,15 +188,15 @@ Create CSV with ROR column and import using migration script.
 
 ### 2. Linguistic Diversity Index
 
-**Formula**: African language outputs / total outputs × 100
+**Formula**: African language outputs / total outputs x 100
 
 **Supported Languages**: Yoruba, Igbo, Hausa, Swahili, Amharic, Somali, Kinyarwanda, Zulu, Xhosa, Afrikaans, and 10+ more
 
 **Strategic Value**: Measures decolonization of knowledge
 
-### 3. Patent Velocity — 🚧 roadmap, not implemented
+### 3. Patent Velocity -  roadmap, not implemented
 
-**Formula**: Average(Patent date - Publication date) — no data source integrated to compute this yet.
+**Formula**: Average(Patent date - Publication date) - no data source integrated to compute this yet.
 
 **Interpretation**:
 - < 1 year: Fast movers (rapid innovation)
@@ -348,7 +348,7 @@ curl http://localhost:8080/api/analytics/tk-vitality-score
 - [x] Comparator engine backend
 - [x] TK Vitality Score
 - [x] Linguistic Diversity Index
-- [ ] Patent Velocity Tracker (roadmap — no data source integrated)
+- [ ] Patent Velocity Tracker (roadmap - no data source integrated)
 - [x] Senate report generation (JSON)
 - [x] API endpoints
 - [ ] Comparator UI integrated

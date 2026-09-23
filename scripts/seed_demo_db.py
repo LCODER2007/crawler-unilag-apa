@@ -84,7 +84,7 @@ DEMO_PAPERS = [
     },
     {
         "title": "Igbo Proverb Literature and Collective Memory: A Computational Analysis",
-        "abstract": "Using NLP techniques, we analyse a corpus of 12,000 Igbo proverbs collected from 1952–2020. Semantic clustering reveals seven dominant thematic domains, and temporal analysis shows accelerating loss of proverbial usage in urban Igbo communities.",
+        "abstract": "Using NLP techniques, we analyse a corpus of 12,000 Igbo proverbs collected from 1952-2020. Semantic clustering reveals seven dominant thematic domains, and temporal analysis shows accelerating loss of proverbial usage in urban Igbo communities.",
         "authors": ["Okonkwo, C.F.", "Nwosu, P.E.", "Adeyemi, R.A."],
         "doi": "10.1234/uraas.2022.001",
         "source": "Semantic Scholar",
@@ -104,7 +104,7 @@ DEMO_PAPERS = [
     },
     {
         "title": "Lagos Market Women's Oral Histories: Gender, Trade, and Urban Memory",
-        "abstract": "Oral history methodology applied to 234 interviews with Lagos market women aged 60–95. Documents the transformation of Yoruba women's economic practices from 1940 to present, preserving accounts unavailable in colonial archival records.",
+        "abstract": "Oral history methodology applied to 234 interviews with Lagos market women aged 60-95. Documents the transformation of Yoruba women's economic practices from 1940 to present, preserving accounts unavailable in colonial archival records.",
         "authors": ["Adeola, F.N.", "Okafor, B.C."],
         "doi": "10.1234/uraas.2023.005",
         "source": "AJOL",
@@ -124,7 +124,7 @@ DEMO_PAPERS = [
     },
     {
         "title": "Postcolonial African Science Fiction: Imagining Futures Beyond Extractivism",
-        "abstract": "Literary analysis of 78 African science fiction works published 2010–2023. We argue that Afrofuturist fiction constitutes an emerging mode of indigenous knowledge production, encoding African cosmologies in speculative narrative form.",
+        "abstract": "Literary analysis of 78 African science fiction works published 2010-2023. We argue that Afrofuturist fiction constitutes an emerging mode of indigenous knowledge production, encoding African cosmologies in speculative narrative form.",
         "authors": ["Nwosu, C.I.", "Lawal, A.O.", "Eze, K.N."],
         "doi": "10.1234/uraas.2023.006",
         "source": "OpenAlex",
@@ -241,7 +241,7 @@ def seed():
     try:
         if session.query(Item).count() >= 10:
             print(
-                f"Database already has {session.query(Item).count()} items — skipping seed."
+                f"Database already has {session.query(Item).count()} items - skipping seed."
             )
             return
 
@@ -296,7 +296,7 @@ def seed():
                 special_collection_score=p["sc_score"],
                 special_collection_categories=p["sc_cats"],
                 dc_rights="info:eu-repo/semantics/openAccess",
-                dc_description_provenance=f"Seeded for demo — URAAS {datetime.utcnow().date()}",
+                dc_description_provenance=f"Seeded for demo - URAAS {datetime.utcnow().date()}",
                 is_african_language=False,
                 cited_by_count=random.randint(0, 45),
             )

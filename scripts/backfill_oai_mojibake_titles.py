@@ -1,6 +1,6 @@
 """Repair OAI-PMH-sourced titles corrupted by UNILAG DSpace's OAI encoding
 bug (see uraas/spiders/sources/oai_spider.py's _looks_mojibake() docstring
-for the full diagnosis — confirmed 2026-07-19: the OAI feed replaces
+for the full diagnosis - confirmed 2026-07-19: the OAI feed replaces
 non-ASCII bytes with literal "?" even though it declares charset=UTF-8,
 while the SAME record's REST API representation has correct Unicode).
 
@@ -60,7 +60,7 @@ def main():
         registry = get_registry()
         # Item.institution stores the display name (e.g. "University of
         # Lagos"), not the registry's short-name key ("unilag") that
-        # registry.get() expects — match by name instead.
+        # registry.get() expects - match by name instead.
         by_name = {c.name: c for c in registry.list_all()}
 
         fixed = failed = 0
@@ -68,7 +68,7 @@ def main():
             handle = _handle_from_url(it.url or "")
             # REST base must come from the institution's configured OAI
             # endpoint (api-ir.unilag.edu.ng), NOT guessed from the item's
-            # own stored url — DSpace's public handle-resolver domain
+            # own stored url - DSpace's public handle-resolver domain
             # (ir.unilag.edu.ng) is a different host from the REST API.
             inst_cfg = by_name.get(it.institution) if it.institution else None
             rest_base = (

@@ -5,7 +5,7 @@ Uses ListIdentifiers + GetRecord instead of ListRecords because some DSpace
 servers (including UNILAG's) return HTTP 500 on ListRecords while
 ListIdentifiers and GetRecord work correctly.
 
-OAI-PMH is read-only by specification — it cannot harm the source repository.
+OAI-PMH is read-only by specification - it cannot harm the source repository.
 """
 
 import logging
@@ -33,7 +33,7 @@ _MOJIBAKE_RE = re.compile(r"[a-zA-Z]\?|\?[a-zA-Z]")
 def _looks_mojibake(text: str) -> bool:
     """A '?' directly adjacent to a letter (no space) is an unusual
     punctuation pattern in real text but exactly what non-ASCII bytes
-    replaced with U+FFFD/'?' look like — the signature of UNILAG's OAI-PMH
+    replaced with U+FFFD/'?' look like - the signature of UNILAG's OAI-PMH
     encoding bug (see parse_record())."""
     return bool(text) and bool(_MOJIBAKE_RE.search(text))
 
@@ -159,10 +159,10 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
 
     def parse_identifiers(self, response):
-        """Parse ListIdentifiers page — extract identifiers, yield GetRecord requests."""
+        """Parse ListIdentifiers page - extract identifiers, yield GetRecord requests."""
         if response.status == 500:
             self.logger.error(
-                "OAI ListIdentifiers 500 — server error on endpoint %s",
+                "OAI ListIdentifiers 500 - server error on endpoint %s",
                 self.oai_endpoint,
             )
             return
@@ -233,14 +233,14 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
 
         # UNILAG's DSpace OAI-PMH feed has a confirmed server-side encoding
         # bug distinct from anything in this crawler: it replaces non-ASCII
-        # bytes (accented/diacritic characters — exactly what shows up in
+        # bytes (accented/diacritic characters - exactly what shows up in
         # Yoruba names and titles, i.e. precisely the content this platform
         # cares most about preserving correctly) with literal "?" characters
         # in dc:title/dc:creator, even though it declares charset=UTF-8 and
         # despite the SAME record's REST API representation
         # (/api/pid/find?id=hdl:...) having the correct Unicode text. Live-
         # confirmed 2026-07-19 (OAI handle 123456789/13428: OAI feed gives
-        # "Ko??la? Aki?nl?d??s", REST gives "Kọ́lá Akínlàdé's" — same item).
+        # "Ko??la? Aki?nl?d??s", REST gives "Kọ́lá Akínlàdé's" - same item).
         # When detected, re-fetch the clean title from the REST API instead
         # of storing garbled text.
         if _looks_mojibake(title):
@@ -260,7 +260,7 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
                     errback=self.errback_clean_title_failed,
                 )
                 return
-            # No usable handle to re-fetch from — can't recover a clean
+            # No usable handle to re-fetch from - can't recover a clean
             # title, and storing known-garbled text directly contradicts
             # this platform's purpose for exactly this kind of content.
             self.logger.warning(
@@ -341,7 +341,7 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         # (see the mojibake handling above) but is deliberately NOT blanked
         # or repaired here. The pipeline (uraas/pipelines/database.py)
         # independently re-runs is_special_collection() on whatever ends up
-        # in item["abstract"] as its OWN authoritative gate — blanking a
+        # in item["abstract"] as its OWN authoritative gate - blanking a
         # corrupted-but-keyword-rich abstract client-side made that
         # downstream re-check score 0 and silently DropItem a genuine SC
         # paper (live-confirmed regression while developing this fix). A
@@ -351,7 +351,7 @@ class OAISpider(DedupAwareSpiderMixin, scrapy.Spider):
         if sc_score_of(title, abstract, ", ".join(subjects[:8])) <= 0.0:
             return
 
-        # Dedup gate — skip (don't count, but keep paginating past) records
+        # Dedup gate - skip (don't count, but keep paginating past) records
         # already synced from this IR in a prior run.
         if self._is_known(doi=doi, url=url, title=title):
             return

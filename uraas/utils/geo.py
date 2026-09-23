@@ -1,5 +1,5 @@
 """
-Lightweight geo helpers — great-circle arc generation for the collaboration
+Lightweight geo helpers - great-circle arc generation for the collaboration
 map. Plain spherical interpolation (slerp); no shapely/pyproj dependency.
 """
 

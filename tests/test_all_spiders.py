@@ -1,7 +1,7 @@
 """Every paper-sourcing spider can be constructed for a real institution and
 carries the attributes the pipeline/dashboard depend on.
 
-Rewritten 2026-08 — the previous version imported uraas.spiders.sources.
+Rewritten 2026-08 - the previous version imported uraas.spiders.sources.
 scholar_spider (renamed to semantic_scholar_spider long ago) and hardcoded
 stale institution/staff counts from early development, so it failed to even
 collect and hadn't meaningfully run in a long time.

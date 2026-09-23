@@ -12,7 +12,7 @@ class GapAnalysisPipeline:
     Phase 2: The Gap Analysis (Fuzzy Edition).
     1. Check DOI first (exact, deterministic).
     2. If no DOI, fuzzy-compare normalized title via Levenshtein distance.
-       If similarity >= 95% → drop as duplicate.
+       If similarity >= 95% -> drop as duplicate.
     """
 
     def open_spider(self):
@@ -57,7 +57,7 @@ class GapAnalysisPipeline:
                         )
                         raise DropItem(f"Fuzzy duplicate title ({score}%)")
 
-            # Survives all checks → it's a genuine gap, add to cache for this session
+            # Survives all checks -> it's a genuine gap, add to cache for this session
             self._cached_titles.append(normalize_title(item.get("title", "")))
             return item
 

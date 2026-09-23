@@ -6,7 +6,7 @@ Implements all APA Intelligence & Analytics Platform metrics:
   - Linguistic Diversity Index  (African vs colonial language output)
   - Patent-to-Paper Velocity  (innovation lifecycle timing)
   - Multi-institution Comparator  (ROR-based benchmarking)
-  - SDG Alignment  (UN Sustainable Development Goals) — AI-powered via spaCy
+  - SDG Alignment  (UN Sustainable Development Goals) - AI-powered via spaCy
   - Keyword Cloud  (AI-extracted terms)
   - Collaboration Network  (D3 force graph data)
   - Special Collections (African Literature, Indigenous Knowledge, etc.)
@@ -179,8 +179,8 @@ class URAASAnalyticsEngine:
 
         The authoritative SC signal is the stored ``special_collection_score``
         column (computed by the SC decision engine at crawl time / via the
-        re-classify script). This is a cheap indexed query — no per-row
-        re-classification — so the dashboard count updates immediately after a
+        re-classify script). This is a cheap indexed query - no per-row
+        re-classification - so the dashboard count updates immediately after a
         crawl or prune (once the analytics cache is flushed).
         """
         inst_name = self._resolve_institution_name(institution)
@@ -308,8 +308,7 @@ class URAASAnalyticsEngine:
                                 "doi": p.doi or "",
                                 "url": p.url or "",
                                 "docid": p.docid or "",
-                                # Honest about the bytes, not just the row —
-                                # see uraas.utils.pdf_downloader.stored_pdf_exists.
+                                # Honest about the bytes, not just the row - # see uraas.utils.pdf_downloader.stored_pdf_exists.
                                 "has_local_pdf": _stored_pdf_exists(f),
                                 "access_policy": f.access_policy if f else None,
                                 # Resolvable whenever the download endpoint can
@@ -548,7 +547,7 @@ class URAASAnalyticsEngine:
                 text_corpus = f"{title or ''} {abstract or ''}"
                 hits = classifier.detect_sdg_alignment(text_corpus)
                 for hit in hits:
-                    sdg_str = hit["sdg"]  # e.g. "SDG 1 — No Poverty"
+                    sdg_str = hit["sdg"]  # e.g. "SDG 1 - No Poverty"
                     try:
                         num = int(re.search(r"SDG (\d+)", sdg_str).group(1))
                         sdg_names_full[num] = sdg_str
@@ -911,7 +910,7 @@ class URAASAnalyticsEngine:
         self, institution: Optional[str] = None
     ) -> Dict:
         """
-        Special Collections Overview analytics — purpose-built for indigenous
+        Special Collections Overview analytics - purpose-built for indigenous
         knowledge / African literature / cultural-heritage collections rather
         than the citation-prestige lens of commercial bibliometric platforms.
 
@@ -952,7 +951,7 @@ class URAASAnalyticsEngine:
             "influential": [],
         }
 
-        # Build institution name → ISO2 code for country-fallback when
+        # Build institution name -> ISO2 code for country-fallback when
         # coauthor_countries is empty (papers with no cross-institution data).
         _name_to_iso2 = {v.lower(): k for k, v in COUNTRY_NAMES.items()}
         try:
@@ -1040,7 +1039,7 @@ class URAASAnalyticsEngine:
                         matrix[ia][ib] += 1
                         matrix[ib][ia] += 1
 
-                # Knowledge sovereignty — contributing African countries.
+                # Knowledge sovereignty - contributing African countries.
                 _any_country = False
                 for code in (countries or "").split(","):
                     code = code.strip().upper()
@@ -1276,7 +1275,7 @@ class URAASAnalyticsEngine:
     INTRA_AFRICAN_BASELINE_PCT = 8.4
 
     def get_collaboration_overview(self, institution: Optional[str] = None) -> Dict:
-        """Intra-African Collaboration Index — Scimago-compatible definition
+        """Intra-African Collaboration Index - Scimago-compatible definition
         (works whose affiliations span >=2 distinct African countries),
         benchmarked against the continental average."""
         inst_name = self._resolve_institution_name(institution)
@@ -1590,7 +1589,7 @@ class URAASAnalyticsEngine:
         return {"type": "FeatureCollection", "features": features}
 
     def get_pid_coverage(self, institution: Optional[str] = None) -> Dict:
-        """Return PID coverage statistics — key metric for PID Alliance audiences.
+        """Return PID coverage statistics - key metric for PID Alliance audiences.
 
         Reports the fraction of Special Collections items carrying each
         persistent identifier type: DOI, ORCID (via any author), ARK, ROR.
@@ -1674,18 +1673,18 @@ class URAASAnalyticsEngine:
         finally:
             session.close()
 
-    # ── Knowledge Repatriation Index ─────────────────────────────────────────
+    # -- Knowledge Repatriation Index -----------------------------------------
 
     def get_knowledge_repatriation(self, institution: Optional[str] = None) -> Dict:
-        """Knowledge Repatriation Index — measures whether Africa leads its own
+        """Knowledge Repatriation Index - measures whether Africa leads its own
         research rather than being a subject of externally-led studies.
 
         Segments the corpus into three collaboration profiles:
-          • Africa-Led   : only African institutions on the paper (sole or pan-African)
-          • North-South  : African institution + ≥1 non-African institution
-          • Unclassified : no affiliation data available
+          - Africa-Led   : only African institutions on the paper (sole or pan-African)
+          - North-South  : African institution + >=1 non-African institution
+          - Unclassified : no affiliation data available
 
-        The repatriation score (0-100) = Africa-Led / (Africa-Led + North-South) × 100.
+        The repatriation score (0-100) = Africa-Led / (Africa-Led + North-South) x 100.
         Higher = Africa owns more of its own knowledge production.
         No other analytics platform surfaces this metric. Cached 30 min.
         """
@@ -1766,7 +1765,7 @@ class URAASAnalyticsEngine:
                     africa_led += 1
 
             # Items with no coauthor_countries and no ItemAffiliation were crawled
-            # from African institutions — classify as Africa-Led (best-effort).
+            # from African institutions - classify as Africa-Led (best-effort).
             africa_led += len(no_country_ids)
 
             classified = africa_led + north_south
@@ -1829,10 +1828,10 @@ class URAASAnalyticsEngine:
         finally:
             session.close()
 
-    # ── Research Portfolio Diversity Score ────────────────────────────────────
+    # -- Research Portfolio Diversity Score ------------------------------------
 
     def get_research_diversity(self, institution: Optional[str] = None) -> Dict:
-        """Research Portfolio Diversity Score — Shannon entropy across SDGs.
+        """Research Portfolio Diversity Score - Shannon entropy across SDGs.
 
         A diversified research portfolio is more resilient to funding shifts
         and more likely to support cross-cutting African development goals.
@@ -1938,15 +1937,15 @@ class URAASAnalyticsEngine:
         finally:
             session.close()
 
-    # ── Open Science Health Score ─────────────────────────────────────────────
+    # -- Open Science Health Score ---------------------------------------------
 
     def get_open_science_health(self, institution: Optional[str] = None) -> Dict:
-        """Open Science Health Score — composite OA + PID + reproducibility metric.
+        """Open Science Health Score - composite OA + PID + reproducibility metric.
 
         Weighted composite (0-100):
           40 pts  Open Access rate   (% of papers openly accessible)
           25 pts  DOI coverage       (% of papers with a DOI)
-          20 pts  ORCID coverage     (% of papers with ≥1 ORCID author)
+          20 pts  ORCID coverage     (% of papers with >=1 ORCID author)
           15 pts  ARK/DocID coverage (% with a persistent institutional PID)
 
         Provides a single, actionable number for funder compliance, AU Open
@@ -2051,15 +2050,15 @@ class URAASAnalyticsEngine:
                 "continental_baseline": 38.0,
                 "vs_baseline": round(score - 38.0, 1),
                 "interpretation": (
-                    "Excellent — Plan S compliant"
+                    "Excellent - Plan S compliant"
                     if score >= 75
                     else (
-                        "Good — approaching open science standards"
+                        "Good - approaching open science standards"
                         if score >= 55
                         else (
-                            "Developing — action needed on OA and PIDs"
+                            "Developing - action needed on OA and PIDs"
                             if score >= 35
-                            else "Critical — significant gaps in open science"
+                            else "Critical - significant gaps in open science"
                         )
                     )
                 ),

@@ -1,12 +1,12 @@
 """
-PubMed/NCBI spider — queries the NCBI E-utilities API.
+PubMed/NCBI spider - queries the NCBI E-utilities API.
 
 PubMed indexes 37M+ biomedical papers. For URAAS Special Collections it is the
 single best source for:
-  • Ethnobotany & traditional plant medicine (Indigenous Knowledge category)
-  • Traditional healing practices
-  • Ethno-pharmacology
-  • Community health using indigenous methods
+  - Ethnobotany & traditional plant medicine (Indigenous Knowledge category)
+  - Traditional healing practices
+  - Ethno-pharmacology
+  - Community health using indigenous methods
 
 No API key required (1 req/3s). With a free NCBI API key (ncbi.nlm.nih.gov/account/)
 the rate limit rises to 10 req/s. Set NCBI_API_KEY in .env.
@@ -168,7 +168,7 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 or art.xpath(".//PubDate/MedlineDate/text()").get("")[:4]
             )
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
@@ -179,7 +179,7 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
             )
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -199,7 +199,7 @@ class PubMedSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # The esearch query itself is scoped to PubMed's structured
-                # [Affiliation] field (see _affil_term) — not a free-text
+                # [Affiliation] field (see _affil_term) - not a free-text
                 # guess, so every accepted item is a strong match.
                 "affiliation_confidence": "strong",
             }

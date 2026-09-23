@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
-# ── SDG Definitions ───────────────────────────────────────────────────────────
+# -- SDG Definitions -----------------------------------------------------------
 SDG_DEFINITIONS: Dict[int, Dict] = {
     1: {
         "name": "No Poverty",
@@ -289,7 +289,7 @@ SDG_DEFINITIONS: Dict[int, Dict] = {
     },
 }
 
-# ── Special Collections ───────────────────────────────────────────────────────
+# -- Special Collections -------------------------------------------------------
 SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
     "Indigenous Knowledge": [
         "indigenous knowledge",
@@ -655,7 +655,7 @@ SPECIAL_COLLECTIONS: Dict[str, List[str]] = {
     ],
 }
 
-# ── African Union Charter Targets ─────────────────────────────────────────────
+# -- African Union Charter Targets ---------------------------------------------
 AU_CHARTER_TARGETS: Dict[int, Dict] = {
     1: {
         "name": "Tangible & Intangible Cultural Heritage Preservation",
@@ -845,7 +845,7 @@ def classify_au_targets(title: str, abstract: str, dc_subject: str = "") -> List
     return results
 
 
-# ── Comprehensive Stop Words ──────────────────────────────────────────────────
+# -- Comprehensive Stop Words --------------------------------------------------
 # Covers: common English, academic filler, metadata artifacts, XML/JATS tags,
 # geographic terms that are too broad, formatting remnants
 STOP_WORDS = {
@@ -1185,7 +1185,7 @@ def _clean_text(text: str) -> str:
     """Strip HTML entities, XML/JATS tags, and non-alphabetic artifacts."""
     if not text:
         return ""
-    # Decode HTML entities (e.g., &amp;lt; → <)
+    # Decode HTML entities (e.g., &amp;lt; -> <)
     text = html.unescape(text)
     text = html.unescape(text)  # Double-decode for double-encoded entities
     # Strip remaining HTML/XML tags
@@ -1204,24 +1204,23 @@ def _clean_text(text: str) -> str:
 _DISPLAY_WHITESPACE_RE = re.compile(r"[ \t\f\v]+")
 _DISPLAY_BLANK_LINES_RE = re.compile(r"\n\s*\n+")
 # Invisible formatting characters that leak through from PDF text extraction
-# (soft hyphen at hyphenation break points, zero-width space/joiners, BOM) —
-# confirmed live 2026-07-28: a DOAJ-sourced abstract carried a literal U+00AD
+# (soft hyphen at hyphenation break points, zero-width space/joiners, BOM) - # confirmed live 2026-07-28: a DOAJ-sourced abstract carried a literal U+00AD
 # mid-word ("Thi\xadong'o"). These have no display purpose in a plain-text
 # field and only ever appear as extraction artifacts here. Written as
 # explicit \u escapes rather than literal characters so the codepoints stay
 # unambiguous to future readers/editors.
-_INVISIBLE_CHARS_RE = re.compile("[­​‌‍﻿]")
+_INVISIBLE_CHARS_RE = re.compile("[­‌‍﻿]")
 
 
 def sanitize_text(text: Optional[str]) -> Optional[str]:
     """Display-safe cleanup for title/abstract text pulled from source APIs.
 
     Several sources (Crossref, PubMed/Europe PMC, CORE, DataCite, OpenAIRE)
-    return abstracts — and occasionally titles — as raw JATS/HTML XML
+    return abstracts - and occasionally titles - as raw JATS/HTML XML
     (``<jats:p>``, ``<jats:italic>``, ``<bold>``...) or double-HTML-encoded
     entities (``&amp;lt;i&amp;gt;``). Unlike `_clean_text` (which strips all
     non-alphabetic characters for keyword scoring), this preserves digits,
-    punctuation, and unicode so real text isn't mangled — it only removes
+    punctuation, and unicode so real text isn't mangled - it only removes
     markup noise. Returns None for empty/whitespace-only input so callers can
     store NULL instead of an empty string.
     """
@@ -1262,7 +1261,7 @@ def _is_valid_word(word: str) -> bool:
     return True
 
 
-# ── NLP loading ───────────────────────────────────────────────────────────────
+# -- NLP loading ---------------------------------------------------------------
 _nlp = None
 _spacy_available = False
 
@@ -1293,7 +1292,7 @@ def _load_nlp():
     return _nlp
 
 
-# ── Core classification functions ─────────────────────────────────────────────
+# -- Core classification functions ---------------------------------------------
 
 import re
 
@@ -1368,11 +1367,11 @@ def extract_keywords(
 
     text_lower = text.lower()
 
-    # ── Unigrams ──────────────────────────────────────────────────────────────
+    # -- Unigrams --------------------------------------------------------------
     words = re.findall(r"\b[a-zA-Z][a-zA-Z\-]{3,}\b", text_lower)
     unigrams = [w for w in words if _is_valid_word(w)]
 
-    # ── Bigrams (two-word phrases) ────────────────────────────────────────────
+    # -- Bigrams (two-word phrases) --------------------------------------------
     bigrams = []
     for i in range(len(words) - 1):
         w1, w2 = words[i], words[i + 1]
@@ -1380,19 +1379,19 @@ def extract_keywords(
             bigram = f"{w1} {w2}"
             bigrams.append(bigram)
 
-    # ── Trigrams (three-word phrases for compound terms) ─────────────────────
+    # -- Trigrams (three-word phrases for compound terms) ---------------------
     trigrams = []
     for i in range(len(words) - 2):
         w1, w2, w3 = words[i], words[i + 1], words[i + 2]
         if _is_valid_word(w1) and _is_valid_word(w2) and _is_valid_word(w3):
             trigrams.append(f"{w1} {w2} {w3}")
 
-    # ── Frequency counts ──────────────────────────────────────────────────────
+    # -- Frequency counts ------------------------------------------------------
     term_freq: Dict[str, int] = {}
     for t in unigrams + bigrams + trigrams:
         term_freq[t] = term_freq.get(t, 0) + 1
 
-    # ── IDF computation (if corpus provided) ─────────────────────────────────
+    # -- IDF computation (if corpus provided) ---------------------------------
     idf_scores: Dict[str, float] = {}
     if all_texts and len(all_texts) > 1:
         N = len(all_texts)
@@ -1409,7 +1408,7 @@ def extract_keywords(
         for term in term_freq:
             idf_scores[term] = math.log(term_freq[term] + 2)
 
-    # ── Score = TF * IDF ──────────────────────────────────────────────────────
+    # -- Score = TF * IDF ------------------------------------------------------
     total = sum(term_freq.values()) or 1
     scored = []
     for term, freq in term_freq.items():
@@ -1428,7 +1427,7 @@ def extract_keywords(
             }
         )
 
-    # ── Add spaCy named entities (boost recognized entities) ─────────────────
+    # -- Add spaCy named entities (boost recognized entities) -----------------
     nlp = _load_nlp()
     if _spacy_available and nlp:
         try:
@@ -1457,7 +1456,7 @@ def extract_keywords(
         except Exception:
             pass
 
-    # ── Sort, deduplicate, return top N ──────────────────────────────────────
+    # -- Sort, deduplicate, return top N --------------------------------------
     scored.sort(key=lambda x: -x["score"])
     seen: set = set()
     unique = []
@@ -1520,7 +1519,7 @@ def extract_trends_from_corpus(papers: List[Dict], top_n: int = 12) -> List[Dict
                 global_year_presence[term] = set()
             global_year_presence[term].add(year)
 
-    # Score terms: frequency × year spread
+    # Score terms: frequency x year spread
     N_docs = len(all_texts)
     all_texts_lower = [t.lower() for t in all_texts]
     candidate_terms = sorted(global_freq.keys(), key=lambda t: -global_freq[t])[:1500]

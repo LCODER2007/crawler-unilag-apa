@@ -1,11 +1,11 @@
 """
-Test Harvest — UNILAG Special Collections papers (dry run, multi-source).
+Test Harvest - UNILAG Special Collections papers (dry run, multi-source).
 
 Discovers SC papers from the open web by querying multiple academic databases:
-  • OpenAlex     — broad academic paper index (journals, books, preprints)
-  • Crossref     — DOI metadata authority, strong on humanities/social sciences
-  • Semantic Scholar — AI-indexed full-text coverage, good for humanities
-  • EuropePMC    — PubMed + PMC + WHO; best for ethnobotany / traditional medicine
+  - OpenAlex - broad academic paper index (journals, books, preprints)
+  - Crossref - DOI metadata authority, strong on humanities/social sciences
+  - Semantic Scholar - AI-indexed full-text coverage, good for humanities
+  - EuropePMC - PubMed + PMC + WHO; best for ethnobotany / traditional medicine
 
 For each source: queries institution affiliation + SC seed keywords, then applies
 the same SC classifier used by the main pipeline. Results are deduplicated by DOI
@@ -36,7 +36,7 @@ from uraas.services.sc_engine import is_special_collection
 _RATE_SLEEP = 1.0  # polite delay between requests per source
 
 
-# ── OpenAlex ──────────────────────────────────────────────────────────────────
+# -- OpenAlex ------------------------------------------------------------------
 
 
 def _reconstruct_abstract(inverted_index: dict) -> str:
@@ -157,7 +157,7 @@ def harvest_openalex(
     return papers
 
 
-# ── Crossref ──────────────────────────────────────────────────────────────────
+# -- Crossref ------------------------------------------------------------------
 
 
 def harvest_crossref(
@@ -260,7 +260,7 @@ def harvest_crossref(
     return papers
 
 
-# ── Semantic Scholar ──────────────────────────────────────────────────────────
+# -- Semantic Scholar ----------------------------------------------------------
 
 
 def harvest_semantic_scholar(
@@ -310,7 +310,7 @@ def harvest_semantic_scholar(
                 time.sleep(delay)
                 resp = session.get(url, timeout=30, headers=headers)
                 if resp.status_code == 429:
-                    # Rate limited — skip remaining S2 queries rather than block.
+                    # Rate limited - skip remaining S2 queries rather than block.
                     # Add S2_API_KEY to .env (free at semanticscholar.org) to lift limit.
                     print(
                         "  [S2] Rate limited. Add S2_API_KEY to .env for higher quota.",
@@ -378,7 +378,7 @@ def harvest_semantic_scholar(
     return papers
 
 
-# ── EuropePMC ─────────────────────────────────────────────────────────────────
+# -- EuropePMC -----------------------------------------------------------------
 
 
 def harvest_europepmc(
@@ -394,7 +394,7 @@ def harvest_europepmc(
     papers: list[dict] = []
 
     # EuropePMC AFFILIATION field matches against stored author affiliation strings.
-    # UNILAG papers appear under several spellings — use a short unambiguous token.
+    # UNILAG papers appear under several spellings - use a short unambiguous token.
     affil = '(AFFILIATION:"University of Lagos" OR AFFILIATION:"unilag" OR AFFILIATION:"UNILAG")'
 
     # EuropePMC is best for ethnobotany/traditional medicine SC papers
@@ -506,7 +506,7 @@ def harvest_europepmc(
     return papers
 
 
-# ── DOAJ ──────────────────────────────────────────────────────────────────────
+# -- DOAJ ----------------------------------------------------------------------
 
 
 def harvest_doaj(
@@ -517,7 +517,7 @@ def harvest_doaj(
     seen_titles: set,
 ) -> list[dict]:
     """
-    Directory of Open Access Journals (DOAJ) — covers many African humanities
+    Directory of Open Access Journals (DOAJ) - covers many African humanities
     and social-science journals that are not in OpenAlex or Crossref.
     Free API, no key required.
     """
@@ -626,7 +626,7 @@ def harvest_doaj(
     return papers
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 
 
 def _paper(
@@ -644,7 +644,7 @@ def _paper(
 ) -> dict:
     return {
         "title": title,
-        "abstract": abstract[:500] + ("…" if len(abstract) > 500 else ""),
+        "abstract": abstract[:500] + ("..." if len(abstract) > 500 else ""),
         "authors": authors[:5],
         "doi": doi,
         "url": url,
@@ -665,7 +665,7 @@ def _log_hit(n: int, score: float, cats: list, title: str):
     )
 
 
-# ── Main harvest orchestrator ─────────────────────────────────────────────────
+# -- Main harvest orchestrator -------------------------------------------------
 
 
 def harvest_all(
@@ -758,7 +758,7 @@ def harvest_all(
     return merged[:max_results]
 
 
-# ── Email ─────────────────────────────────────────────────────────────────────
+# -- Email ---------------------------------------------------------------------
 
 
 def send_preview_email(
@@ -768,7 +768,7 @@ def send_preview_email(
 
     if not cfg.SMTP_HOST or not cfg.SMTP_USER or not cfg.SMTP_PASSWORD:
         print(
-            "[WARN] SMTP not configured — skipping email. Set SMTP_* in .env",
+            "[WARN] SMTP not configured - skipping email. Set SMTP_* in .env",
             flush=True,
         )
         preview = json.dumps(papers[:3], indent=2, ensure_ascii=True)
@@ -780,7 +780,7 @@ def send_preview_email(
     from email.mime.text import MIMEText
 
     n = len(papers)
-    subject = f"[URAAS] Test Harvest Preview — {n} SC papers from {institution_name}"
+    subject = f"[URAAS] Test Harvest Preview - {n} SC papers from {institution_name}"
 
     source_counts: dict[str, int] = {}
     for p in papers:
@@ -795,7 +795,7 @@ def send_preview_email(
         url_part = (
             f'<a href="{p["url"]}" style="color:#3b82f6">{p["url"][:55]}</a>'
             if p["url"]
-            else "—"
+            else "-"
         )
         pdf_part = (
             f' <a href="{p["pdf_url"]}" style="color:#16a34a;font-size:10px">[PDF]</a>'
@@ -809,8 +809,8 @@ def send_preview_email(
             <strong>{p['title'][:85]}</strong><br>
             <span style="font-size:10px;color:#6b7280">{', '.join(p['authors'][:2])}</span>
           </td>
-          <td style="padding:6px 4px;font-size:11px;color:#6b7280">{p.get('dc_type','—')[:20]}</td>
-          <td style="padding:6px 4px;font-size:11px;color:#374151">{(p.get('publication_date') or '—')[:4]}</td>
+          <td style="padding:6px 4px;font-size:11px;color:#6b7280">{p.get('dc_type','-')[:20]}</td>
+          <td style="padding:6px 4px;font-size:11px;color:#374151">{(p.get('publication_date') or '-')[:4]}</td>
           <td style="padding:6px 4px;font-size:11px;color:#7c3aed">{cats}</td>
           <td style="padding:6px 4px;font-size:10px;color:#2563eb">{p.get('source','?')}</td>
           <td style="padding:6px 4px;font-size:10px">{url_part}{pdf_part}</td>
@@ -818,9 +818,9 @@ def send_preview_email(
 
     plain_rows = "\n".join(
         f"{i:>3}. [{p.get('source','?')}] {p['title'][:75]}\n"
-        f"     By: {', '.join(p['authors'][:2]) or '—'}  |  {(p.get('publication_date') or '')[:4]}\n"
+        f"     By: {', '.join(p['authors'][:2]) or '-'}  |  {(p.get('publication_date') or '')[:4]}\n"
         f"     SC: {', '.join(p['sc_categories'])}  |  Score: {p['sc_score']}\n"
-        f"     URL: {p['url'] or '—'}\n"
+        f"     URL: {p['url'] or '-'}\n"
         for i, p in enumerate(papers, 1)
     )
 
@@ -830,14 +830,14 @@ def send_preview_email(
 <div style="max-width:950px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,.1)">
   <div style="background:#1a3a5c;padding:24px 28px">
     <p style="margin:0;font-size:10px;color:#7eb3d4;text-transform:uppercase;letter-spacing:2px">University of Lagos · URAAS</p>
-    <h1 style="margin:6px 0 0;font-size:20px;color:#fff">Test Harvest — Special Collections Preview</h1>
+    <h1 style="margin:6px 0 0;font-size:20px;color:#fff">Test Harvest - Special Collections Preview</h1>
     <p style="margin:6px 0 0;font-size:12px;color:#a8c9e0">
       OpenAlex · Crossref · Semantic Scholar · DOAJ · Dry run · No IR deposit
     </p>
   </div>
   <div style="padding:24px 28px">
     <p style="font-size:14px;color:#374151;margin:0 0 12px">
-      <strong>Dry-run preview</strong> — no papers were saved to the local database and nothing was
+      <strong>Dry-run preview</strong> - no papers were saved to the local database and nothing was
       deposited to the live IR. These are Special Collections papers by <strong>{institution_name}</strong>
       authors discovered from across the open web.
     </p>
@@ -873,20 +873,20 @@ def send_preview_email(
     </p>
   </div>
   <div style="background:#f0f4f8;padding:14px 28px;font-size:11px;color:#9ca3af;text-align:center">
-    URAAS · APA Intelligence &amp; Analytics Platform · University of Lagos · Dry-run — nothing was changed
+    URAAS · APA Intelligence &amp; Analytics Platform · University of Lagos · Dry-run - nothing was changed
   </div>
 </div>
 </body></html>"""
 
-    plain = f"""URAAS Test Harvest — {institution_name}
+    plain = f"""URAAS Test Harvest - {institution_name}
 Sources: {source_summary}
-DRY RUN — nothing saved to DB, nothing deposited to IR.
+DRY RUN - nothing saved to DB, nothing deposited to IR.
 
 Special Collections papers found: {n}
 
 {plain_rows}
 ---
-URAAS — APA Intelligence & Analytics Platform
+URAAS - APA Intelligence & Analytics Platform
 """
 
     msg = MIMEMultipart("alternative")
@@ -934,7 +934,7 @@ def save_json_preview(papers: list[dict], institution: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Multi-source test harvest (dry run — no DB, no IR deposit)"
+        description="Multi-source test harvest (dry run - no DB, no IR deposit)"
     )
     parser.add_argument("--institution", default="unilag")
     parser.add_argument(
@@ -952,7 +952,7 @@ def main():
     ror_short = inst_cfg.ror.split("/")[-1]
 
     print(f"\n{'='*60}", flush=True)
-    print(f"URAAS DRY-RUN HARVEST — {inst_cfg.name}", flush=True)
+    print(f"URAAS DRY-RUN HARVEST - {inst_cfg.name}", flush=True)
     print(f"Sources: OpenAlex · Crossref · Semantic Scholar · DOAJ", flush=True)
     print(f"{'='*60}", flush=True)
 

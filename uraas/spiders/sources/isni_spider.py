@@ -108,7 +108,7 @@ class ISNISpider(scrapy.Spider):
             num_match = _NUM_RECORDS_RE.search(raw)
             num_records = int(num_match.group(1)) if num_match else None
 
-            # Unescape once — the payload inside <record> is HTML-entity-escaped
+            # Unescape once - the payload inside <record> is HTML-entity-escaped
             # inner XML text, not real child elements (see module docstring).
             unescaped = html.unescape(raw)
             candidates = list(dict.fromkeys(_ISNI_RE.findall(unescaped)))
@@ -119,7 +119,7 @@ class ISNISpider(scrapy.Spider):
             if num_records == 1 or len(candidates) == 1:
                 isni_value = candidates[0]
             else:
-                # Ambiguous — multiple distinct ISNI candidates for a common
+                # Ambiguous - multiple distinct ISNI candidates for a common
                 # name and no reliable affiliation field to disambiguate with.
                 self.logger.debug(
                     f"ISNI ambiguous for {name!r}: {len(candidates)} candidates, skipping"

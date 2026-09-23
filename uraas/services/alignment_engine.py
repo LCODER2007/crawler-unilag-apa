@@ -1,5 +1,5 @@
 """
-Framework Alignment Engine — single source of truth for scoring papers
+Framework Alignment Engine - single source of truth for scoring papers
 against AU charters, Agenda 2063 aspirations and regional-bloc themes.
 
 Hybrid score per pillar (0-100):
@@ -12,7 +12,7 @@ Scores are computed ONCE at ingest (DatabaseStoragePipeline) or by
 scripts/backfill_alignment.py and stored as JSON on items.alignment_scores.
 Matched keywords are kept per pillar as auditable evidence (the credibility
 layer surfaces them as chips, OSDG-style). Endpoints read precomputed
-AlignmentAggregate rows — never score at request time.
+AlignmentAggregate rows - never score at request time.
 """
 
 import json
@@ -44,7 +44,7 @@ KEYWORD_WEIGHT = 0.4
 # keeping topically aligned papers (>0.5 cosine) strongly separated.
 SEMANTIC_FLOOR = 0.25
 
-# ── Pillar embedding cache (per ALIGNMENT_VERSION, computed once) ────────────
+# -- Pillar embedding cache (per ALIGNMENT_VERSION, computed once) ------------
 _pillar_cache: Dict[int, Optional[dict]] = {}
 
 
@@ -90,7 +90,7 @@ def score_item_alignment(
 
     Returns (json_string_for_items.alignment_scores, ALIGNMENT_VERSION).
     The JSON omits pillars below MIN_RECORD; returns (None, version) when
-    nothing aligns. Never raises — callers store the result at ingest."""
+    nothing aligns. Never raises - callers store the result at ingest."""
     try:
         text = _clean_text(f"{title or ''} {abstract or ''} {dc_subject or ''}")
         if not text.strip():

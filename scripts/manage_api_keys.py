@@ -2,7 +2,7 @@
 (e.g. Africa PID Alliance / DOCiD reading papers/analytics endpoints
 server-to-server, instead of using the browser session-cookie login).
 
-The plaintext key is shown exactly once, at creation — it is never stored;
+The plaintext key is shown exactly once, at creation - it is never stored;
 only its SHA-256 hash is, so a stolen database dump can't be used to
 authenticate as a partner. If a key is lost, revoke it and create a new one.
 
@@ -43,7 +43,7 @@ def cmd_create(args):
         )
         session.add(row)
         session.commit()
-        print("Created API key — this is the ONLY time the full value is shown:\n")
+        print("Created API key - this is the ONLY time the full value is shown:\n")
         print(f"    {raw}\n")
         print(f"Name:   {row.name}")
         print(f"Prefix: {row.key_prefix}  (safe to log/reference later)")

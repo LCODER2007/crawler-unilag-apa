@@ -33,7 +33,7 @@ with engine.connect() as conn:
     for table, col, col_type in NEW_COLS:
         existing = [c["name"] for c in inspector.get_columns(table)]
         if col not in existing:
-            # SQLite doesn't support UNIQUE in ALTER TABLE — skip constraint
+            # SQLite doesn't support UNIQUE in ALTER TABLE - skip constraint
             safe_type = col_type.replace(" UNIQUE", "")
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {safe_type}"))
             print(f"  + {table}.{col}")

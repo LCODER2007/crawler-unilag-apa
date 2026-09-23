@@ -32,7 +32,7 @@ class InstitutionProfile:
     def calculate_metrics(self, session):
         """Calculate all metrics for this institution"""
 
-        # Basic counts — Item.ror is reliably set by every spider at ingest
+        # Basic counts - Item.ror is reliably set by every spider at ingest
         # time, but falls back to a name match for any legacy row where it
         # isn't (e.g. pre-ROR-tagging data, or a future data-quality drift),
         # rather than silently showing 0 papers for an institution that
@@ -216,10 +216,9 @@ class ComparatorEngine:
 
         insights = []
 
-        # Patent data has no source integration anywhere in this codebase —
-        # Item.patent_id is never populated by any spider or pipeline stage
+        # Patent data has no source integration anywhere in this codebase - # Item.patent_id is never populated by any spider or pipeline stage
         # (deferred to roadmap; see docs/APA_PLATFORM_COMPLETE.md). A
-        # patent_rate of 0 therefore means "no data," not "no patents" — treat
+        # patent_rate of 0 therefore means "no data," not "no patents" - treat
         # it as an unmeasured metric, not a genuine leader/gap finding, so we
         # don't manufacture a misleading strategic insight from an always-zero
         # denominator.
@@ -275,7 +274,7 @@ class ComparatorEngine:
                 {
                     "category": "Data Gap",
                     "institution": None,
-                    "message": "Patent Velocity is on the roadmap but not yet implemented — "
+                    "message": "Patent Velocity is on the roadmap but not yet implemented - "
                     "no patent data source is integrated, so patent_rate is unmeasured "
                     "(not zero) for every institution.",
                     "metric": "patent_rate",

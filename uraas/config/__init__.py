@@ -13,7 +13,7 @@ load_dotenv()
 
 
 class Config:
-    # Database — defaults to SQLite for local dev.
+    # Database - defaults to SQLite for local dev.
     # In any PostgreSQL deployment, DATABASE_URL must be explicitly set as an env var.
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///uraas.db")
 
@@ -30,7 +30,7 @@ class Config:
     CONCURRENT_REQUESTS = int(os.getenv("CONCURRENT_REQUESTS", "16"))
     # Per-wave/query pagination ceiling. Now that spiders skip (rather than
     # count) already-known duplicates toward `target`, they need headroom to
-    # search deeper into a source once the shallow window is exhausted — this
+    # search deeper into a source once the shallow window is exhausted - this
     # replaces several spiders' old hardcoded `min(total, 500)` caps.
     MAX_RESULTS_SCANNED = int(os.getenv("MAX_RESULTS_SCANNED", "2000"))
     # Test/dry-run safety valve: when set, the storage pipeline skips IR
@@ -45,7 +45,7 @@ class Config:
     }
     # Push-to-DOCiD after each crawl. Defaults OFF: the Africa PID Alliance
     # team asked (2026-09) to *pull* from URAAS into their own staging, where
-    # a curator promotes records — so URAAS pushing the same records in at
+    # a curator promotes records - so URAAS pushing the same records in at
     # the same time would have both sides ingesting everything twice. Set
     # URAAS_ENABLE_DOCID_PUSH=1 only if that direction is agreed and the
     # pull integration is switched off on their side.
@@ -60,7 +60,7 @@ class Config:
     DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8080"))
     DASHBOARD_SECRET_KEY = os.getenv("DASHBOARD_SECRET_KEY", "dev-secret-key")
 
-    # Authentication — credentials are env-provided; passwords are stored as
+    # Authentication - credentials are env-provided; passwords are stored as
     # Werkzeug hashes (generate with:
     #   python -c "from werkzeug.security import generate_password_hash as g; \
     #              print(g('your-password'))"
@@ -113,25 +113,25 @@ class Config:
     def cors_origins(self) -> list:
         return [o.strip() for o in self.DASHBOARD_CORS_ORIGINS.split(",") if o.strip()]
 
-    # OpenAlex — free API key (openalex.org/settings/api); keyless access is
+    # OpenAlex - free API key (openalex.org/settings/api); keyless access is
     # being retired, so set this in production.
     OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "")
     OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "cokiki@unilag.edu.ng")
 
-    # ARK persistent identifiers (Archival Resource Key) — 99999 is the
+    # ARK persistent identifiers (Archival Resource Key) - 99999 is the
     # official test NAAN until the Africa PID Alliance NAAN registration lands.
     ARK_NAAN = os.getenv("ARK_NAAN", "99999")
     # Shoulder must use the betanumeric alphabet (no vowels / no 'l').
     ARK_SHOULDER = os.getenv("ARK_SHOULDER", "z1")
 
-    # ── Public dashboard URL (needed for approval email links) ────────────────
+    # -- Public dashboard URL (needed for approval email links) ----------------
     # Set to the URL users reach the dashboard at (no trailing slash).
     DASHBOARD_BASE_URL = os.getenv(
         "DASHBOARD_BASE_URL", "http://localhost:8080"
     ).rstrip("/")
 
-    # ── Live DSpace IR (api-ir.unilag.edu.ng) ────────────────────────────────
-    # Backend API base — NOT the Angular frontend URL.
+    # -- Live DSpace IR (api-ir.unilag.edu.ng) --------------------------------
+    # Backend API base - NOT the Angular frontend URL.
     DSPACE_API_URL = os.getenv(
         "DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server"
     ).rstrip("/")
@@ -141,25 +141,25 @@ class Config:
     # Leave blank to skip auto-deposit; set to a collection UUID to enable it.
     DSPACE_COLLECTION_UUID = os.getenv("DSPACE_COLLECTION_UUID", "")
 
-    # ── Africa PID Alliance DOCiD™ platform (docid.africapidalliance.org) ────
-    # Real registration API — distinct from uraas.utils.docid_generator, which
+    # -- Africa PID Alliance DOCiD™ platform (docid.africapidalliance.org) ----
+    # Real registration API - distinct from uraas.utils.docid_generator, which
     # is a purely local placeholder hash used until real credentials exist.
     # The base URL below (https://docid.africapidalliance.org/api) was
     # confirmed live 2026-07-19 by reading the platform's own public
-    # frontend source (github.com/Africa-PID-Alliance/DOCiD) — it's a
+    # frontend source (github.com/Africa-PID-Alliance/DOCiD) - it's a
     # same-origin Next.js proxy to the real Flask backend, not a secret, so
     # it's defaulted here; only DOCID_EMAIL/DOCID_PASSWORD need supplying.
     # docs/api-reference.html on that domain describes a different, older
     # /api/v1/* JSON-body shape that doesn't match what's actually deployed
     # (real /publish is multipart/form-data at plain /api/publications/publish)
-    # — see uraas/services/docid_client.py's module docstring for the full
+    # - see uraas/services/docid_client.py's module docstring for the full
     # empirically-verified schema. Leave EMAIL/PASSWORD blank to keep
     # registration disabled (falls back to the local placeholder generator).
     DOCID_API_URL = os.getenv("DOCID_API_URL", "").rstrip("/")
     DOCID_EMAIL = os.getenv("DOCID_EMAIL", "")
     DOCID_PASSWORD = os.getenv("DOCID_PASSWORD", "")
 
-    # ── SMTP for batch approval emails ────────────────────────────────────────
+    # -- SMTP for batch approval emails ----------------------------------------
     SMTP_HOST = os.getenv("SMTP_HOST", "")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"

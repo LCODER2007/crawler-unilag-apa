@@ -1,5 +1,5 @@
 """
-Per-metric methodology definitions — the "how is this computed" layer.
+Per-metric methodology definitions - the "how is this computed" layer.
 
 Served whole via GET /api/methodology (frontend caches it for the ⓘ tooltips)
 and attached per-endpoint through responses.api_ok(methodology_key=...).
@@ -14,11 +14,11 @@ METHODOLOGY = {
     "alignment_score": {
         "title": "Framework Alignment Score",
         "formula": (
-            "0.6 × semantic similarity (Model2Vec potion-base-8M cosine between the "
-            "paper's title+abstract and the pillar description) + 0.4 × keyword "
-            "evidence (matched pillar keywords, saturating at 4 hits). Scaled 0–100."
+            "0.6 x semantic similarity (Model2Vec potion-base-8M cosine between the "
+            "paper's title+abstract and the pillar description) + 0.4 x keyword "
+            "evidence (matched pillar keywords, saturating at 4 hits). Scaled 0-100."
         ),
-        "scale": "0–100 per pillar; institutional profile = mean over papers scoring ≥5.",
+        "scale": "0-100 per pillar; institutional profile = mean over papers scoring >=5.",
         "source": "Open metadata (OpenAlex, CC0); URAAS alignment engine v1.",
         "caveats": (
             "Falls back to keyword-only scoring when the embedding model is "
@@ -39,11 +39,11 @@ METHODOLOGY = {
     "intra_african_collaboration": {
         "title": "Intra-African Collaboration Index",
         "formula": (
-            "% of works whose author affiliations span ≥2 distinct African countries "
-            "(full counting at the work level — the Scimago/Leiden international-"
+            "% of works whose author affiliations span >=2 distinct African countries "
+            "(full counting at the work level - the Scimago/Leiden international-"
             "collaboration indicator restricted to AU member states)."
         ),
-        "scale": "0–100%.",
+        "scale": "0-100%.",
         "source": "OpenAlex authorship affiliations (institutions[].country_code).",
         "benchmark": {
             "value": 8.4,
@@ -78,10 +78,10 @@ METHODOLOGY = {
     "pan_african_citation_share": {
         "title": "Pan-African Citation Share",
         "formula": (
-            "% of a work's citing works that have ≥1 author affiliated with an "
+            "% of a work's citing works that have >=1 author affiliated with an "
             "African institution (OpenAlex group_by country of citing works)."
         ),
-        "scale": "0–100% per work; institutional figure is citation-weighted mean.",
+        "scale": "0-100% per work; institutional figure is citation-weighted mean.",
         "source": "OpenAlex cites: filter grouped by authorships.institutions.country_code.",
         "caveats": "Computed for the most-cited works first; citing works without affiliations are excluded.",
     },
@@ -91,28 +91,28 @@ METHODOLOGY = {
             "Weighted share of indigenous-knowledge content types: "
             "indigenous_knowledge=3.0, cultural_heritage=2.5, oral_tradition=2.5, "
             "grey_literature=1.5, thesis/dataset=1.2, patent=1.0, research_paper=0.5; "
-            "normalised by total items × 3.0, scaled to 100."
+            "normalised by total items x 3.0, scaled to 100."
         ),
-        "scale": "0–100.",
+        "scale": "0-100.",
         "source": "URAAS content-type classification.",
         "caveats": "Depends on content_type assignment quality at ingest.",
     },
     "linguistic_diversity": {
         "title": "Linguistic Diversity Index",
         "formula": "% of repository output published in African languages (23 ISO 639-1 codes tracked).",
-        "scale": "0–100%.",
+        "scale": "0-100%.",
         "source": "Item language metadata (dc_language / language_code).",
         "caveats": "Language metadata is sparse in upstream sources; treat as a lower bound.",
     },
     "sc_score": {
         "title": "Special Collections Score",
         "formula": (
-            "Multi-gate keyword decision engine: strong-category matches × 3 + "
-            "support matches × 1, with ambiguous-token guards and STEM exclusion. "
+            "Multi-gate keyword decision engine: strong-category matches x 3 + "
+            "support matches x 1, with ambiguous-token guards and STEM exclusion. "
             "Score > 0 = genuine Special Collections item."
         ),
         "scale": "0 = not SC; higher = stronger signal.",
-        "source": "URAAS SC decision engine (uraas/services/sc_engine.py — open source).",
+        "source": "URAAS SC decision engine (uraas/services/sc_engine.py - open source).",
         "caveats": "All dashboard analytics are gated to SC items (score > 0) by design.",
     },
     "ark_identifier": {
@@ -121,8 +121,8 @@ METHODOLOGY = {
             "ark:/<NAAN>/<shoulder><name><check> minted deterministically from the "
             "item's DocID hash, betanumeric alphabet, NCDA check character."
         ),
-        "scale": "—",
-        "source": "ARK Alliance specification (arks.org); Africa PID Alliance × ARK Alliance partnership (2025).",
+        "scale": "-",
+        "source": "ARK Alliance specification (arks.org); Africa PID Alliance x ARK Alliance partnership (2025).",
         "caveats": "Test NAAN (99999) until the production NAAN registration completes; ARKs are free to mint.",
     },
     "sc_thematic_composition": {
@@ -145,7 +145,7 @@ METHODOLOGY = {
             "increments that pair's link weight by 1 (full counting); single-theme "
             "items contribute to the diagonal. Visualised as a chord diagram so "
             "interdisciplinary overlaps (e.g. Indigenous Knowledge ↔ Cultural "
-            "Heritage) are legible — a view commercial bibliometric tools omit."
+            "Heritage) are legible - a view commercial bibliometric tools omit."
         ),
         "scale": "Co-occurrence counts per theme pair.",
         "source": "Derived from special_collection_categories.",
@@ -156,10 +156,10 @@ METHODOLOGY = {
         "formula": (
             "Distribution of contributing African countries across SC works "
             "(from co-author affiliations), plus the share of SC works spanning "
-            "≥2 African countries. A custodianship lens that centres African "
+            ">=2 African countries. A custodianship lens that centres African "
             "authorship rather than North-export citation prestige."
         ),
-        "scale": "Country item counts; intra-African share 0–100%.",
+        "scale": "Country item counts; intra-African share 0-100%.",
         "source": "OpenAlex authorship affiliations (coauthor_countries, is_intra_african).",
         "caveats": "Works without affiliation metadata are excluded from country/intra-African figures.",
     },
@@ -170,7 +170,7 @@ METHODOLOGY = {
             "(works may carry multiple SDG tags), connecting cultural and "
             "indigenous-knowledge scholarship to development relevance."
         ),
-        "scale": "Item counts per SDG (1–17).",
+        "scale": "Item counts per SDG (1-17).",
         "source": "URAAS SDG tagging (sdg_tags).",
         "caveats": "Multi-tagged works count toward each of their SDGs; tagging coverage is partial.",
     },

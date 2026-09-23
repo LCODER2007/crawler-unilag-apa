@@ -3,7 +3,7 @@
 uraas/pipelines/database.py's date parser had a slicing bug (fixed
 2026-07-19): it truncated every incoming date string to len(format_string)
 characters before calling strptime, e.g. slicing "2024-06-15" (10 chars) to
-"2024-06-" (8 chars, matching len("%Y-%m-%d")) — which then fails to parse,
+"2024-06-" (8 chars, matching len("%Y-%m-%d")) - which then fails to parse,
 for every format, for every item, always. Confirmed live: 0/54 items in the
 production DB had publication_date set despite 40/54 having a valid
 dc_date_issued string. Since Item.publication_date (not dc_date_issued, a
@@ -15,7 +15,7 @@ been silently empty/broken for every item ever crawled.
 
 This re-derives publication_date from the already-correct dc_date_issued
 string using the same (now-fixed) parsing logic, for every row currently
-missing it. Idempotent — only touches rows where publication_date IS NULL.
+missing it. Idempotent - only touches rows where publication_date IS NULL.
 
 Usage:
     python scripts/backfill_publication_dates.py            # DRY RUN

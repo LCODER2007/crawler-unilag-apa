@@ -25,7 +25,7 @@ if __name__ == "__main__":
     print("Creating citation tracking tables...")
     print("=" * 70)
     Base.metadata.create_all(bind=engine)
-    print("✓ Tables created\n")
+    print(" Tables created\n")
 
     # Test 1: Citation Tracking
     print("=" * 70)
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         success = CitationTracker.update_paper_citations(paper.id)
 
         if success:
-            print("✓ Citations fetched successfully")
+            print(" Citations fetched successfully")
 
             # Get citation data
             cite_data = get_paper_citations(paper.id)
@@ -57,9 +57,9 @@ if __name__ == "__main__":
                 for cite in cite_data["citing_papers"][:3]:
                     print(f"  - {cite['title'][:60]}... ({cite['year']})")
         else:
-            print("⚠ Citation fetch failed (paper may not be in OpenAlex)")
+            print(" Citation fetch failed (paper may not be in OpenAlex)")
     else:
-        print("⚠ No papers with DOI found in database")
+        print(" No papers with DOI found in database")
 
     session.close()
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     h_index = CitationTracker.calculate_h_index(test_citations)
     print(f"\nTest citation counts: {test_citations}")
     print(f"Calculated h-index: {h_index}")
-    print(f"Expected: 10 (10 papers with ≥10 citations)")
+    print(f"Expected: 10 (10 papers with >=10 citations)")
 
     # Find an author and calculate their metrics
     author = session.query(Author).join(Author.items).first()
@@ -95,7 +95,7 @@ if __name__ == "__main__":
             print(f"  i10-index: {metrics.get('i10_index', 0)}")
             print(f"  Citations per paper: {metrics.get('citations_per_paper', 0)}")
         else:
-            print("⚠ Author metrics calculation failed (papers may lack citation data)")
+            print(" Author metrics calculation failed (papers may lack citation data)")
 
     session.close()
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     test_partials = ["health", "machine", "science"]
     for partial in test_partials:
         suggestions = SearchQuery.get_search_suggestions(partial)
-        print(f"\n'{partial}' → {len(suggestions)} suggestions")
+        print(f"\n'{partial}' -> {len(suggestions)} suggestions")
         for sug in suggestions[:5]:
             print(f"  - {sug}")
 
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     print("FEATURE COMPARISON SUMMARY")
     print("=" * 70)
 
-    print("\n✓ IMPLEMENTED:")
+    print("\n IMPLEMENTED:")
     print("  1. Citation tracking (OpenAlex + Crossref APIs)")
     print("  2. H-index calculation (standard algorithm)")
     print("  3. i10-index (papers with 10+ citations)")
@@ -189,13 +189,13 @@ if __name__ == "__main__":
     print("  9. Autocomplete suggestions")
     print(" 10. Pagination support")
 
-    print("\n⚠ LIMITATIONS vs Scopus:")
+    print("\n LIMITATIONS vs Scopus:")
     print("  - Scale: ~1K papers vs 80M+ (institutional focus)")
     print("  - Citation data: Depends on OpenAlex coverage")
     print("  - Update frequency: Weekly vs daily (configurable)")
     print("  - Journal metrics: Not included (focus on institutional output)")
 
-    print("\n✓ ADVANTAGES over Scopus:")
+    print("\n ADVANTAGES over Scopus:")
     print("  - Zero false positives (staff validation)")
     print("  - Free (no $40K/year subscription)")
     print("  - Customizable (open source)")

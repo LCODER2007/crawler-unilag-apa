@@ -3,22 +3,22 @@
 This is the ONLY thing that's allowed to set Item.docid to a real value.
 uraas.utils.docid_generator (a purely local SHA-256 placeholder hash that
 never talks to any server) must never be wired into the crawl pipeline or
-any auto-run path — DocIDs are minted by DOCiD itself, not by us. This
+any auto-run path - DocIDs are minted by DOCiD itself, not by us. This
 script hits the actual docid.africapidalliance.org registration API via
 uraas.services.docid_client.DocIDClient. Requires DOCID_EMAIL / DOCID_PASSWORD
-in .env (the base URL is defaulted to the real, confirmed public API — see
+in .env (the base URL is defaulted to the real, confirmed public API - see
 .env.example). Until credentials are set this exits cleanly with an
 explanation instead of doing anything.
 
 WARNING: each item registered here calls the real /cordoi/assign-doi/
 container-id + /publications/publish endpoints, which create real,
 permanent, publicly-visible records on the live Africa PID Alliance
-platform — always run with --limit against a small batch first, and without
+platform - always run with --limit against a small batch first, and without
 --apply (the default) to see what would happen before committing to it.
 
 Finds items in the local DB that don't have a *real* DOCiD yet AND have
 affiliation_confidence == "strong" (roster match, verified employment
-record, or a structured author-affiliation field from the source — never a
+record, or a structured author-affiliation field from the source - never a
 bare title/abstract text mention), and registers them, storing whatever
 identifier the platform assigns back onto Item.docid.
 
@@ -61,7 +61,7 @@ def main():
 
     session = SessionLocal()
     try:
-        # Skip anything that already has a real docid — local placeholder
+        # Skip anything that already has a real docid - local placeholder
         # minting was removed entirely, so any non-null Item.docid at this
         # point came from an actual prior registration with this platform.
         # Live-verified 2026-07-28: this filter was previously missing
@@ -70,7 +70,7 @@ def main():
         # affiliation_confidence == "strong" excludes items whose only
         # evidence of UNILAG authorship is a bare title/abstract text
         # mention (e.g. a paper ABOUT a UNILAG figure written by someone
-        # else) — see the per-spider "strong" vs "weak" logic. Auto-pushing
+        # else) - see the per-spider "strong" vs "weak" logic. Auto-pushing
         # a weak match to a permanent public registry under UNILAG's name
         # would be a real misattribution risk, not just noise.
         candidates = (
@@ -89,7 +89,7 @@ def main():
             print(f"Limited to first {len(candidates)} for this run")
 
         if not args.apply:
-            print("[DRY RUN] Would attempt to register these with the real DOCiD API —")
+            print("[DRY RUN] Would attempt to register these with the real DOCiD API -")
             print("this creates real, permanent, publicly-visible records. Re-run with")
             print("--apply --limit 1 to test against a single item first.")
             return 0
@@ -102,7 +102,7 @@ def main():
                 docid = result["_assigned_docid"]
                 it.docid = docid
                 it.docid_assigned_at = datetime.utcnow()
-                # Commit immediately, not batched at the end — the record
+                # Commit immediately, not batched at the end - the record
                 # already exists on the live platform the moment publish_item()
                 # returns, so a crash before a final batched commit would
                 # otherwise lose the local docid and risk a duplicate

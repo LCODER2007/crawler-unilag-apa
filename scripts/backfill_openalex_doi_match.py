@@ -4,17 +4,17 @@ title+author matching against OpenAlex.
 
 Some sources (AJOL HTML scrapes especially, and OAI-PMH records with
 incomplete dc:identifier metadata) yield items with no DOI at all. This
-script looks each one up on OpenAlex by title, and — mirroring
+script looks each one up on OpenAlex by title, and - mirroring
 uraas/spiders/sources/isni_spider.py's "exactly one confident candidate or
-skip" philosophy — only accepts a match when it's unambiguous. It never
+skip" philosophy - only accepts a match when it's unambiguous. It never
 guesses: a wrong DOI attached to the wrong paper is worse than a missing one.
 
 On accept, backfills doi / openalex_id / cited_by_count / counts_by_year.
-Does NOT touch item_affiliations — run scripts/backfill_collaboration_data.py
+Does NOT touch item_affiliations - run scripts/backfill_collaboration_data.py
 afterward for that (it's idempotent/skip-if-already-populated, so the two
 scripts compose naturally as sequential passes).
 
-Funder/grant enrichment is deliberately out of scope here — it needs a new
+Funder/grant enrichment is deliberately out of scope here - it needs a new
 Item.funders column (not yet added) and is much simpler once a DOI exists
 (direct OpenAlex work lookup by DOI, no fuzzy matching needed at all), so
 it belongs in a follow-up script that runs after this one.
@@ -39,9 +39,9 @@ from uraas.database import Item, SessionLocal
 from uraas.utils.analytics_cache import analytics_cache
 from uraas.utils.openalex_client import oa_get
 
-TITLE_THRESHOLD = 92  # near-unique signal — strict on purpose
+TITLE_THRESHOLD = 92  # near-unique signal - strict on purpose
 AUTHOR_THRESHOLD = (
-    80  # corroborating only — loose to tolerate name-order/transliteration variance
+    80  # corroborating only - loose to tolerate name-order/transliteration variance
 )
 CANDIDATES_PER_QUERY = 5
 SELECT = "id,doi,title,authorships,cited_by_count,counts_by_year"
@@ -50,7 +50,7 @@ SELECT = "id,doi,title,authorships,cited_by_count,counts_by_year"
 def _first_author_name(item) -> str:
     """Best-effort 'first' author. item_authors has no sequence/order column,
     so this is a heuristic (usually reflects insertion order), used only as
-    a corroborating signal — never the primary accept/reject gate."""
+    a corroborating signal - never the primary accept/reject gate."""
     authors = list(item.authors)
     return authors[0].name if authors and authors[0].name else ""
 

@@ -17,7 +17,7 @@ Each framework is decomposed into thematic pillars. A pillar carries two layers:
     Keyword hits in titles/abstracts are surfaced to users as transparent
     justification for why a paper was mapped to a pillar.
 
-Plain dicts only — this module must stay import-light and serialisable.
+Plain dicts only - this module must stay import-light and serialisable.
 """
 
 ALIGNMENT_VERSION = 1

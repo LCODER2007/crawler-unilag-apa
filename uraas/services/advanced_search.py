@@ -523,7 +523,7 @@ class SearchQuery:
             session.close()
 
 
-# ── Saved Searches ────────────────────────────────────────────────────────────
+# -- Saved Searches ------------------------------------------------------------
 
 
 class SavedSearch:

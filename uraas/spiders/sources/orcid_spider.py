@@ -1,9 +1,9 @@
 """
-ORCID Spider — harvests papers using ORCID IDs from rich staff data.
+ORCID Spider - harvests papers using ORCID IDs from rich staff data.
 Loads staff records with ORCID from {inst}_staff.json.
 
 Precision design: ORCID work-summary records carry NO institutional
-affiliation at all (that's an ORCID schema limitation — affiliation lives
+affiliation at all (that's an ORCID schema limitation - affiliation lives
 under /employments, not /works), so a naive "everything this ORCID ever
 published belongs to <institution>" crawl mis-attributes a researcher's
 entire pre-/post-<institution> publication history. Before pulling a
@@ -11,10 +11,10 @@ person's works we fetch /employments once and, when it lists the target
 institution, use the employment start/end date to only accept works
 published while they were actually there. When ORCID lists employment(s)
 at OTHER institutions only (no match for the target), we drop the person's
-works rather than blindly attributing them — this catches stale
+works rather than blindly attributing them - this catches stale
 institution assignments (e.g. someone whose ROR-authorship snapshot from
 one paper got them added to the staff roster, but who has since moved).
-When a person has no employment history on ORCID at all (common — many
+When a person has no employment history on ORCID at all (common - many
 researchers never fill this in), we fall back to trusting the static
 roster assignment, since there's no contradicting signal.
 """
@@ -126,8 +126,7 @@ class ORCIDSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     ed = (es.get("end-date") or {}).get("year", {}).get("value")
                     if sd:
                         start_years.append(int(sd))
-                    # Merge across multiple stints at the same institution —
-                    # any stint still open (no end-date) means "currently
+                    # Merge across multiple stints at the same institution - # any stint still open (no end-date) means "currently
                     # employed" wins over any other, older, closed stint.
                     if ed:
                         end_years.append(int(ed))
@@ -140,7 +139,7 @@ class ORCIDSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
         if had_any_employment and not target_matched:
             # ORCID positively lists employment(s) elsewhere and none at the
-            # target institution — the roster assignment for this person is
+            # target institution - the roster assignment for this person is
             # very likely stale/wrong. Skip their works entirely rather than
             # mis-attribute them.
             self._rejected_no_employment_match += 1
@@ -232,7 +231,7 @@ class ORCIDSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
                 journal = (work.get("journal-title", {}) or {}).get("value", "")
 
-                # SC gate — only count papers the storage pipeline will keep,
+                # SC gate - only count papers the storage pipeline will keep,
                 # so `target` means "N genuinely new SC papers" (same
                 # discipline as every other web-discovery spider).
                 if sc_score_of(title, "", journal) <= 0.0:
@@ -261,7 +260,7 @@ class ORCIDSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     "faculty": faculty,
                     # Every accepted item passed this spider's own employment
                     # cross-check against the institution's official ORCID
-                    # employment record — the strongest signal available.
+                    # employment record - the strongest signal available.
                     "affiliation_confidence": "strong",
                 }
                 yield item

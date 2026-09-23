@@ -3,7 +3,7 @@ ARK (Archival Resource Key) generator for URAAS.
 
 ARKs are free, decentralised persistent identifiers (arks.org). The Africa
 PID Alliance partnered with the ARK Alliance (March 2025) to strengthen PID
-infrastructure in Africa — URAAS mints an ARK for every item alongside its
+infrastructure in Africa - URAAS mints an ARK for every item alongside its
 DocID™ so outputs without DOIs still carry a resolvable persistent ID.
 
 Format: ark:/<NAAN>/<shoulder><name><check>
@@ -54,7 +54,7 @@ class ARKGenerator:
     def mint(self, seed: str) -> str:
         """Deterministically mint an ARK from a seed string (the item DocID).
 
-        Same seed → same ARK, so backfills are idempotent."""
+        Same seed -> same ARK, so backfills are idempotent."""
         digest = hashlib.sha256((seed or "").encode("utf-8")).digest()
         # Map hash bytes onto the betanumeric alphabet for a 12-char name.
         body = "".join(BETANUMERIC[b % len(BETANUMERIC)] for b in digest[:12])

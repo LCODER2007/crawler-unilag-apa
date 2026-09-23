@@ -5,5 +5,11 @@ extend-exclude = '''
 )/
 '''
 
+[tool.isort]
+profile = "black"
+skip = ["scratch"]
+
 [tool.mypy]
 exclude = ["scratch/"]
+ignore_missing_imports = true
+ignore_errors = true

@@ -109,7 +109,7 @@ class StaffValidator:
 
     def _load_faculty_map(self):
         """Load faculty and department mappings"""
-        # Try to load detailed staff records (name → faculty/dept)
+        # Try to load detailed staff records (name -> faculty/dept)
         base_name = os.path.splitext(os.path.basename(self.staff_cache_path))[0]
         detailed_path = os.path.join(
             os.path.dirname(self.staff_cache_path), f"{base_name}_detailed.json"
@@ -226,7 +226,7 @@ class StaffValidator:
         return False
 
     def get_faculty_hint(self, author_name: str) -> Optional[str]:
-        """Return most likely faculty — checks full name first, then surname."""
+        """Return most likely faculty - checks full name first, then surname."""
         if not author_name:
             return None
 

@@ -8,7 +8,7 @@ Adds to items:
   - ark / ark_assigned_at  (ARK persistent identifiers)
 
 New tables (item_affiliations, alignment_aggregates) are created by
-scripts/init_db.py via Base.metadata.create_all — run init_db.py first.
+scripts/init_db.py via Base.metadata.create_all - run init_db.py first.
 """
 
 import os
@@ -20,7 +20,7 @@ from sqlalchemy import inspect, text
 
 from uraas.database import engine
 
-# (column, DDL type clause) — types chosen to work on both SQLite and Postgres.
+# (column, DDL type clause) - types chosen to work on both SQLite and Postgres.
 ITEMS_COLUMNS = [
     ("alignment_scores", "TEXT"),
     ("alignment_version", "INTEGER DEFAULT 0"),

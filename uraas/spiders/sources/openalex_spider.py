@@ -17,7 +17,7 @@ OPENALEX_BASE = "https://api.openalex.org/works"
 # OpenAlex authorships lists are truncated to 100 entries for mega-authorship
 # works (large consortia/consortium studies commonly run into the hundreds of
 # authors). Gate 2/3 can't see past this, so treat it as "unverifiable, trust
-# Gate 1" rather than a false rejection — see parse().
+# Gate 1" rather than a false rejection - see parse().
 AUTHORSHIPS_TRUNCATION_LIMIT = 100
 
 log = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
     Gate 2: Per-paper authorship ROR verification (at least 1 author has target ROR)
     Gate 3: Affiliation string pattern matching (belt-and-suspenders)
 
-    Papers failing any gate are dropped — never mixed across institutions.
+    Papers failing any gate are dropped - never mixed across institutions.
     """
 
     name = "openalex_multi"
@@ -65,13 +65,13 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
         institution:   registry short name (e.g. "unilag")
         target:        max SC papers to accept this run
         boost_special: also run SC seed waves (topic+ROR) in addition to the
-                       general ROR wave — keeps SC recall high (default ON)
+                       general ROR wave - keeps SC recall high (default ON)
         sc_only:       skip the general ROR wave and run ONLY SC seed waves;
                        use when you only want targeted SC discovery, no noise
         """
         super().__init__(*args, **kwargs)
         self.target_limit = int(target)
-        # Accept both bool and string ("true"/"false") — Scrapy passes CLI
+        # Accept both bool and string ("true"/"false") - Scrapy passes CLI
         # spider args as strings when launched via crawl_multi_institution.py.
         _truthy = {"1", "true", "yes", "on"}
         if isinstance(boost_special, str):
@@ -120,7 +120,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             f"&cursor={cursor}"
             f"&mailto={config.OPENALEX_MAILTO}"
         )
-        # api_key unlocks OpenAlex's higher-throughput "premium" pool — the
+        # api_key unlocks OpenAlex's higher-throughput "premium" pool - the
         # rest of the codebase (uraas/utils/openalex_client.py, used by the
         # citation tracker/backfill scripts) already reads this; the spider
         # previously built its own URLs with a hardcoded mailto and never
@@ -131,10 +131,10 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
         return url
 
     async def start(self):
-        # Wave 1 — general ROR-only crawl (skipped in sc_only mode)
+        # Wave 1 - general ROR-only crawl (skipped in sc_only mode)
         if not self.sc_only:
             url = self._build_url(filters=f"institutions.ror:{self.ror_short}")
-            # DEBUG not INFO — with 300+ SC seed waves, logging every raw
+            # DEBUG not INFO - with 300+ SC seed waves, logging every raw
             # query URL at INFO level floods the dashboard's live feed
             # (which runs at LOG_LEVEL=INFO) with unreadable noise; still
             # available for real debugging via LOG_LEVEL=DEBUG.
@@ -146,10 +146,9 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 priority=0,
             )
 
-        # Wave 2 — SC-boosted waves: one request per SC seed phrase, AND-ed with ROR.
+        # Wave 2 - SC-boosted waves: one request per SC seed phrase, AND-ed with ROR.
         # OpenAlex combines filters with comma=AND. The valid free-text filter is
-        # title_and_abstract.search (concepts.display_name.search is not supported —
-        # only concepts.id is). We rely on free-text seeds; the in-pipeline classifier
+        # title_and_abstract.search (concepts.display_name.search is not supported - # only concepts.id is). We rely on free-text seeds; the in-pipeline classifier
         # then scores the actual hits.
         if self.boost_special:
             seeds = set(SC_SEED_KEYWORDS)
@@ -173,12 +172,12 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
         if response.status == 429:
             self.logger.warning(
-                "OpenAlex rate-limited (429) on wave=%s — Scrapy retry will back off",
+                "OpenAlex rate-limited (429) on wave=%s - Scrapy retry will back off",
                 response.meta.get("wave", "?"),
             )
             return
 
-        # Hard stop if we've already reached the global target — closes the
+        # Hard stop if we've already reached the global target - closes the
         # spider outright so the ~300 other already-scheduled seed-wave
         # requests get cancelled instead of still hitting the API. See
         # DedupAwareSpiderMixin._stop_if_target_reached().
@@ -201,7 +200,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # Check both wave-local cap and global target limit
             if wave_accepted >= wave_cap or self._accepted >= self.target_limit:
                 break
-            # Scan-depth ceiling — OpenAlex cursor pagination has no natural
+            # Scan-depth ceiling - OpenAlex cursor pagination has no natural
             # stopping point otherwise. Counted per-work-seen (not per-accept)
             # so a wave dominated by already-known duplicates still terminates.
             if scanned_this_wave >= self.max_results_scanned:
@@ -217,14 +216,14 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             # mega-authorship works (GBD-style consortium papers routinely
             # run into the hundreds/thousands of authors). When that cap is
             # hit, a target-institution author can easily sit past position
-            # 100 and simply be invisible to us — Gate 2/3 have nothing to
+            # 100 and simply be invisible to us - Gate 2/3 have nothing to
             # verify against. Gate 1 (the server-side institutions.ror=
             # filter OpenAlex already applied to return this result at all)
             # is unaffected by the truncation, so for truncated works we
             # trust Gate 1 instead of false-rejecting a genuine match.
             authorships_truncated = len(authorships) >= AUTHORSHIPS_TRUNCATION_LIMIT
 
-            # ── Gate 2: Authorship ROR verification ──────────────────────────
+            # -- Gate 2: Authorship ROR verification --------------------------
             if (
                 not authorships_truncated
                 and not self.institution_config.verify_ror_in_authorships(authorships)
@@ -275,10 +274,10 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 " | ".join(set(affiliations)) if affiliations else self.institution_name
             )
 
-            # ── Gate 3: Affiliation pattern matching ──────────────────────────
+            # -- Gate 3: Affiliation pattern matching --------------------------
             # Same truncation caveat as Gate 2: the visible affiliation strings
             # are only the first 100 authors' worth, so a miss here doesn't
-            # mean the paper is wrong — it means the matching author is
+            # mean the paper is wrong - it means the matching author is
             # off-screen. Skip Gate 3 too when truncated.
             if (
                 affiliations
@@ -296,7 +295,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             concepts = work.get("concepts", [])
             dc_subject = ", ".join(c.get("display_name", "") for c in concepts[:5] if c)
 
-            # SC gate — only count papers that the storage pipeline will keep.
+            # SC gate - only count papers that the storage pipeline will keep.
             # Without this the target fills with non-SC papers that get dropped
             # downstream, and the crawl stops before reaching `target` SC papers.
             if sc_score_of(title, abstract, dc_subject) <= 0.0:
@@ -310,7 +309,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             if not url:
                 url = f"https://openalex.org/{work.get('id', '').replace('https://openalex.org/', '')}"
 
-            # Dedup gate — only count papers not already in the DB. Without
+            # Dedup gate - only count papers not already in the DB. Without
             # this, repeat crawls re-discover the same top results (search
             # APIs are deterministic), "fill" target with items the pipeline
             # then silently drops as duplicates, and never paginate deep
@@ -366,7 +365,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 ),
                 "funders": funders,
                 # Every accepted item passed the server-side ROR filter (Gate
-                # 1) at minimum — OpenAlex's own curated institution-linkage
+                # 1) at minimum - OpenAlex's own curated institution-linkage
                 # database, the strongest affiliation signal available here.
                 "affiliation_confidence": "strong",
                 # OpenAlex's own open_access.is_oa verdict. Without this the
@@ -383,7 +382,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             yield item
             self._mark_seen(doi=doi, url=url, title=title)
 
-        # Cursor-based pagination — keep paginating within the same wave until its
+        # Cursor-based pagination - keep paginating within the same wave until its
         # cap is hit. Reuse the originating wave's filter (extracted from current URL)
         # so SC waves don't degrade back into plain ROR queries. Continues past
         # a run of already-known duplicates (wave_accepted stalled) as long as
@@ -417,7 +416,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
             )
 
     def _reconstruct_abstract(self, inverted_index: dict) -> str:
-        """OpenAlex stores abstracts as word→[position] inverted index."""
+        """OpenAlex stores abstracts as word->[position] inverted index."""
         if not inverted_index:
             return ""
         word_positions = []
@@ -431,8 +430,7 @@ class OpenAlexSpider(DedupAwareSpiderMixin, scrapy.Spider):
         """Normalize OpenAlex `funders` (org list) + `awards` (specific
         grant/award numbers, each linked to a funder by funder_id) into
         [{"name", "ror", "award_id"}, ...]. Live-verified 2026-07-19: 56% of
-        sampled UNILAG papers have funders, 40% have a specific award number
-        — real, previously-uncaptured data (SELECT_FIELDS didn't request
+        sampled UNILAG papers have funders, 40% have a specific award number - real, previously-uncaptured data (SELECT_FIELDS didn't request
         either field before this).
         """
         funders = work.get("funders") or []

@@ -1,10 +1,9 @@
 """
 Backfill missing pdf_url via Unpaywall for items that have a DOI but no
-open-access PDF link from their original source. Free, self-service API —
-just an email param, no key/application needed.
+open-access PDF link from their original source. Free, self-service API - just an email param, no key/application needed.
 
 Live-verified 2026-07-20: 13/34 real DB items missing a PDF got one filled
-this way — several sources (AJOL in particular) don't surface a direct PDF
+this way - several sources (AJOL in particular) don't surface a direct PDF
 link even when the article is genuinely open access; Unpaywall aggregates
 OA status/location across publishers and repository mirrors that individual
 source APIs often miss.
@@ -83,7 +82,7 @@ def main():
                 print(f"  OK  id={it.id} -> {pdf_url[:70]}")
             time.sleep(
                 0.3
-            )  # polite — Unpaywall has no published hard rate limit, but be reasonable
+            )  # polite - Unpaywall has no published hard rate limit, but be reasonable
         session.commit()
         print(f"\nDONE. Filled: {filled}/{len(candidates)}")
         return 0

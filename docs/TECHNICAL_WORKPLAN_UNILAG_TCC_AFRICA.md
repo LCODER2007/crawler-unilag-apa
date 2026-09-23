@@ -1,13 +1,13 @@
 # APA Intelligence & Analytics Platform
 ## Technical Implementation Report and Collaborative Workplan
 
-**Project Duration**: March 25, 2026 - April 25, 2026 (1 Month)  
+**Project Duration**: March 25, 2026 - April 25, 2026 (1 Month)
 **Collaborating Institutions**:
 - University of Lagos (UNILAG) - Technical Team
 - TCC Africa / Africa PID Alliance DocID Team - Technical Team
 
-**Document Version**: 1.0  
-**Date**: April 25, 2026  
+**Document Version**: 1.0
+**Date**: April 25, 2026
 **Status**: Phase 1 Complete - Transition to Collaborative Development
 
 ---
@@ -170,8 +170,8 @@ Total endpoints implemented: 45+
 - Crawler control (6 endpoints)
 - DocID operations (2 endpoints)
 
-**Authentication**: None (development phase)  
-**Rate Limiting**: 2-second delay between requests  
+**Authentication**: None (development phase)
+**Rate Limiting**: 2-second delay between requests
 **Response Format**: JSON
 
 ### 1.6 Data Quality and Validation
@@ -587,8 +587,8 @@ Total endpoints implemented: 45+
 ### 5.1 Technical Risks
 
 #### Risk 1: DocID Integration Delays
-**Impact**: High  
-**Probability**: Medium  
+**Impact**: High
+**Probability**: Medium
 **Mitigation**:
 - Begin integration design in Week 1
 - Use mock API for parallel development
@@ -596,8 +596,8 @@ Total endpoints implemented: 45+
 - Regular sync meetings between teams
 
 #### Risk 2: Data Quality Issues
-**Impact**: High  
-**Probability**: Medium  
+**Impact**: High
+**Probability**: Medium
 **Mitigation**:
 - Implement comprehensive validation rules
 - Manual review process for critical data
@@ -605,8 +605,8 @@ Total endpoints implemented: 45+
 - Regular data audits
 
 #### Risk 3: Performance Bottlenecks
-**Impact**: Medium  
-**Probability**: Medium  
+**Impact**: Medium
+**Probability**: Medium
 **Mitigation**:
 - Early load testing with realistic datasets
 - Implement caching strategy
@@ -614,8 +614,8 @@ Total endpoints implemented: 45+
 - Asynchronous processing for heavy operations
 
 #### Risk 4: Security Vulnerabilities
-**Impact**: High  
-**Probability**: Low  
+**Impact**: High
+**Probability**: Low
 **Mitigation**:
 - Security audit before production
 - Follow OWASP best practices
@@ -623,8 +623,8 @@ Total endpoints implemented: 45+
 - Penetration testing
 
 #### Risk 5: Scope Creep
-**Impact**: Medium  
-**Probability**: High  
+**Impact**: Medium
+**Probability**: High
 **Mitigation**:
 - Clear milestone definitions
 - Weekly progress reviews
@@ -634,8 +634,8 @@ Total endpoints implemented: 45+
 ### 5.2 Organizational Risks
 
 #### Risk 1: Communication Gaps
-**Impact**: Medium  
-**Probability**: Medium  
+**Impact**: Medium
+**Probability**: Medium
 **Mitigation**:
 - Daily async updates via Slack
 - Weekly video calls
@@ -643,8 +643,8 @@ Total endpoints implemented: 45+
 - Clear escalation path
 
 #### Risk 2: Resource Availability
-**Impact**: High  
-**Probability**: Low  
+**Impact**: High
+**Probability**: Low
 **Mitigation**:
 - Identify backup team members
 - Document all decisions and code
@@ -914,47 +914,47 @@ Success depends on clear communication, adherence to the weekly workplan, and co
 
 ```
 Communities (Faculties)
-├── id (PK)
-├── name
-├── description
-└── created_at
++-- id (PK)
++-- name
++-- description
++-- created_at
 
 Collections (Departments)
-├── id (PK)
-├── community_id (FK)
-├── name
-├── description
-└── created_at
++-- id (PK)
++-- community_id (FK)
++-- name
++-- description
++-- created_at
 
 Items (Papers)
-├── id (PK)
-├── title
-├── abstract
-├── doi
-├── ror (Institution ROR ID)
-├── institution
-├── content_type (for TK Vitality)
-├── tk_label
-├── patent_id
-├── patent_date
-├── language_code
-├── is_african_language
-├── docid
-├── publication_date
-└── created_at
++-- id (PK)
++-- title
++-- abstract
++-- doi
++-- ror (Institution ROR ID)
++-- institution
++-- content_type (for TK Vitality)
++-- tk_label
++-- patent_id
++-- patent_date
++-- language_code
++-- is_african_language
++-- docid
++-- publication_date
++-- created_at
 
 Authors
-├── id (PK)
-├── name
-└── created_at
++-- id (PK)
++-- name
++-- created_at
 
 Files (PDFs)
-├── id (PK)
-├── item_id (FK)
-├── file_path
-├── sha256_hash
-├── access_policy
-└── created_at
++-- id (PK)
++-- item_id (FK)
++-- file_path
++-- sha256_hash
++-- access_policy
++-- created_at
 ```
 
 ### Appendix D: Contact Information
@@ -977,7 +977,7 @@ Files (PDFs)
 
 ---
 
-**Document Prepared By**: Technical Team  
-**Review Date**: April 25, 2026  
-**Next Review**: May 2, 2026  
+**Document Prepared By**: Technical Team
+**Review Date**: April 25, 2026
+**Next Review**: May 2, 2026
 **Approval Status**: Pending Joint Review

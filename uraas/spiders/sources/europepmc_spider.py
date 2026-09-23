@@ -1,10 +1,9 @@
 """
-EuropePMC spider — queries the Europe PubMed Central REST API.
+EuropePMC spider - queries the Europe PubMed Central REST API.
 
 EuropePMC (europepmc.org) aggregates life-sciences and biomedical literature from
 PubMed, PMC, WHO, and many other sources. For URAAS Special Collections it is
-particularly valuable for the **Indigenous Knowledge** and **Ethnobotany** subcategories
-— traditional plant medicine, ethno-pharmacology, and indigenous health practices
+particularly valuable for the **Indigenous Knowledge** and **Ethnobotany** subcategories - traditional plant medicine, ethno-pharmacology, and indigenous health practices
 feature heavily in UNILAG research and are well-indexed here.
 
 The API is free, no key required.
@@ -92,14 +91,14 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
         return f"{_EPMC_BASE}?{urlencode(params)}"
 
     def _affil_query(self, seed: str = "") -> str:
-        # EPMC affiliation filter — OR across all known institution name patterns.
+        # EPMC affiliation filter - OR across all known institution name patterns.
         # Each clause MUST be individually parenthesized: EPMC's query parser
         # does NOT treat `AFFILIATION:"A" OR AFFILIATION:"B"` as a boolean
-        # union — it silently collapses toward the last clause's own (much
+        # union - it silently collapses toward the last clause's own (much
         # smaller) hit count instead of unioning them. Live-verified: the
         # unparenthesized 3-clause UNILAG query returned hitCount=2 vs. 120
         # for the single clause `AFFILIATION:"University of Lagos"` alone
-        # (which the union must be >= per the OR semantics) — a >98% recall
+        # (which the union must be >= per the OR semantics) - a >98% recall
         # loss, reproduced identically on a second institution (UCT: 282
         # instead of 1020). Wrapping each clause individually fixes it.
         affil_parts = " OR ".join(
@@ -125,7 +124,7 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
             )
 
         if self.boost_special:
-            # Only run the most SC-relevant seeds for EPMC — ethnobotany, traditional
+            # Only run the most SC-relevant seeds for EPMC - ethnobotany, traditional
             # knowledge, and cultural heritage are where EPMC adds the most value.
             priority_seeds = [
                 s
@@ -202,12 +201,12 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 if a.get("lastName")
             ]
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -228,10 +227,10 @@ class EuropePMCSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution_ror": self.ror_id,
                 "content_type": doc_type,
                 # The query itself is scoped to EPMC's structured
-                # AFFILIATION: field (see _affil_query) — not a free-text
+                # AFFILIATION: field (see _affil_query) - not a free-text
                 # guess, so every accepted item is a strong match.
                 "affiliation_confidence": "strong",
-                # EuropePMC's own isOpenAccess flag — see the same note in
+                # EuropePMC's own isOpenAccess flag - see the same note in
                 # openalex_spider.py: without this, dc_rights stays at the
                 # restrictedAccess model default forever.
                 "dc_rights": (

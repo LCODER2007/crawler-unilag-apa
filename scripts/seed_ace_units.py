@@ -1,10 +1,10 @@
 """
 Seed Africa Centres of Excellence (ACE) as Community rows (unit_type="ace"),
-each minted a self-assigned persistent ID (PMD) — the same role ROR plays
+each minted a self-assigned persistent ID (PMD) - the same role ROR plays
 for institutions, minted locally via ark_generator (deterministic, no
 network access, idempotent on re-run).
 
-This script does NOT ship with any hardcoded ACE names — supply the real
+This script does NOT ship with any hardcoded ACE names - supply the real
 list at UNILAG (and any other institution) via a JSON input file:
 
     [
@@ -13,7 +13,7 @@ list at UNILAG (and any other institution) via a JSON input file:
     ]
 
 `institution` must match a short_name known to uraas/config/institutions.py.
-`ror_id` is optional — only set it if the ACE has been assigned its own ROR.
+`ror_id` is optional - only set it if the ACE has been assigned its own ROR.
 
 Usage:
     python scripts/seed_ace_units.py ace_units.json            # DRY RUN

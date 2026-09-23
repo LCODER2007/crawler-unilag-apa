@@ -1,5 +1,5 @@
 """
-Shared OpenAlex HTTP helper — single place for the api_key / mailto params.
+Shared OpenAlex HTTP helper - single place for the api_key / mailto params.
 
 Used by the citation tracker and the backfill scripts (the Scrapy spider
 builds its own URLs but reads the same Config values).

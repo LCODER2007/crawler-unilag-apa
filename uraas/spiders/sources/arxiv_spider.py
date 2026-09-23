@@ -1,5 +1,5 @@
 """
-arXiv spider — uses the official Atom API (export.arxiv.org/api/query).
+arXiv spider - uses the official Atom API (export.arxiv.org/api/query).
 
 The HTML search page at arxiv.org/search was fragile and layout-dependent.
 The Atom API is stable, rate-limit-friendly (1 req/3s recommended), and
@@ -7,9 +7,9 @@ returns clean structured XML metadata.
 
 Docs: info.arxiv.org/help/api/basics.html
 Rate limit: arXiv's own Terms of Use (info.arxiv.org/help/api/tou.html) say
-"make no more than one request every three seconds" — i.e. DOWNLOAD_DELAY
+"make no more than one request every three seconds" - i.e. DOWNLOAD_DELAY
 must be >= 3.0s. This file's two rate-limit comments used to disagree with
-each other (one said "1 req/3s", the other said "3 req/s" — a 10x gap) and
+each other (one said "1 req/3s", the other said "3 req/s" - a 10x gap) and
 the configured delay (1.5s) matched neither, running at 2x the real allowed
 rate.
 """
@@ -36,7 +36,7 @@ _NS = {
     "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
 }
 _BATCH = 50
-# arXiv is primarily CS/STEM — only a few SC seed terms will yield results.
+# arXiv is primarily CS/STEM - only a few SC seed terms will yield results.
 _SC_RELEVANT = {
     "indigenous",
     "cultural heritage",
@@ -96,7 +96,7 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
         seen_queries: set = set()
 
         if not self.sc_only:
-            # Primary institution wave — exact phrase in all fields
+            # Primary institution wave - exact phrase in all fields
             q = f'all:"{self.institution_name}"'
             seen_queries.add(q)
             yield scrapy.Request(
@@ -168,7 +168,7 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     pdf_url = link.get("href")
                     break
 
-            # Extract affiliations from arxiv:affiliation elements — populated
+            # Extract affiliations from arxiv:affiliation elements - populated
             # for only a minority of papers (live-verified: 0/3 on a sample
             # UNILAG query), but when present it's real per-author data, so
             # gate on it the same way openalex_spider.py's Gate 3 does: only
@@ -187,26 +187,25 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             # When no structured affiliation data exists at all (the common
             # case), arXiv's `all:` query only guarantees the institution
-            # name appears SOMEWHERE in title/abstract/authors/comments —
-            # not that any author is actually affiliated there. That can't
+            # name appears SOMEWHERE in title/abstract/authors/comments - # not that any author is actually affiliated there. That can't
             # distinguish a paper genuinely authored at the institution from
             # one merely written ABOUT it (confirmed live: a scientometric
             # study titled "Two Decades of Research at the University of
             # Lagos" passed this exact query with zero UNILAG authors).
             # Cross-checking author names against the verified staff roster
-            # closes that gap — require a roster match when there's no
+            # closes that gap - require a roster match when there's no
             # structured affiliation to fall back on.
             if not affiliations and not self.institution_config.matches_staff_roster(
                 authors
             ):
                 continue
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=arxiv_id, title=title):
                 continue
@@ -227,9 +226,9 @@ class ArxivSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution_ror": self.ror_id,
                 # Every accepted item passed either the structured
                 # arxiv:affiliation check or (when that's absent) the staff
-                # roster cross-check above — never a bare text mention.
+                # roster cross-check above - never a bare text mention.
                 "affiliation_confidence": "strong",
-                # arXiv is an open-access preprint server — everything it
+                # arXiv is an open-access preprint server - everything it
                 # serves is freely readable, so this is a property of the
                 # source rather than a per-record flag.
                 "dc_rights": "info:eu-repo/semantics/openAccess",

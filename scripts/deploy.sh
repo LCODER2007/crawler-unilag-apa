@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# ──────────────────────────────────────────────────────────────────────────────
-#  URAAS — One-shot deployment script for Ubuntu 22.04 / Debian 12
+# ------------------------------------------------------------------------------
+# URAAS - One-shot deployment script for Ubuntu 22.04 / Debian 12
 #
-#  Run on a fresh VPS as root or a sudo user:
-#    curl -sSL https://raw.githubusercontent.com/YOUR/repo/main/scripts/deploy.sh | bash
-#  OR after cloning:
-#    bash scripts/deploy.sh
+# Run on a fresh VPS as root or a sudo user:
+# curl -sSL https://raw.githubusercontent.com/YOUR/repo/main/scripts/deploy.sh | bash
+# OR after cloning:
+# bash scripts/deploy.sh
 #
-#  What it does:
-#    1. Install Docker + Docker Compose plugin
-#    2. Generate password hashes interactively
-#    3. Build and start all containers (postgres, redis, app, nginx)
-#    4. Print the URL to reach the dashboard
-# ──────────────────────────────────────────────────────────────────────────────
+# What it does:
+# 1. Install Docker + Docker Compose plugin
+# 2. Generate password hashes interactively
+# 3. Build and start all containers (postgres, redis, app, nginx)
+# 4. Print the URL to reach the dashboard
+# ------------------------------------------------------------------------------
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 echo ""
-echo "═══════════════════════════════════════════════════"
-echo "  URAAS Deployment — $(date +%Y-%m-%d)"
-echo "═══════════════════════════════════════════════════"
+echo "==================================================="
+echo "  URAAS Deployment - $(date +%Y-%m-%d)"
+echo "==================================================="
 
-# ── 1. Docker ─────────────────────────────────────────────────────────────────
+# -- 1. Docker -----------------------------------------------------------------
 if ! command -v docker &>/dev/null; then
   echo ""
   echo "▶  Installing Docker..."
@@ -40,7 +40,7 @@ if ! docker compose version &>/dev/null 2>&1; then
     echo "   Install docker-compose manually from docs.docker.com/compose/install/"
 fi
 
-# ── 2. .env.prod ──────────────────────────────────────────────────────────────
+# -- 2. .env.prod --------------------------------------------------------------
 if [ ! -f .env.prod ]; then
   echo ""
   echo "▶  Creating .env.prod from example..."
@@ -72,10 +72,10 @@ if [ ! -f .env.prod ]; then
   echo "     CORE_API_KEY=<from core.ac.uk/api-keys>"
 fi
 
-# ── 3. Required directories ───────────────────────────────────────────────────
+# -- 3. Required directories ---------------------------------------------------
 mkdir -p storage/pdfs data logs backups nginx/ssl
 
-# ── 4. Build + Start ──────────────────────────────────────────────────────────
+# -- 4. Build + Start ----------------------------------------------------------
 echo ""
 echo "▶  Building and starting containers (this takes ~3 min first time)..."
 echo ""
@@ -83,7 +83,7 @@ echo ""
 # Switch to docker-compose.prod.yml once you have a domain + SSL certificate.
 docker compose --env-file .env.prod -f docker-compose.demo.yml up --build -d
 
-# ── 5. Wait for health ────────────────────────────────────────────────────────
+# -- 5. Wait for health --------------------------------------------------------
 echo ""
 echo "▶  Waiting for app to become healthy..."
 for i in $(seq 1 20); do
@@ -92,14 +92,14 @@ for i in $(seq 1 20); do
     echo "   App is healthy!"
     break
   fi
-  echo "   [$i/20] Status: $STATUS — waiting 5s..."
+  echo "   [$i/20] Status: $STATUS - waiting 5s..."
   sleep 5
 done
 
-# ── 6. Done ───────────────────────────────────────────────────────────────────
+# -- 6. Done -------------------------------------------------------------------
 SERVER_IP=$(curl -s https://ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
 echo ""
-echo "═══════════════════════════════════════════════════"
+echo "==================================================="
 echo "  URAAS is running!"
 echo ""
 echo "  Dashboard (direct):  http://$SERVER_IP:8080"
@@ -107,4 +107,4 @@ echo "  Dashboard (nginx):   http://$SERVER_IP"
 echo ""
 echo "  Logs:  docker compose -f docker-compose.prod.yml logs -f app"
 echo "  Stop:  docker compose -f docker-compose.prod.yml down"
-echo "═══════════════════════════════════════════════════"
+echo "==================================================="

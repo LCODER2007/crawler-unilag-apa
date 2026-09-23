@@ -1,14 +1,14 @@
 """
-Semantic Scholar spider — queries the free S2 Graph API.
+Semantic Scholar spider - queries the free S2 Graph API.
 
 Semantic Scholar (semanticscholar.org) has broader humanities and social-science
 coverage than arXiv, including African studies, philosophy, cultural heritage, and
-postcolonial literature — exactly the SC categories URAAS cares about. The API is
+postcolonial literature - exactly the SC categories URAAS cares about. The API is
 free (no key required for basic use; 100 reqs/5 min per IP).
 
 The spider runs two types of waves:
-  • SC seed waves  — institution + each SC seed phrase (e.g. "indigenous knowledge")
-  • General wave   — institution name alone (catches SC hits missed by seeds)
+  - SC seed waves - institution + each SC seed phrase (e.g. "indigenous knowledge")
+  - General wave - institution name alone (catches SC hits missed by seeds)
 
 The SC classifier in the pipeline gates what actually gets saved.
 """
@@ -108,7 +108,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
         """
         S2 basic search doesn't return author affiliations, so we verify the
         institution appears anywhere in the available text fields.  This is
-        intentionally lenient — a false negative (dropping a valid paper)
+        intentionally lenient - a false negative (dropping a valid paper)
         is preferable to a false positive (storing a paper from the wrong
         university).
         """
@@ -119,11 +119,11 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
 
     def _headers(self) -> dict:
-        # config.S2_API_KEY existed but was never actually sent — this spider
+        # config.S2_API_KEY existed but was never actually sent - this spider
         # built requests with no headers at all. Live-tested 2026-07-18: a
         # burst at this spider's own configured 6s delay got HTTP 429 on 4/5
         # sequential requests, with the 429 body reading "apply for a key for
-        # higher rate limits" — the one available lever that would help was
+        # higher rate limits" - the one available lever that would help was
         # unused. S2's docs specify the `x-api-key` header for this.
         if config.S2_API_KEY:
             return {"x-api-key": config.S2_API_KEY}
@@ -166,7 +166,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
     def parse(self, response):
         if response.status == 429:
             self.logger.warning(
-                "S2 rate-limited (429) — request will be retried by Scrapy"
+                "S2 rate-limited (429) - request will be retried by Scrapy"
             )
             return
         if self._accepted >= self.target_limit:
@@ -220,8 +220,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
 
             # S2 doesn't return author affiliations in basic search at all.
             # A text mention of the institution can't distinguish a paper
-            # genuinely authored there from one merely written about it —
-            # cross-checking author names against the verified staff roster
+            # genuinely authored there from one merely written about it - # cross-checking author names against the verified staff roster
             # is a materially stronger, independent signal; only fall back
             # to the weaker text match when no author matches the roster
             # (e.g. a genuine UNILAG researcher not yet in our harvested
@@ -232,12 +231,12 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 self.logger.debug(f"S2 aff FAIL: {title[:60]}")
                 continue
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract, dc_subject) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB.
             if self._is_known(doi=doi, url=url_val, title=title):
                 continue
@@ -257,7 +256,7 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 "dc_subject": dc_subject,
-                # "strong" only via the staff-roster cross-check — the
+                # "strong" only via the staff-roster cross-check - the
                 # title/abstract/venue text fallback can't distinguish
                 # authored-there from written-about.
                 "affiliation_confidence": "strong" if roster_ok else "weak",
@@ -292,6 +291,6 @@ class SemanticScholarSpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
         if self._accepted == 0:
             self.logger.warning(
-                "S2: 0 papers accepted for %s — check institution affiliation_patterns",
+                "S2: 0 papers accepted for %s - check institution affiliation_patterns",
                 self.institution_name,
             )

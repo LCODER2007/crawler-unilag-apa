@@ -1,15 +1,15 @@
 # URAAS CI Pipeline
 #
-# Rewritten 2026-08 — the previous version was aspirational boilerplate for
+# Rewritten 2026-08 - the previous version was aspirational boilerplate for
 # infrastructure this project never actually built: it built/pushed to
 # Docker Hub, deployed to Kubernetes, and ran a "performance" job against
-# `https://uraas.example.com` using tests/performance/locustfile.py — none
+# `https://uraas.example.com` using tests/performance/locustfile.py - none
 # of which exist. That last job alone failed on every single run (missing
 # file, unreachable fake host), which is the real reason CI had been red on
 # all 28 recorded runs regardless of whether the actual code was correct.
 #
 # The real deployment path is manual: scripts/push_to_hf.py to the Hugging
-# Face Space, a deliberate, reviewed action — not something CI should
+# Face Space, a deliberate, reviewed action - not something CI should
 # auto-trigger on push. This workflow now only verifies what's true: lint,
 # the test suite, and a non-blocking security scan.
 name: CI Pipeline
@@ -37,12 +37,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        # Pinned, not "latest" — live-verified 2026-08 that an unpinned
+        # Pinned, not "latest" - live-verified 2026-08 that an unpinned
         # `pip install isort` (which resolved to 9.0.1) failed CI's isort
         # check on files that pass cleanly under 8.0.1, even though nothing
         # in the codebase itself had changed. An unpinned lint toolchain can
         # turn a green pipeline red on a tool's own release, independent of
-        # any real code issue — pin to versions actually verified against
+        # any real code issue - pin to versions actually verified against
         # this codebase and bump deliberately.
         run: |
           python -m pip install --upgrade pip
@@ -110,12 +110,12 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
-          # Coverage upload is informational, not a correctness gate — a
+          # Coverage upload is informational, not a correctness gate - a
           # Codecov outage shouldn't read as "the code is broken" when every
           # test above actually passed.
           fail_ci_if_error: false
 
-  # Security Scan — informational only (continue-on-error on every step);
+  # Security Scan - informational only (continue-on-error on every step);
   # findings are worth reviewing but shouldn't block merges on their own.
   security:
     name: Security Scan

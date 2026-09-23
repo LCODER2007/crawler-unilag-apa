@@ -6,7 +6,7 @@ load_dotenv()
 
 
 class Config:
-    # Database — defaults to local SQLite; Render overrides via DATABASE_URL.
+    # Database - defaults to local SQLite; Render overrides via DATABASE_URL.
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///uraas.db")
 
     # Redis

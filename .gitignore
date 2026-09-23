@@ -5,7 +5,8 @@ __pycache__/
 venv/
 .venv/
 env/
-# Secrets — ignore all .env variants (incl. .env.prod) but keep the template.
+
+# Secrets: ignore every .env variant (including .env.prod) but keep the template.
 .env
 .env.*
 !.env.example
@@ -13,38 +14,40 @@ env/
 # Claude Code local settings (may contain tokens/keys from shell history)
 .claude/settings.local.json
 
-# Databases
+# Databases and their backups
 *.db
 *.db-journal
 *.sqlite
+*.bak
 
-# URAAS Storage
+# Crawled content and generated data
 storage/
 data/
 logs/
 exports.csv
 senate.csv
 
+# Local working material: drafts, decks, one-off scripts. Never deployed.
+scratch/
+docs/assets/
+
 # TLS certs / keys (self-signed dry-run certs, real certs)
-nginx/ssl/
+deploy/nginx/ssl/
 
 # IDEs
 .vscode/
 .idea/
 
-# Deployment
-.vercel
-.netlify
+# Test and coverage artifacts
 .pytest_cache/
+.mypy_cache/
 pytest_out*
-
-# Logs and temp files
-*.log
-test_write.txt
-dashboard.log
-
-# Test/coverage run artifacts
 .coverage
 coverage.xml
 htmlcov/
 tests/reports/
+
+# Logs and temp files
+*.log
+dashboard.log
+test_write.txt

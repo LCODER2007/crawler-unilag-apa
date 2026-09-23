@@ -1,12 +1,12 @@
 """Batch deposit orchestration for the UNILAG IR.
 
 UNILAG deposits go **directly** to the live DSpace IR using the configured
-crawler credentials — there is no email-approval confirmation step.
+crawler credentials - there is no email-approval confirmation step.
 
 Lifecycle (direct path)
 -----------------------
-approved (auto)  ─→ depositing ─→ completed
-                                 └─→ failed
+approved (auto)  --> depositing --> completed
+                                 +--> failed
 
 The legacy email approve/reject helpers (approve_batch / reject_batch) are
 retained for backward compatibility with any old links, but the normal flow
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 APPROVAL_LINK_TTL_HOURS = 48
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
+# -- Public API ----------------------------------------------------------------
 
 
 def queue_batch(
@@ -58,7 +58,7 @@ def queue_batch(
     try:
         batch = DepositBatch(
             token=token,
-            status="approved",  # auto-approved — no email confirmation required
+            status="approved",  # auto-approved - no email confirmation required
             approval_email=approval_email or "",
             collection_uuid=collection_uuid,
             collection_name=collection_name,
@@ -85,7 +85,7 @@ def queue_batch(
         "item_count": len(item_ids),
         "collection_name": collection_name,
         "message": (
-            f"Batch #{batch_id} approved automatically — depositing "
+            f"Batch #{batch_id} approved automatically - depositing "
             f"{len(item_ids)} item(s) directly to the UNILAG IR. "
             "Track progress on the dashboard."
         ),
@@ -196,7 +196,7 @@ def get_batches(limit: int = 50) -> list[dict]:
         db.close()
 
 
-# ── Internal deposit runner ───────────────────────────────────────────────────
+# -- Internal deposit runner ---------------------------------------------------
 
 
 def _run_deposit(batch_id: int):
@@ -241,7 +241,7 @@ def _run_deposit(batch_id: int):
                 fail_count += 1
                 continue
 
-            # Only deposit papers affiliated with UNILAG — other institutions
+            # Only deposit papers affiliated with UNILAG - other institutions
             # will get their own IR integrations later.
             is_unilag = (item.ror == UNILAG_ROR) or (
                 "university of lagos" in (item.institution or "").lower()
@@ -279,7 +279,7 @@ def _run_deposit(batch_id: int):
             if result["status"] == "ok":
                 ok_count += 1
             elif result["status"] == "duplicate":
-                ok_count += 1  # not a failure — item is already in IR
+                ok_count += 1  # not a failure - item is already in IR
             else:
                 fail_count += 1
 
@@ -300,7 +300,7 @@ def _run_deposit(batch_id: int):
         batch.updated_at = datetime.utcnow()
         if fail_count:
             batch.notes = (
-                f"{fail_count} item(s) failed to deposit — see deposit_log for details"
+                f"{fail_count} item(s) failed to deposit - see deposit_log for details"
             )
         db.commit()
         logger.info(
@@ -331,7 +331,7 @@ def _mark_failed(db, batch, reason: str):
     logger.error("Deposit batch failed: %s", reason)
 
 
-# ── Serialisation helper ──────────────────────────────────────────────────────
+# -- Serialisation helper ------------------------------------------------------
 
 
 def _batch_to_dict(batch: DepositBatch) -> dict:

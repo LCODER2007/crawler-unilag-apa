@@ -1,8 +1,8 @@
-"""URAAS API test suite — covers the dashboard's HTTP surface and analytics
+"""URAAS API test suite - covers the dashboard's HTTP surface and analytics
 engine. Run: pytest tests/test_api.py -v
 
 Every dashboard route except a small public allowlist (login, health,
-static, ...) requires an authenticated session — see
+static, ...) requires an authenticated session - see
 uraas.dashboard.app._enforce_authentication. Use the admin_client fixture
 (tests/conftest.py) for anything under /api/, not the bare client fixture.
 """
@@ -19,7 +19,7 @@ from uraas.database import Item, SessionLocal
 from uraas.utils.ai_keyword_extractor import ai_extractor
 from uraas.utils.docid_generator import docid_generator
 
-# ── Auth surface itself ──────────────────────────────────────────────────
+# -- Auth surface itself --------------------------------------------------
 
 
 def test_index_requires_login(client):
@@ -42,7 +42,7 @@ def test_health_check_is_public(client):
     assert r.status_code == 200
 
 
-# ── Analytics overview ────────────────────────────────────────────────────
+# -- Analytics overview ----------------------------------------------------
 
 
 def test_analytics_overview(admin_client):
@@ -113,7 +113,7 @@ def test_faculties_list(admin_client):
     assert isinstance(r.get_json(), list)
 
 
-# ── Search ────────────────────────────────────────────────────────────────
+# -- Search ----------------------------------------------------------------
 
 
 def test_search_empty(admin_client):
@@ -142,7 +142,7 @@ def test_search_sql_injection(admin_client):
     assert r.status_code == 200  # should not crash
 
 
-# ── Papers ────────────────────────────────────────────────────────────────
+# -- Papers ----------------------------------------------------------------
 
 
 def test_papers_tree(admin_client):
@@ -172,7 +172,7 @@ def test_paper_detail_if_exists(admin_client):
     assert "title" in d
     assert "authors" in d
     assert "dc" in d
-    # "file" must always be present, even for metadata-only records — it used
+    # "file" must always be present, even for metadata-only records - it used
     # to collapse to a bare {"has_local_pdf": False} only when a File row
     # existed, so consumers couldn't rely on the key's shape.
     assert "file" in d
@@ -207,7 +207,7 @@ def test_open_access_download_resolves(admin_client):
     assert r.status_code in (200, 302), f"unexpected {r.status_code}"
 
 
-# ── Keyword cloud / language ─────────────────────────────────────────────
+# -- Keyword cloud / language ---------------------------------------------
 
 
 def test_keyword_cloud(admin_client):
@@ -244,7 +244,7 @@ def test_language_research(admin_client):
             assert bad not in title_lower, f"False positive: '{bad}' in '{title_lower}'"
 
 
-# ── APA novel metrics ─────────────────────────────────────────────────────
+# -- APA novel metrics -----------------------------------------------------
 
 
 def test_tk_vitality_score(admin_client):
@@ -266,7 +266,7 @@ def test_linguistic_diversity_index(admin_client):
     assert "breakdown" in d
 
 
-# ── Author network ────────────────────────────────────────────────────────
+# -- Author network --------------------------------------------------------
 
 
 def test_author_network_global(admin_client):
@@ -291,7 +291,7 @@ def test_faculty_comparison_empty(admin_client):
     assert isinstance(r.get_json(), dict)
 
 
-# ── Exports (admin-only) ──────────────────────────────────────────────────
+# -- Exports (admin-only) --------------------------------------------------
 
 
 def test_export_csv_requires_admin(viewer_client):
@@ -312,7 +312,7 @@ def test_export_bibtex(admin_client):
     assert r.status_code == 200
 
 
-# ── Crawler status (admin-only) ───────────────────────────────────────────
+# -- Crawler status (admin-only) -------------------------------------------
 
 
 def test_crawler_status_requires_admin(viewer_client):
@@ -326,7 +326,7 @@ def test_crawler_status(admin_client):
     assert r.get_json()["status"] in ("running", "idle")
 
 
-# ── Partner API (X-API-Key, not a session) ────────────────────────────────
+# -- Partner API (X-API-Key, not a session) --------------------------------
 
 
 def test_partner_endpoint_rejects_missing_key(client):
@@ -341,14 +341,14 @@ def test_partner_endpoint_rejects_bad_key(client):
 
 def test_partner_key_cannot_reach_admin_routes(client):
     # Even a real, valid key must never reach an admin/crawler-control route
-    # — this is enforced structurally (PARTNER_ENDPOINTS is a strict
+    # - this is enforced structurally (PARTNER_ENDPOINTS is a strict
     # allowlist), so a garbage key proves the same 403 a real one would get,
     # without this test needing to mint a real key against a live database.
     r = client.post("/api/crawler/start", headers={"X-API-Key": "not-a-real-key"})
     assert r.status_code in (401, 403)
 
 
-# ── Analytics engine unit tests ───────────────────────────────────────────
+# -- Analytics engine unit tests -------------------------------------------
 
 
 def test_engine_top_authors():
@@ -388,8 +388,8 @@ def test_engine_linguistic_diversity():
     assert 0 <= result["index"] <= 100
 
 
-# ── DocID generator ───────────────────────────────────────────────────────
-# NOTE: uraas.utils.docid_generator is a local placeholder — it has never
+# -- DocID generator -------------------------------------------------------
+# NOTE: uraas.utils.docid_generator is a local placeholder - it has never
 # been wired into the crawl pipeline (see scripts/register_docid.py's
 # docstring). Real DocIDs are minted by the Africa PID Alliance platform via
 # uraas.services.docid_client. These tests only cover the generator's own
@@ -418,7 +418,7 @@ def test_docid_uniqueness():
     assert len(ids) == 10  # all unique due to uuid4
 
 
-# ── AI keyword extractor ──────────────────────────────────────────────────
+# -- AI keyword extractor --------------------------------------------------
 
 
 def test_keyword_extraction():
@@ -453,7 +453,7 @@ def test_paper_scoring():
     assert "keywords" in score
 
 
-# ── Performance ────────────────────────────────────────────────────────────
+# -- Performance ------------------------------------------------------------
 
 
 def test_overview_response_time(admin_client):
@@ -491,7 +491,7 @@ def test_paper_detail_carries_attribution_and_classification(admin_client):
 
     Partners stage records one at a time, so institution, ROR, affiliation
     confidence and Special Collections category have to travel on the record
-    itself — previously they were only reachable via separate aggregate
+    itself - previously they were only reachable via separate aggregate
     endpoints, which meant a staged record couldn't say what it was.
     """
     session = SessionLocal()

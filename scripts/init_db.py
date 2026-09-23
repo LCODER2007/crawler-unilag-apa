@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import citation tracker models so SQLAlchemy registers their tables with
-# Base.metadata before create_all() runs — otherwise citations,
+# Base.metadata before create_all() runs - otherwise citations,
 # citation_metrics, and author_metrics are never created.
 import uraas.services.citation_tracker  # noqa: F401
 from uraas.database import (
@@ -23,22 +23,21 @@ from uraas.database import (
 from uraas.utils.unilag_classifier import UNILAG_STRUCTURE
 
 # Base.metadata.create_all() (called by init_db() below) only creates tables
-# that don't exist yet — it never alters an EXISTING table to add a column a
+# that don't exist yet - it never alters an EXISTING table to add a column a
 # newer version of the ORM model expects. On a fresh DB that's a no-op (every
 # table is new, so every column is already there); on a database that
 # already existed before some column was added to the model (e.g. an HF
 # Space's persistent /data/uraas.db surviving across deploys), the table is
 # silently left on its old schema and the very next query touching that
-# column crashes — confirmed live 2026-07-19: the Space failed to start
+# column crashes - confirmed live 2026-07-19: the Space failed to start
 # entirely ("no such column: communities.unit_type") because its persistent
 # DB predated that column and nothing ever ran the matching migration
 # against it. Running every idempotent (column_exists()-guarded, ALTER-TABLE-
-# only) migration here means any existing database — this one included —
-# self-heals to the current schema on every startup, not just fresh ones.
+# only) migration here means any existing database - this one included - # self-heals to the current schema on every startup, not just fresh ones.
 # migrate_add_ror.py is deliberately excluded: unlike the others it also
 # *writes* a default ROR value to existing NULL rows, and that default is
 # the deprecated pre-2026 UNILAG ROR (03qcnxw14, since corrected to
-# 05rk03822 by migrate_unilag_ror.py) — safe to run once by hand, not safe
+# 05rk03822 by migrate_unilag_ror.py) - safe to run once by hand, not safe
 # to run unconditionally on every boot.
 _SCHEMA_MIGRATIONS = [
     "migrate_add_pid_source",
@@ -53,7 +52,7 @@ _SCHEMA_MIGRATIONS = [
 def run_schema_migrations():
     import importlib
 
-    print("Applying schema migrations (idempotent — safe to re-run)...")
+    print("Applying schema migrations (idempotent - safe to re-run)...")
     print("  Generic column sync:")
     sync_schema_columns()
     for mod_name in _SCHEMA_MIGRATIONS:
@@ -63,7 +62,7 @@ def run_schema_migrations():
         except Exception as e:
             # A migration failing shouldn't take down the whole app if the
             # underlying tables/columns it depends on genuinely aren't there
-            # yet for some other reason — log and continue rather than abort
+            # yet for some other reason - log and continue rather than abort
             # startup entirely (seeding below will surface the real error if
             # it still matters).
             print(f"  [WARN] {mod_name} failed (continuing): {e}")

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="URAAS — University of Lagos Research Archival & Analytics System. Discover, track, and analyze UNILAG research outputs across all faculties using AI-powered classification and Africa PID Alliance DocID™.">
-<title>URAAS — African Research Intelligence Platform</title>
+<meta name="description" content="URAAS - University of Lagos Research Archival & Analytics System. Discover, track, and analyze UNILAG research outputs across all faculties using AI-powered classification and Africa PID Alliance DocID™.">
+<title>URAAS - African Research Intelligence Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -33,7 +33,7 @@
   <div style="background:var(--modal-bg);border:1px solid var(--border);border-radius:20px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;margin:16px">
     <div class="sticky top-0 flex justify-between items-start p-6 pb-4 border-b" style="background:var(--modal-bg);border-color:var(--border);z-index:10;border-radius:20px 20px 0 0">
       <h2 id="modal-title" class="text-base font-bold pr-4 leading-snug " style="color:var(--text)"></h2>
-      <button onclick="closePaperModal()" class="btn-ghost px-3 py-1 flex-shrink-0" style="font-size:18px;line-height:1">×</button>
+      <button onclick="closePaperModal()" class="btn-ghost px-3 py-1 flex-shrink-0" style="font-size:18px;line-height:1">x</button>
     </div>
     <div id="modal-body" class="p-6"></div>
   </div>
@@ -63,15 +63,15 @@
     <div class="flex items-center gap-3 flex-wrap">
       <div class="flex items-center gap-2">
         <div class="surface rounded-xl px-4 py-2 text-center min-w-[70px]">
-          <p class="text-2xl font-bold " style="color:var(--accent);font-size:1.5rem;font-weight:700" id="stat-total">—</p>
+          <p class="text-2xl font-bold " style="color:var(--accent);font-size:1.5rem;font-weight:700" id="stat-total">-</p>
           <p class="text-xs" style="color:var(--text-muted)">Papers</p>
         </div>
         <div class="surface rounded-xl px-4 py-2 text-center min-w-[70px]">
-          <p class="text-2xl font-bold " style="color:var(--text);font-size:1.5rem;font-weight:700" id="stat-authors">—</p>
+          <p class="text-2xl font-bold " style="color:var(--text);font-size:1.5rem;font-weight:700" id="stat-authors">-</p>
           <p class="text-xs" style="color:var(--text-muted)">Authors</p>
         </div>
         <div class="surface rounded-xl px-4 py-2 text-center min-w-[70px]">
-          <p class="text-2xl font-bold " style="color:var(--success);font-size:1.5rem;font-weight:700" id="stat-oa">—</p>
+          <p class="text-2xl font-bold " style="color:var(--success);font-size:1.5rem;font-weight:700" id="stat-oa">-</p>
           <p class="text-xs" style="color:var(--text-muted)">Open Access</p>
         </div>
       </div>
@@ -89,12 +89,12 @@
 
   <!--  IMPACT CARDS  -->
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Papers</p><p class="text-3xl font-bold " style="color:var(--accent);font-size:1.75rem;font-weight:700" id="ic-total">—</p></div>
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Authors</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-authors">—</p></div>
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Faculties</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-faculties">—</p></div>
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Open Access</p><p class="text-3xl font-bold " style="color:var(--success);font-size:1.75rem;font-weight:700" id="ic-oa">—</p></div>
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">OA Rate</p><p class="text-3xl font-bold " style="color:var(--warning);font-size:1.75rem;font-weight:700" id="ic-oa-rate">—</p></div>
-    <div class="stat-card surface rounded-xl p-4"><p class="section-label">PDFs Stored</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-pdfs">—</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Papers</p><p class="text-3xl font-bold " style="color:var(--accent);font-size:1.75rem;font-weight:700" id="ic-total">-</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Authors</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-authors">-</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Faculties</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-faculties">-</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">Open Access</p><p class="text-3xl font-bold " style="color:var(--success);font-size:1.75rem;font-weight:700" id="ic-oa">-</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">OA Rate</p><p class="text-3xl font-bold " style="color:var(--warning);font-size:1.75rem;font-weight:700" id="ic-oa-rate">-</p></div>
+    <div class="stat-card surface rounded-xl p-4"><p class="section-label">PDFs Stored</p><p class="text-3xl font-bold " style="color:var(--text);font-size:1.75rem;font-weight:700" id="ic-pdfs">-</p></div>
   </div>
 
   <!--  MAIN TABS  -->
@@ -115,7 +115,7 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       Analytics
     </button>
-    <span class="ml-2 text-xs self-center" style="color:var(--text-muted)">Press 1–5 or / to navigate</span>
+    <span class="ml-2 text-xs self-center" style="color:var(--text-muted)">Press 1-5 or / to navigate</span>
   </div>
 
   <!--  -->
@@ -137,11 +137,11 @@
           </select>
           <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Select Institution</label>
           <select id="crawler-institution" class="w-full mb-3" style="font-size:13px"></select>
-          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Target Papers (1–250)</label>
+          <label class="block text-xs mb-1.5 font-medium" style="color:var(--text-dim)">Target Papers (1-250)</label>
           <input type="number" id="target-count" min="1" max="250" value="20"/>
           <label class="block text-xs mb-1.5 font-medium mt-3" style="color:var(--text-dim)">Discovery Source</label>
           <select id="crawler-spider" class="w-full mb-3" style="font-size:13px">
-            <option value="openalex">OpenAlex (Default — 250M+ papers)</option>
+            <option value="openalex">OpenAlex (Default - 250M+ papers)</option>
             <option value="all">All Sources (Maximum Coverage)</option>
             <option value="crossref">Crossref (DOI Registry)</option>
             <option value="semantic_scholar">Semantic Scholar (AI-indexed)</option>
@@ -215,35 +215,35 @@
         <div class="flex items-center gap-2">
           <select id="archive-institution-select" onchange="fetchArchive()" style="font-size:12px;padding:4px 28px 4px 10px;width:220px;height:28px">
             <option value="">All Institutions</option>
-            <optgroup label="🌐 North Africa">
+            <optgroup label=" North Africa">
               <option value="cairo">Cairo University</option>
               <option value="ainshams">Ain Shams University</option>
               <option value="alexandria">Alexandria University</option>
               <option value="tunis">Université de Tunis El Manar</option>
               <option value="mohammed5">Université Mohammed V de Rabat</option>
             </optgroup>
-            <optgroup label="🌍 West Africa">
+            <optgroup label=" West Africa">
               <option value="unilag">University of Lagos</option>
               <option value="ui">University of Ibadan</option>
               <option value="covenant">Covenant University</option>
               <option value="ghana">University of Ghana</option>
               <option value="knust">KNUST</option>
             </optgroup>
-            <optgroup label="🌍 East Africa">
+            <optgroup label=" East Africa">
               <option value="nairobi">University of Nairobi</option>
               <option value="makerere">Makerere University</option>
               <option value="addis">Addis Ababa University</option>
               <option value="dar">University of Dar es Salaam</option>
               <option value="rwanda">University of Rwanda</option>
             </optgroup>
-            <optgroup label="🌍 Southern Africa">
+            <optgroup label=" Southern Africa">
               <option value="uct">University of Cape Town</option>
               <option value="stellenbosch">Stellenbosch University</option>
               <option value="wits">Univ. of the Witwatersrand</option>
               <option value="pretoria">University of Pretoria</option>
               <option value="zimbabwe">University of Zimbabwe</option>
             </optgroup>
-            <optgroup label="🌍 Central Africa">
+            <optgroup label=" Central Africa">
               <option value="yaounde">Université de Yaoundé I</option>
               <option value="kinshasa">Université de Kinshasa</option>
               <option value="agostinho">Université Agostinho Neto</option>
@@ -271,7 +271,7 @@
   <div id="tab-search" class="tab-content hidden">
     <!-- Advanced Search Help -->
     <div class="surface rounded-xl p-4 mb-4" style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2)">
-      <p class="text-xs font-semibold mb-2" style="color:var(--accent)">Advanced Search — Scopus-style Boolean Operators</p>
+      <p class="text-xs font-semibold mb-2" style="color:var(--accent)">Advanced Search - Scopus-style Boolean Operators</p>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs" style="color:var(--text-dim)">
         <div><code class="text-green-400">"phrase"</code> - Exact match</div>
         <div><code class="text-green-400">author:smith</code> - By author</div>
@@ -384,7 +384,7 @@
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Special Collections Overview: African Literature &amp; Indigenous Knowledge</h2>
-          <p class="text-sm" style="color:var(--text-muted)">Analytics reframed for cultural-heritage scholarship — thematic, custodianship &amp; development lenses beyond citation prestige.</p>
+          <p class="text-sm" style="color:var(--text-muted)">Analytics reframed for cultural-heritage scholarship - thematic, custodianship &amp; development lenses beyond citation prestige.</p>
         </div>
         <a href="/api/analytics/special-collections/export.csv" id="sco-csv-btn" class="btn-ghost text-xs flex-shrink-0">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -408,7 +408,7 @@
           </div>
           <div class="surface rounded-2xl p-5">
             <p class="section-label">Theme Co-occurrence <span class="info-icon" data-method="sc_cooccurrence">&#9432;</span></p>
-            <p class="text-xs mb-2" style="color:var(--text-muted)">Interdisciplinary overlap between themes — a chord view commercial tools omit.</p>
+            <p class="text-xs mb-2" style="color:var(--text-muted)">Interdisciplinary overlap between themes - a chord view commercial tools omit.</p>
             <div id="sco-chord" style="height:280px"></div>
           </div>
         </div>
@@ -420,7 +420,7 @@
               <p class="section-label mb-0">Knowledge Sovereignty <span class="info-icon" data-method="sc_knowledge_sovereignty">&#9432;</span></p>
               <span id="sco-intra-african" class="badge-oa"></span>
             </div>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">African countries custodian to this scholarship — centring African authorship over North-export prestige.</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">African countries custodian to this scholarship - centring African authorship over North-export prestige.</p>
             <div id="sco-countries" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
           </div>
           <div class="surface rounded-2xl p-5">
@@ -439,7 +439,7 @@
           </div>
           <div class="surface rounded-2xl p-5">
             <p class="section-label">Cultural Lexicon</p>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">The vocabulary of the collection — most frequent extracted terms.</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">The vocabulary of the collection - most frequent extracted terms.</p>
             <div id="sco-lexicon" class="flex flex-wrap gap-1.5 overflow-y-auto" style="max-height:300px"></div>
           </div>
         </div>
@@ -447,52 +447,52 @@
         <!-- Most influential works -->
         <div class="surface rounded-2xl p-5">
           <p class="section-label">Most Influential Works <span class="info-icon" data-method="sc_influential_works">&#9432;</span></p>
-          <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach — one signal among several, not the sole measure of value.</p>
+          <p class="text-xs mb-3" style="color:var(--text-muted)">Special-collection works ranked by citation reach - one signal among several, not the sole measure of value.</p>
           <div id="sco-influential" class="space-y-1.5"></div>
         </div>
 
-        <!-- PID Coverage panel — shown to PID Alliance audience -->
+        <!-- PID Coverage panel - shown to PID Alliance audience -->
         <div class="surface rounded-2xl p-5 mt-5" id="pid-coverage-panel">
           <div class="flex items-center justify-between mb-1">
-            <p class="section-label mb-0">Africa PID Alliance — Persistent Identifier Coverage</p>
+            <p class="section-label mb-0">Africa PID Alliance - Persistent Identifier Coverage</p>
             <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(99,102,241,.12);color:var(--accent)">DocID™</span>
           </div>
           <p class="text-xs mb-4" style="color:var(--text-muted)">Fraction of Special Collections items carrying each PID type. ARKs are minted at crawl time via the ARK Alliance test NAAN (99999); a production NAAN application is in progress with the Africa PID Alliance.</p>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="pid-kpis">
             <div class="rounded-xl p-4 text-center" style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18)">
-              <p class="text-2xl font-bold" style="color:var(--accent)" id="pid-doi-pct">—</p>
+              <p class="text-2xl font-bold" style="color:var(--accent)" id="pid-doi-pct">-</p>
               <p class="text-xs font-semibold mt-0.5">DOI Coverage</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-doi-n"></p>
             </div>
             <div class="rounded-xl p-4 text-center" style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18)">
-              <p class="text-2xl font-bold" style="color:var(--success)" id="pid-orcid-pct">—</p>
+              <p class="text-2xl font-bold" style="color:var(--success)" id="pid-orcid-pct">-</p>
               <p class="text-xs font-semibold mt-0.5">ORCID Coverage</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-orcid-n"></p>
             </div>
             <div class="rounded-xl p-4 text-center" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18)">
-              <p class="text-2xl font-bold" style="color:var(--warning)" id="pid-ark-pct">—</p>
+              <p class="text-2xl font-bold" style="color:var(--warning)" id="pid-ark-pct">-</p>
               <p class="text-xs font-semibold mt-0.5">ARK Coverage</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-ark-n"></p>
             </div>
             <div class="rounded-xl p-4 text-center" style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.18)">
-              <p class="text-2xl font-bold" style="color:#8b5cf6" id="pid-ror-pct">—</p>
+              <p class="text-2xl font-bold" style="color:#8b5cf6" id="pid-ror-pct">-</p>
               <p class="text-xs font-semibold mt-0.5">ROR Coverage</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)" id="pid-ror-n"></p>
             </div>
           </div>
-          <p class="text-xs mt-3" style="color:var(--text-muted)">Total Special Collections items tracked: <span class="font-semibold" style="color:var(--text)" id="pid-total">—</span></p>
+          <p class="text-xs mt-3" style="color:var(--text-muted)">Total Special Collections items tracked: <span class="font-semibold" style="color:var(--text)" id="pid-total">-</span></p>
         </div>
 
         <!-- Knowledge Repatriation Index -->
         <div class="surface rounded-2xl p-5 mt-5">
           <div class="flex items-center justify-between mb-1">
-            <p class="section-label mb-0">Knowledge Repatriation Index <span class="info-icon" title="Proportion of Africa-led scholarship vs. extractive North→South collaborations">&#9432;</span></p>
+            <p class="section-label mb-0">Knowledge Repatriation Index <span class="info-icon" title="Proportion of Africa-led scholarship vs. extractive North-South collaborations">&#9432;</span></p>
             <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(16,185,129,.12);color:var(--success)">Novel Metric</span>
           </div>
-          <p class="text-xs mb-4" style="color:var(--text-muted)">Africa-led research vs. North→South extraction. Score 100 = all African-first-author; 0 = all externally led. Continental baseline ~35/100.</p>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Africa-led research vs. North-South extraction. Score 100 = all African-first-author; 0 = all externally led. Continental baseline ~35/100.</p>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div class="rounded-xl p-5 text-center" style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18)">
-              <p class="text-4xl font-bold" style="color:var(--success)" id="kri-score">—</p>
+              <p class="text-4xl font-bold" style="color:var(--success)" id="kri-score">-</p>
               <p class="text-xs font-semibold mt-1">KRI Score / 100</p>
               <p class="text-xs mt-2" style="color:var(--text-muted)" id="kri-interpretation"></p>
             </div>
@@ -501,26 +501,26 @@
               <div class="space-y-2">
                 <div class="flex justify-between items-center">
                   <span class="text-xs">Africa-Led</span>
-                  <span class="text-sm font-bold" style="color:var(--success)" id="kri-africa-led">—</span>
+                  <span class="text-sm font-bold" style="color:var(--success)" id="kri-africa-led">-</span>
                 </div>
                 <div class="w-full rounded-full h-1.5" style="background:rgba(16,185,129,.15)"><div class="h-1.5 rounded-full" style="background:var(--success);width:0%" id="kri-africa-bar"></div></div>
                 <div class="flex justify-between items-center mt-2">
-                  <span class="text-xs">North→South</span>
-                  <span class="text-sm font-bold" style="color:var(--warning)" id="kri-north-south">—</span>
+                  <span class="text-xs">North-South</span>
+                  <span class="text-sm font-bold" style="color:var(--warning)" id="kri-north-south">-</span>
                 </div>
                 <div class="w-full rounded-full h-1.5" style="background:rgba(245,158,11,.15)"><div class="h-1.5 rounded-full" style="background:var(--warning);width:0%" id="kri-ns-bar"></div></div>
                 <div class="flex justify-between items-center mt-2">
                   <span class="text-xs">Unclassified</span>
-                  <span class="text-sm font-bold" style="color:var(--text-muted)" id="kri-unclassified">—</span>
+                  <span class="text-sm font-bold" style="color:var(--text-muted)" id="kri-unclassified">-</span>
                 </div>
               </div>
             </div>
             <div class="rounded-xl p-4" style="background:rgba(16,185,129,.04);border:1px solid rgba(16,185,129,.1)">
               <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">TREND</p>
-              <p class="text-xl font-bold" id="kri-trend">—</p>
+              <p class="text-xl font-bold" id="kri-trend">-</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)">vs prior period</p>
               <p class="text-xs font-semibold mt-4 mb-1" style="color:var(--text-muted)">TOTAL PAPERS</p>
-              <p class="text-xl font-bold" style="color:var(--text)" id="kri-total">—</p>
+              <p class="text-xl font-bold" style="color:var(--text)" id="kri-total">-</p>
             </div>
           </div>
         </div>
@@ -528,21 +528,21 @@
         <!-- Research Portfolio Diversity Score -->
         <div class="surface rounded-2xl p-5 mt-5">
           <div class="flex items-center justify-between mb-1">
-            <p class="section-label mb-0">Research Portfolio Diversity <span class="info-icon" title="Shannon entropy across UN SDG tags, normalized 0–100">&#9432;</span></p>
+            <p class="section-label mb-0">Research Portfolio Diversity <span class="info-icon" title="Shannon entropy across UN SDG tags, normalized 0-100">&#9432;</span></p>
             <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(99,102,241,.12);color:var(--accent)">Novel Metric</span>
           </div>
-          <p class="text-xs mb-4" style="color:var(--text-muted)">Shannon entropy across UN Sustainable Development Goals. 100 = perfectly balanced portfolio; continental baseline ≈ 45/100. Gap SDGs flag under-served research areas.</p>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Shannon entropy across UN Sustainable Development Goals. 100 = perfectly balanced portfolio; continental baseline ~ 45/100. Gap SDGs flag under-served research areas.</p>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div class="rounded-xl p-5 text-center" style="background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.18)">
-              <p class="text-4xl font-bold" style="color:var(--accent)" id="rpd-score">—</p>
+              <p class="text-4xl font-bold" style="color:var(--accent)" id="rpd-score">-</p>
               <p class="text-xs font-semibold mt-1">Diversity Score / 100</p>
               <p class="text-xs mt-2" style="color:var(--text-muted)" id="rpd-interpretation"></p>
             </div>
             <div class="rounded-xl p-4" style="background:rgba(99,102,241,.04);border:1px solid rgba(99,102,241,.1)">
               <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">DOMINANT SDG</p>
-              <p class="text-base font-bold" style="color:var(--accent)" id="rpd-dominant">—</p>
+              <p class="text-base font-bold" style="color:var(--accent)" id="rpd-dominant">-</p>
               <p class="text-xs font-semibold mt-4 mb-1" style="color:var(--text-muted)">VS CONTINENTAL BASELINE</p>
-              <p class="text-2xl font-bold" id="rpd-vs-baseline">—</p>
+              <p class="text-2xl font-bold" id="rpd-vs-baseline">-</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)">vs ~45 baseline</p>
             </div>
             <div class="rounded-xl p-4" style="background:rgba(99,102,241,.04);border:1px solid rgba(99,102,241,.1)">
@@ -558,38 +558,38 @@
             <p class="section-label mb-0">Open Science Health Score <span class="info-icon" title="Composite: OA 40% + DOI 25% + ORCID 20% + ARK 15%">&#9432;</span></p>
             <span class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(245,158,11,.12);color:var(--warning)">Novel Metric</span>
           </div>
-          <p class="text-xs mb-4" style="color:var(--text-muted)">Composite open-access + identifier health. Weighted: Open Access (40%), DOI (25%), ORCID (20%), ARK (15%). Continental baseline ≈ 38/100.</p>
+          <p class="text-xs mb-4" style="color:var(--text-muted)">Composite open-access + identifier health. Weighted: Open Access (40%), DOI (25%), ORCID (20%), ARK (15%). Continental baseline ~ 38/100.</p>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div class="rounded-xl p-5 text-center" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18)">
-              <p class="text-5xl font-bold" style="color:var(--warning)" id="oshs-grade">—</p>
+              <p class="text-5xl font-bold" style="color:var(--warning)" id="oshs-grade">-</p>
               <p class="text-xs font-semibold mt-1">Grade</p>
-              <p class="text-2xl font-bold mt-2" style="color:var(--text)" id="oshs-score">—</p>
+              <p class="text-2xl font-bold mt-2" style="color:var(--text)" id="oshs-score">-</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)" id="oshs-interpretation"></p>
             </div>
             <div class="rounded-xl p-4" style="background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.1)">
               <p class="text-xs font-semibold mb-3" style="color:var(--text-muted)">COMPONENTS</p>
               <div class="space-y-3">
                 <div>
-                  <div class="flex justify-between text-xs mb-1"><span>Open Access (40%)</span><span class="font-bold" id="oshs-oa">—</span></div>
+                  <div class="flex justify-between text-xs mb-1"><span>Open Access (40%)</span><span class="font-bold" id="oshs-oa">-</span></div>
                   <div class="w-full rounded-full h-1.5" style="background:rgba(245,158,11,.15)"><div class="h-1.5 rounded-full" style="background:var(--warning)" id="oshs-oa-bar"></div></div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-xs mb-1"><span>DOI (25%)</span><span class="font-bold" id="oshs-doi">—</span></div>
+                  <div class="flex justify-between text-xs mb-1"><span>DOI (25%)</span><span class="font-bold" id="oshs-doi">-</span></div>
                   <div class="w-full rounded-full h-1.5" style="background:rgba(99,102,241,.15)"><div class="h-1.5 rounded-full" style="background:var(--accent)" id="oshs-doi-bar"></div></div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-xs mb-1"><span>ORCID (20%)</span><span class="font-bold" id="oshs-orcid">—</span></div>
+                  <div class="flex justify-between text-xs mb-1"><span>ORCID (20%)</span><span class="font-bold" id="oshs-orcid">-</span></div>
                   <div class="w-full rounded-full h-1.5" style="background:rgba(16,185,129,.15)"><div class="h-1.5 rounded-full" style="background:var(--success)" id="oshs-orcid-bar"></div></div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-xs mb-1"><span>ARK (15%)</span><span class="font-bold" id="oshs-ark">—</span></div>
+                  <div class="flex justify-between text-xs mb-1"><span>ARK (15%)</span><span class="font-bold" id="oshs-ark">-</span></div>
                   <div class="w-full rounded-full h-1.5" style="background:rgba(139,92,246,.15)"><div class="h-1.5 rounded-full" style="background:#8b5cf6" id="oshs-ark-bar"></div></div>
                 </div>
               </div>
             </div>
             <div class="rounded-xl p-4" style="background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.1)">
               <p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">VS CONTINENTAL BASELINE</p>
-              <p class="text-2xl font-bold" id="oshs-vs-baseline">—</p>
+              <p class="text-2xl font-bold" id="oshs-vs-baseline">-</p>
               <p class="text-xs mt-1" style="color:var(--text-muted)">vs ~38 continental avg</p>
             </div>
           </div>
@@ -628,7 +628,7 @@
           </div>
           <div class="surface rounded-2xl p-5">
             <p class="section-label">Research Gap Radar <span class="info-icon" data-method="alignment_gap">&#9432;</span></p>
-            <p class="text-xs mb-3" style="color:var(--text-muted)">Framework pillars where measured output falls below the gap threshold — candidates for future funding and research directives.</p>
+            <p class="text-xs mb-3" style="color:var(--text-muted)">Framework pillars where measured output falls below the gap threshold - candidates for future funding and research directives.</p>
             <div id="align-gaps" class="space-y-1.5 overflow-y-auto" style="max-height:300px"></div>
             <p id="gaps-narrative" class="chart-narrative text-xs mt-3" style="color:var(--text-muted)"></p>
           </div>
@@ -638,7 +638,7 @@
           <div id="align-pillars" class="grid grid-cols-1 lg:grid-cols-3 gap-3"></div>
         </div>
         <div class="surface rounded-2xl p-5">
-          <p class="section-label">Full Alignment Matrix — All Frameworks</p>
+          <p class="section-label">Full Alignment Matrix - All Frameworks</p>
           <div id="align-matrix" class="overflow-x-auto"></div>
         </div>
       </div>
@@ -648,7 +648,7 @@
     <div id="atab-collab" class="atab-content hidden">
       <div class="mb-5">
         <h2 class="text-xl font-bold mb-1" style="color:var(--text)">Intra-African Collaboration</h2>
-        <p class="text-sm" style="color:var(--text-muted)">Continental co-authorship networks — measuring South-South knowledge ecosystems rather than North-export prestige.</p>
+        <p class="text-sm" style="color:var(--text-muted)">Continental co-authorship networks - measuring South-South knowledge ecosystems rather than North-export prestige.</p>
       </div>
       <div id="collab-loading" class="flex items-center gap-3 py-10 justify-center">
         <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color:var(--accent);border-top-color:transparent"></div>
@@ -696,7 +696,7 @@
         </div>
       </div>
     </div>
-    
+
     <!--  SPECIAL COLLECTIONS  -->
     <div id="atab-special" class="atab-content hidden">
       <div class="mb-5 flex items-start justify-between gap-4">
@@ -723,7 +723,7 @@
 <!-- Discreet admin footer -->
 <div id="admin-footer" class="hidden text-center py-4" style="opacity:0.35">
   <button onclick="clearHalfAndRecrawl()" class="text-xs" style="color:var(--text-muted);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px" title="Admin: clear oldest 50% of papers and start fresh crawl">
-    ⚙ reset &amp; recrawl
+     reset &amp; recrawl
   </button>
 </div>
 
@@ -750,7 +750,7 @@ function clearHalfAndRecrawl(){
 }
 function doConfirmClear(){
   const btn=document.getElementById('clear-confirm-btn');
-  btn.disabled=true; btn.textContent='Working…';
+  btn.disabled=true; btn.textContent='Working...';
   fetch('/api/admin/clear-half-recrawl',{method:'POST',headers:{'Content-Type':'application/json'}})
     .then(r=>r.json())
     .then(d=>{

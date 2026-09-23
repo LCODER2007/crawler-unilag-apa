@@ -37,7 +37,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
     ):
         """
         boost_special: fan out extra Crossref queries seeded with SC keywords
-                       (default True — heavy SC weight).
+                       (default True - heavy SC weight).
         sc_only:       skip the plain-affiliation query; crawl only SC-seeded fan-outs.
         """
         super().__init__(*args, **kwargs)
@@ -84,10 +84,10 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
 
     async def start(self):
-        # Wave 1 — plain affiliation query
+        # Wave 1 - plain affiliation query
         if not self.sc_only:
             url = self._build_url()
-            # DEBUG not INFO — with 300+ SC seed waves, logging every raw
+            # DEBUG not INFO - with 300+ SC seed waves, logging every raw
             # query URL at INFO level floods the dashboard's live feed
             # (which runs at LOG_LEVEL=INFO) with unreadable noise; still
             # available for real debugging via LOG_LEVEL=DEBUG.
@@ -98,7 +98,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 meta={"wave": "ror", "query": "", "offset": 0},
             )
 
-        # Wave 2 — one fan-out request per SC seed phrase, AND-ed with affiliation.
+        # Wave 2 - one fan-out request per SC seed phrase, AND-ed with affiliation.
         if self.boost_special:
             for seed in SC_SEED_KEYWORDS:
                 url = self._build_url(query=seed)
@@ -152,12 +152,12 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     self.logger.debug(f"Crossref aff FAIL: {title[:60]}")
                     continue
 
-            # SC gate — only count papers the storage pipeline will keep, so the
+            # SC gate - only count papers the storage pipeline will keep, so the
             # crawl keeps paginating until `target` real SC papers are found.
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) papers
+            # Dedup gate - skip (don't count, but keep paginating past) papers
             # already in the DB, so repeat crawls make real progress instead
             # of re-filling target with the same deterministic top results.
             if self._is_known(doi=doi, url=url, title=title):
@@ -171,7 +171,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     break
 
             # Crossref funder data uses Funder Registry DOIs (10.13039/...),
-            # not ROR — no ror field to map, unlike OpenAlex.
+            # not ROR - no ror field to map, unlike OpenAlex.
             funders = []
             for f in work.get("funder", []) or []:
                 name = f.get("name", "")
@@ -204,7 +204,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution_ror": self.ror_id,
                 "funders": funders,
                 # "strong" only when Crossref actually returned a structured
-                # author.affiliation string that was verified — when it's
+                # author.affiliation string that was verified - when it's
                 # empty the item is accepted on the query.affiliation server
                 # search alone, which is relevance-ranked, not a guarantee.
                 "affiliation_confidence": "strong" if raw_affs else "weak",
@@ -212,7 +212,7 @@ class CrossrefSpider(DedupAwareSpiderMixin, scrapy.Spider):
             yield item
             self._mark_seen(doi=doi, url=url, title=title)
 
-        # Deep pagination — stop when target reached or no more results.
+        # Deep pagination - stop when target reached or no more results.
         offset = response.meta.get("offset", 0) + 50
         if (
             items

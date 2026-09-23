@@ -1,7 +1,7 @@
 # Multi-Institution Crawler Guide
 
-**Version**: 1.0  
-**Date**: May 1, 2026  
+**Version**: 1.0
+**Date**: May 1, 2026
 **Status**: Production Ready
 
 ---
@@ -51,7 +51,7 @@ python crawl_multi_institution.py --institutions unilag,ui --target 100 --spider
 - Author ORCID IDs
 - Comprehensive metadata
 
-**Rate Limit**: 1 second delay  
+**Rate Limit**: 1 second delay
 **Expected Speed**: ~50 papers/minute
 
 ---
@@ -69,7 +69,7 @@ python crawl_multi_institution.py --institutions ui,oau --target 50 --spider cro
 - Journal metadata
 - Author information
 
-**Rate Limit**: 1 second delay  
+**Rate Limit**: 1 second delay
 **Expected Speed**: ~30 papers/minute
 
 ---
@@ -87,7 +87,7 @@ python crawl_multi_institution.py --institutions unilag --target 30 --spider arx
 - Preprint metadata
 - Subject categories
 
-**Rate Limit**: None  
+**Rate Limit**: None
 **Expected Speed**: ~20 papers/minute
 
 ---
@@ -105,8 +105,8 @@ python crawl_multi_institution.py --institutions ui --target 20 --spider scholar
 - Broad coverage
 - Proxy rotation
 
-**Rate Limit**: 5 second delay (strict)  
-**Expected Speed**: ~5 papers/minute  
+**Rate Limit**: 5 second delay (strict)
+**Expected Speed**: ~5 papers/minute
 **Note**: Use sparingly to avoid IP blocks
 
 ---
@@ -124,8 +124,8 @@ python crawl_multi_institution.py --institutions unilag --target 50 --spider orc
 - Publication metadata
 - Journal information
 
-**Rate Limit**: 2 second delay  
-**Expected Speed**: ~10 papers/minute  
+**Rate Limit**: 2 second delay
+**Expected Speed**: ~10 papers/minute
 **Note**: Requires ORCID cache file (e.g., `data/unilag_orcids.json`)
 
 ---
@@ -256,7 +256,7 @@ Watch the crawl progress:
 
 ### Issue 1: Institution Not Found
 ```
-✗ 'xyz' not found in registry
+ 'xyz' not found in registry
 ```
 
 **Solution**: Check institution short name. Use one of: `unilag`, `ui`, `oau`, `unn`, `abu`
@@ -292,7 +292,7 @@ No ORCID cache found. Run find_orcids.py first.
 429 Too Many Requests
 ```
 
-**Solution**: 
+**Solution**:
 - Increase `DOWNLOAD_DELAY` in spider settings
 - Use different spider
 - Wait before retrying
@@ -472,18 +472,18 @@ python -c "from uraas.config.institutions import get_registry; [print(f'{c.short
 
 | Feature | OpenAlex | Crossref | ArXiv | Scholar | ORCID |
 |---------|----------|----------|-------|---------|-------|
-| ROR Support | ✓ | ✗ | ✗ | ✗ | ✗ |
+| ROR Support |  |  |  |  |  |
 | DOI Coverage | High | Very High | Medium | Medium | High |
-| PDF Links | ✓ | Limited | ✓ | Limited | ✗ |
-| Abstracts | ✓ | Limited | ✓ | ✓ | ✗ |
-| Author ORCID | ✓ | ✗ | ✗ | ✗ | ✓ |
-| Citations | ✗ | ✓ | ✗ | ✓ | ✗ |
+| PDF Links |  | Limited |  | Limited |  |
+| Abstracts |  | Limited |  |  |  |
+| Author ORCID |  |  |  |  |  |
+| Citations |  |  |  |  |  |
 | Speed | Fast | Medium | Medium | Slow | Medium |
 | Reliability | High | High | High | Medium | High |
 | Coverage | Broad | Broad | STEM | Broad | Verified |
 
 ---
 
-**Guide Version**: 1.0  
-**Last Updated**: May 1, 2026  
+**Guide Version**: 1.0
+**Last Updated**: May 1, 2026
 **Maintained By**: Technical Team

@@ -4,8 +4,10 @@ with open("uraas/dashboard/templates/index.html", "r", encoding="utf-8") as f:
     content = f.read()
 
 # Find the special collections section and replace it
-pattern = r"(    \s*<!--\s+SPECIAL COLLECTIONS.*?</div>\n\n  </div><!-- end analytics tab -->)"
-replacement = """    
+pattern = (
+    r"(\s*<!--\s+SPECIAL COLLECTIONS.*?</div>\n\n  </div><!-- end analytics tab -->)"
+)
+replacement = """
     <!--  SPECIAL COLLECTIONS  -->
     <div id="atab-special" class="atab-content hidden">
       <div class="mb-5 flex items-start justify-between gap-4">

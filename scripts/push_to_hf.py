@@ -1,5 +1,5 @@
 """
-Push URAAS to Hugging Face Spaces — Lordkiki/APA-URAAS
+Push URAAS to Hugging Face Spaces - Lordkiki/APA-URAAS
 
 Usage:
     python scripts/push_to_hf.py
@@ -7,10 +7,10 @@ Usage:
 What it does:
   1. Logs you into HF (paste your write token when prompted)
   2. Stages a clean copy of the project:
-       Dockerfile.hf  → Dockerfile   (HF Spaces Dockerfile, not the prod one)
-       README.hf.md   → README.md    (has the HF Space frontmatter)
+       deploy/hf/Dockerfile -> Dockerfile  (HF Spaces build, not the prod one)
+       deploy/hf/README.md  -> README.md   (has the HF Space frontmatter)
   3. Uploads everything to the Space via huggingface_hub.upload_folder
-  4. HF triggers an auto-build — app is live in ~5 minutes
+  4. HF triggers an auto-build - app is live in ~5 minutes
 """
 
 import os
@@ -18,7 +18,7 @@ import shutil
 import sys
 import tempfile
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# -- Config --------------------------------------------------------------------
 REPO_ID = "Lordkiki/APA-URAAS"
 REPO_TYPE = "space"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +33,9 @@ IGNORE_DIRS = {
     "storage",
     "logs",
     "data",
+    "scratch",
+    ".vscode",
+    ".idea",
     "backups",
     "node_modules",
     ".venv",
@@ -44,24 +47,37 @@ IGNORE_FILES = {
     ".env.prod",
     ".env.prod.example",
     "uraas.db",  # DB lives on /data in HF, not in image
-    "Dockerfile",  # replaced by Dockerfile.hf
-    "README.md",  # replaced by README.hf.md (has HF frontmatter)
-    "docker-compose.yml",
-    "docker-compose.prod.yml",
-    "docker-compose.replica.yml",
-    "docker-compose.demo.yml",
+}
+
+# Files staged at a different path on the Space than they live at in the repo.
+# HF Spaces requires the Dockerfile and the frontmatter-bearing README at the
+# repo root, so the HF-specific copies under deploy/hf/ are promoted there.
+HF_RENAMES = {
+    "deploy/hf/Dockerfile": "Dockerfile",
+    "deploy/hf/README.md": "README.md",
+}
+
+# Repo-root files the HF copies above replace. Matched on the full relative
+# path, not the basename, so deploy/hf/Dockerfile is not caught by them.
+IGNORE_REL_PATHS = {
+    "Dockerfile",  # production Dockerfile; deploy/hf/Dockerfile wins on HF
+    "README.md",  # GitHub README; deploy/hf/README.md wins on HF
 }
 IGNORE_EXTS = {
     ".pyc",
     ".pyo",
     ".pyd",
-    # Database files/backups — belt-and-suspenders beyond the exact
+    # Presentation and document sources: reference material for humans,
+    # dead weight in a container image.
+    ".pptx",
+    ".docx",
+    # Database files/backups - belt-and-suspenders beyond the exact
     # "uraas.db" name check below and the startswith("uraas.db") check,
     # since a missed pattern here means real crawled data (author names,
     # DOIs, institutional affiliations, emails) goes to a PUBLIC repo.
     # Confirmed this actually happened (2026-07-19): uraas.db.bak, a
     # 1819-item/14MB snapshot, was uploaded because only "uraas.db" itself
-    # was excluded, not the ".bak" variant — deleted from the live Space
+    # was excluded, not the ".bak" variant - deleted from the live Space
     # after the fact, but should never have gone up in the first place.
     ".bak",
     ".backup",
@@ -74,20 +90,36 @@ IGNORE_EXTS = {
 
 
 def should_skip(rel_path: str, is_dir: bool) -> bool:
-    parts = rel_path.replace("\\", "/").split("/")
-    name = parts[-1]
+    rel = rel_path.replace("\\", "/")
+    name = rel.split("/")[-1]
     if is_dir:
-        return name in IGNORE_DIRS
-    # Catches any suffix variant regardless of extension — uraas.db-wal,
+        if name in IGNORE_DIRS:
+            return True
+        # Descend into deploy/ only as far as deploy/hf/ - the compose, k8s,
+        # nginx and Render configs next to it target other platforms entirely.
+        return rel.startswith("deploy/") and not rel.startswith("deploy/hf")
+    if rel in HF_RENAMES:
+        return False
+    if rel in IGNORE_REL_PATHS:
+        return True
+    if rel.startswith("deploy/") and not rel.startswith("deploy/hf/"):
+        return True
+    # Catches any suffix variant regardless of extension - uraas.db-wal,
     # uraas.db-shm, uraas.db-journal, timestamped backups like
-    # uraas.db.20260629, etc. — not just the exact names/extensions above.
+    # uraas.db.20260629, etc. - not just the exact names/extensions above.
     if name.startswith("uraas.db"):
+        return True
+    # Any dotenv variant, not just the exact names above. Live-verified
+    # 2026-09: scratch/test.env carried real password hashes and Postgres
+    # and Redis passwords, and was being uploaded to the public Space on
+    # every deploy because only the literal ".env" was excluded.
+    if name.endswith(".env"):
         return True
     return name in IGNORE_FILES or os.path.splitext(name)[1].lower() in IGNORE_EXTS
 
 
 def stage_project(src: str, dst: str) -> int:
-    """Copy src → dst with HF-specific renames and exclusions."""
+    """Copy src -> dst with HF-specific renames and exclusions."""
     count = 0
     for root, dirs, files in os.walk(src):
         rel_root = os.path.relpath(root, src)
@@ -109,17 +141,7 @@ def stage_project(src: str, dst: str) -> int:
 
             src_file = os.path.join(root, fname)
 
-            # HF-specific renames
-            if fname == "Dockerfile.hf":
-                dest_rel = (
-                    os.path.join(os.path.dirname(rel), "Dockerfile")
-                    if os.path.dirname(rel)
-                    else "Dockerfile"
-                )
-            elif fname == "README.hf.md":
-                dest_rel = "README.md"
-            else:
-                dest_rel = rel
+            dest_rel = HF_RENAMES.get(rel.replace("\\", "/"), rel)
 
             dst_file = os.path.join(dst, dest_rel)
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
@@ -129,7 +151,7 @@ def stage_project(src: str, dst: str) -> int:
 
 
 def main():
-    # ── Ensure huggingface_hub is available ────────────────────────────────
+    # -- Ensure huggingface_hub is available --------------------------------
     try:
         from huggingface_hub import HfApi, login
     except ImportError:
@@ -144,9 +166,9 @@ def main():
     print(f"  Space: {REPO_ID}")
     print(_SEP)
 
-    # ── Auth ───────────────────────────────────────────────────────────────
+    # -- Auth ---------------------------------------------------------------
     # Live-verified 2026-08-04: with no HF_TOKEN env var, this used to always
-    # call login() with no token, which prompts interactively for one — in
+    # call login() with no token, which prompts interactively for one - in
     # any non-interactive shell (CI, a background task, this script run
     # without a TTY) that blocks forever waiting for input that can never
     # arrive, even when a valid token is already cached from a previous
@@ -184,9 +206,9 @@ def main():
 
     api = HfApi()
 
-    # ── Stage files ────────────────────────────────────────────────────────
+    # -- Stage files --------------------------------------------------------
     print()
-    print("Staging project files…")
+    print("Staging project files...")
     with tempfile.TemporaryDirectory() as staging:
         n = stage_project(REPO_ROOT, staging)
         staged_names = os.listdir(staging)
@@ -195,16 +217,16 @@ def main():
         # Sanity checks
         has_dockerfile = "Dockerfile" in staged_names
         has_readme = "README.md" in staged_names
-        has_start_sh = os.path.exists(os.path.join(staging, "scripts", "start_hf.sh"))
+        has_start_sh = os.path.exists(os.path.join(staging, "deploy", "hf", "start.sh"))
 
         print(
-            f"  Dockerfile   : {'OK' if has_dockerfile else 'MISSING -- check Dockerfile.hf exists'}"
+            f"  Dockerfile   : {'OK' if has_dockerfile else 'MISSING -- check deploy/hf/Dockerfile exists'}"
         )
         print(
-            f"  README.md    : {'OK' if has_readme else 'MISSING -- check README.hf.md exists'}"
+            f"  README.md    : {'OK' if has_readme else 'MISSING -- check deploy/hf/README.md exists'}"
         )
         print(
-            f"  start_hf.sh  : {'OK' if has_start_sh else 'MISSING -- check scripts/start_hf.sh'}"
+            f"  start.sh     : {'OK' if has_start_sh else 'MISSING -- check deploy/hf/start.sh'}"
         )
 
         if not has_dockerfile:
@@ -212,8 +234,8 @@ def main():
             print("ERROR: Dockerfile missing from staging. Aborting.")
             sys.exit(1)
 
-        # ── Upload ─────────────────────────────────────────────────────────
-        # Skip HF's remote YAML validation — it times out on some networks.
+        # -- Upload ---------------------------------------------------------
+        # Skip HF's remote YAML validation - it times out on some networks.
         # README.hf.md is already valid so this is safe to skip.
         api._validate_yaml = lambda *a, **kw: None
 
@@ -223,8 +245,8 @@ def main():
             folder_path=staging,
             repo_id=REPO_ID,
             repo_type=REPO_TYPE,
-            commit_message="Deploy URAAS — African Research Archival & Analytics System",
-            # upload_folder only adds and updates — without this, a file
+            commit_message="Deploy URAAS - African Research Archival & Analytics System",
+            # upload_folder only adds and updates - without this, a file
             # deleted locally lives on in the Space forever. Live-verified
             # 2026-09: 10 duplicate institution configs were removed here and
             # the deployed registry still served all 53 afterwards, because
@@ -235,7 +257,7 @@ def main():
             delete_patterns=["config/institutions/*.json"],
         )
 
-    # ── Done ───────────────────────────────────────────────────────────────
+    # -- Done ---------------------------------------------------------------
     print()
     print(_SEP)
     print("  Upload complete! Build starting on HF (~5 min).")
@@ -244,44 +266,76 @@ def main():
     print("  App URL    : https://lordkiki-apa-uraas.hf.space")
     print()
     print("  --- Secrets to set in Space Settings -> Variables & Secrets ---")
-    secrets = [
-        ("URAAS_ENV", "production"),
-        (
-            "DASHBOARD_SECRET_KEY",
-            "307790fc5aff3fe1e766303f6b94e2fc28c831582bfba5b34802e2c9cbbac0ce",
-        ),
-        ("ADMIN_USERNAME", "admin"),
-        (
-            "ADMIN_PASSWORD_HASH",
-            "scrypt:32768:8:1$r2KZFX32rJ2twbfV$16f394a253c2b505a215ff2747f7dafbb098eb0eb8b4e6bb9fb521f0ea38af8ce71f33d2354245d68cc383678257367bf410aa45f835b5e848bff95a746878c8",
-        ),
-        ("VIEWER_USERNAME", "viewer"),
-        (
-            "VIEWER_PASSWORD_HASH",
-            "scrypt:32768:8:1$M8OjWxX64B38akos$2803ad5b29508c4d69df115579630b2a4cbdf2c8406157598c088d5511a7b3d79f91399035040660705413c63fdc41aa0d020cbd7b45038c8ed51d20092ea609",
-        ),
-        ("SMTP_HOST", "smtp.gmail.com"),
-        ("SMTP_PORT", "587"),
-        ("SMTP_USE_TLS", "true"),
-        ("SMTP_USER", "lawalgiyath200716@gmail.com"),
-        ("SMTP_PASSWORD", "ufwqbdrecpfrzppn"),
-        ("SMTP_FROM", "URAAS UNILAG <lawalgiyath200716@gmail.com>"),
-        ("DASHBOARD_BASE_URL", "https://lordkiki-apa-uraas.hf.space"),
-        ("DASHBOARD_CORS_ORIGINS", "https://lordkiki-apa-uraas.hf.space"),
-        ("ARK_NAAN", "99999"),
-        ("ARK_SHOULDER", "z1"),
-        ("OPENALEX_MAILTO", "lawalgiyath200716@gmail.com"),
-        ("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server"),
-        ("DSPACE_USERNAME", "<professor email — set as Secret, not Variable>"),
-        ("DSPACE_PASSWORD", "<professor password — set as Secret, not Variable>"),
-    ]
-    max_k = max(len(k) for k, _ in secrets)
-    for k, v in secrets:
-        print(f"  {k:<{max_k}} = {v}")
-    print()
-    print("  Admin login : admin / URAAS2024demo")
-    print("  Viewer login: viewer / view2024")
+    print(_secrets_checklist())
     print(_SEP)
+
+
+# Every variable the Space needs, and where its value comes from. Values are
+# read from the local environment (.env included) at print time and are
+# deliberately NOT in this file: it is committed to a public repository, and
+# it previously carried a live Gmail app password, both dashboard password
+# hashes and the session secret key in plain source.
+SPACE_VARIABLES = [
+    ("URAAS_ENV", "production"),
+    ("DASHBOARD_BASE_URL", "https://lordkiki-apa-uraas.hf.space"),
+    ("DASHBOARD_CORS_ORIGINS", "https://lordkiki-apa-uraas.hf.space"),
+    ("DSPACE_API_URL", "https://api-ir.unilag.edu.ng/server"),
+    ("ARK_NAAN", "99999"),
+    ("ARK_SHOULDER", "z1"),
+    ("SMTP_HOST", "smtp.gmail.com"),
+    ("SMTP_PORT", "587"),
+    ("SMTP_USE_TLS", "true"),
+]
+
+# Set as HF *Secrets*, never Variables - a Variable is readable by anyone who
+# can open the Space settings.
+SPACE_SECRETS = [
+    "DASHBOARD_SECRET_KEY",
+    "ADMIN_USERNAME",
+    "ADMIN_PASSWORD_HASH",
+    "VIEWER_USERNAME",
+    "VIEWER_PASSWORD_HASH",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
+    "OPENALEX_MAILTO",
+    "DSPACE_USERNAME",
+    "DSPACE_PASSWORD",
+]
+
+
+def _secrets_checklist() -> str:
+    """The Space configuration checklist, filled in from the local .env.
+
+    Anything not set locally prints as a placeholder rather than a value, so
+    running this on a machine without the .env still produces the full list
+    of what the Space needs.
+    """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(os.path.join(REPO_ROOT, ".env"))
+    except Exception:
+        pass
+
+    lines = []
+    width = max(len(k) for k, _ in SPACE_VARIABLES + [(s, "") for s in SPACE_SECRETS])
+    lines.append("  Variables (safe to set as plain Variables):")
+    for key, default in SPACE_VARIABLES:
+        lines.append(f"    {key:<{width}} = {os.getenv(key) or default}")
+    lines.append("")
+    lines.append("  Secrets (set as Secrets, not Variables):")
+    for key in SPACE_SECRETS:
+        value = os.getenv(key)
+        lines.append(f"    {key:<{width}} = {value if value else '<not set locally>'}")
+    lines.append("")
+    lines.append("  Dashboard logins are whatever ADMIN_PASSWORD_HASH and")
+    lines.append("  VIEWER_PASSWORD_HASH above were generated from. To rotate:")
+    lines.append(
+        '    python -c "from werkzeug.security import generate_password_hash as h;'
+        " print(h(input('new password: ')))\""
+    )
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

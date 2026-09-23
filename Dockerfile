@@ -55,11 +55,11 @@ USER uraas
 
 EXPOSE 8080
 
-# Health check — uses the public /health endpoint (no auth required).
+# Health check - uses the public /health endpoint (no auth required).
 # /api/analytics/overview requires a login session and always returns 401 unauthenticated.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run database initialization and then start gunicorn using the config file.
 # gunicorn_config.py sets gthread workers to match SocketIO async_mode="threading".
-CMD python scripts/init_db.py && gunicorn --config gunicorn_config.py uraas.dashboard.app:app
+CMD python scripts/init_db.py && gunicorn --config deploy/gunicorn_config.py uraas.dashboard.app:app

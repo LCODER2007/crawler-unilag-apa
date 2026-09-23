@@ -3,7 +3,7 @@
 Spec reference: UNILAG_IR_Build_Spec.docx §4 & §7
 Backend base: https://api-ir.unilag.edu.ng/server
 
-Auth pattern (§4.1): prime CSRF token → POST login → JWT + refreshed CSRF.
+Auth pattern (§4.1): prime CSRF token -> POST login -> JWT + refreshed CSRF.
 Every write sends both headers; CSRF rotates on each response and must be
 tracked.  Reads on public objects need no auth.
 """
@@ -42,12 +42,12 @@ class DSpaceClient:
         self.jwt: str | None = None
         self.csrf: str | None = None
 
-    # ── Authentication ────────────────────────────────────────────────────────
+    # -- Authentication --------------------------------------------------------
 
     def _prime_csrf(self) -> str:
         """GET /api/authn/status to seed the CSRF cookie/header.
 
-        DSpace 9.1 does not return a CSRF token on GET requests — the token is
+        DSpace 9.1 does not return a CSRF token on GET requests - the token is
         only issued on the first failed write (403).  This method returns
         whatever it finds; the login() method handles the missing-token case
         by retrying after the first 403.
@@ -104,7 +104,7 @@ class DSpaceClient:
 
         if r.status_code == 401:
             raise IRConnectionError(
-                "DSpace login failed — check DSPACE_USERNAME/PASSWORD"
+                "DSpace login failed - check DSPACE_USERNAME/PASSWORD"
             )
         r.raise_for_status()
         auth = r.headers.get("Authorization", "")
@@ -119,7 +119,7 @@ class DSpaceClient:
             "X-XSRF-TOKEN": self.csrf,
         }
 
-    # ── Read-only probes (no auth required) ───────────────────────────────────
+    # -- Read-only probes (no auth required) -----------------------------------
 
     def probe(self) -> dict:
         """Check connectivity and return DSpace version.  Safe to call without creds."""
@@ -154,7 +154,7 @@ class DSpaceClient:
         """Return facet buckets from the discovery layer (§7.2).
 
         facet: one of dateIssued, author, subject, has_content_in_original_bundle,
-        entityType, access_status — the actual configured list on this
+        entityType, access_status - the actual configured list on this
         instance (confirmed live 2026-07-19 via GET .../api/discover/facets,
         no dsoType filter). "itemtype" is NOT valid here (400) despite
         appearing in some DSpace docs/examples.
@@ -216,7 +216,7 @@ class DSpaceClient:
             if not ep_href:
                 return []
 
-            # 2. Fetch eperson → groups link
+            # 2. Fetch eperson -> groups link
             r2 = self._s.get(ep_href, headers=self._write_headers(), timeout=_TIMEOUT)
             r2.raise_for_status()
             groups_href = r2.json().get("_links", {}).get("groups", {}).get("href", "")
@@ -250,7 +250,7 @@ class DSpaceClient:
         total = self.get_total_items()
         by_year = self.get_facet("dateIssued", size=30)
         # "itemtype" isn't a real facet on this instance (confirmed live
-        # 2026-07-19: 400 Bad Request — GET .../api/discover/facets returns
+        # 2026-07-19: 400 Bad Request - GET .../api/discover/facets returns
         # the actual configured list: author, subject, dateIssued,
         # has_content_in_original_bundle, entityType, access_status).
         # "entityType" IS valid but returns zero values here (this instance
@@ -265,7 +265,7 @@ class DSpaceClient:
             "by_type": by_type,
         }
 
-    # ── Deposit (Path B — REST submission flow, §6.2) ─────────────────────────
+    # -- Deposit (Path B - REST submission flow, §6.2) -------------------------
 
     def _check_duplicate(self, doi: str | None, title: str, year: str | None) -> bool:
         """Return True if an item with this DOI or (title+year) already exists in IR."""
@@ -321,7 +321,7 @@ class DSpaceClient:
         Steps (§6.2):
           1. Create workspace item in the target collection (optionally with PDF)
           2. PATCH Dublin Core metadata
-          3. POST to workflow → archived
+          3. POST to workflow -> archived
 
         Returns {"status": "ok"|"duplicate"|"error", "dspace_id": ..., "message": ...}
         """
@@ -332,7 +332,7 @@ class DSpaceClient:
         if self._check_duplicate(item.doi, item.title or "", item.dc_date_issued):
             return {"status": "duplicate", "message": "Already exists in IR"}
 
-        # 1. Create workspace item ──────────────────────────────────────────────
+        # 1. Create workspace item ----------------------------------------------
         headers = self._write_headers()
         params = {"owningCollection": collection_uuid}
 
@@ -357,7 +357,7 @@ class DSpaceClient:
 
         self._refresh_csrf(r)
         if r.status_code == 401:
-            # JWT expired mid-batch — re-auth once and retry
+            # JWT expired mid-batch - re-auth once and retry
             self.login()
             r = self._s.post(
                 f"{self.base}/api/submission/workspaceitems",
@@ -378,7 +378,7 @@ class DSpaceClient:
         if not ws_id:
             return {"status": "error", "message": "No workspace item ID returned"}
 
-        # 2. PATCH Dublin Core metadata ────────────────────────────────────────
+        # 2. PATCH Dublin Core metadata ----------------------------------------
         patch_ops = _build_metadata_patch(item)
         r2 = self._s.patch(
             f"{self.base}/api/submission/workspaceitems/{ws_id}",
@@ -395,7 +395,7 @@ class DSpaceClient:
                 r2.text[:200],
             )
 
-        # 3. Grant the submission license (required by UNILAG DSpace 9 form) ──
+        # 3. Grant the submission license (required by UNILAG DSpace 9 form) --
         license_patch = [
             {"op": "replace", "path": "/sections/license/granted", "value": True}
         ]
@@ -409,7 +409,7 @@ class DSpaceClient:
         if not rl.ok:
             logger.warning("license grant failed for ws %s: %s", ws_id, rl.status_code)
 
-        # 4. Check for blocking validation errors before submitting ───────────
+        # 4. Check for blocking validation errors before submitting -----------
         rv = self._s.get(
             f"{self.base}/api/submission/workspaceitems/{ws_id}",
             headers=self._write_headers(),
@@ -422,12 +422,12 @@ class DSpaceClient:
                 # DSpace surfaces every blocking validation problem here
                 # (missing/invalid required fields per the TARGET
                 # COLLECTION's own input-form config, not just a missing
-                # file) — previously only the missing-file case was checked
+                # file) - previously only the missing-file case was checked
                 # for, so any other validation error (e.g. a collection
                 # requiring a field our generic Dublin Core patch doesn't
                 # set) fell through to step 5's blind POST, which then 422s
                 # with the real reason never looked at or logged (confirmed
-                # live 2026-07-19 — a deposit failed with just "422 Client
+                # live 2026-07-19 - a deposit failed with just "422 Client
                 # Error", no detail, because raise_for_status() never reads
                 # the response body). Treat ANY validation error as
                 # blocking and log exactly what DSpace is objecting to, so
@@ -449,7 +449,7 @@ class DSpaceClient:
                     "message": f"Collection metadata validation failed: {errors}",
                 }
 
-        # 5. Submit to workflow → archived ────────────────────────────────────
+        # 5. Submit to workflow -> archived ------------------------------------
         r3 = self._s.post(
             f"{self.base}/api/workflow/workflowitems",
             headers={**self._write_headers(), "Content-Type": "text/uri-list"},
@@ -470,7 +470,7 @@ class DSpaceClient:
         return {"status": "ok", "dspace_id": str(dspace_id), "message": "Deposited"}
 
 
-# ── Dublin Core field mapping (§6.4) ─────────────────────────────────────────
+# -- Dublin Core field mapping (§6.4) -----------------------------------------
 
 
 def _mv(value: str, place: int = 0) -> dict:
@@ -521,7 +521,7 @@ def _build_metadata_patch(item) -> list[dict]:
     )
     _add("dc.identifier.uri", uri)
 
-    # Authors — all in one op so every author is preserved
+    # Authors - all in one op so every author is preserved
     author_names = [
         a.name for a in getattr(item, "authors", []) if getattr(a, "name", "")
     ]

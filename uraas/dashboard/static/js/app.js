@@ -1,5 +1,5 @@
 /**
- * URAAS — Dashboard Core Logic
+ * URAAS - Dashboard Core Logic
  * Handles real-time updates via Socket.IO, analytics visualization, and crawler controls.
  */
 
@@ -12,8 +12,8 @@ let currentAtab = 'overview';
 
 // Global Color Palette
 const COLORS = [
-  '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', 
-  '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#84cc16', 
+  '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#84cc16',
   '#e11d48', '#0ea5e9', '#a855f7', '#ec4899', '#64748b'
 ];
 
@@ -98,7 +98,7 @@ function switchTab(name, btn) {
     const b = $('tab-btn-' + name);
     if (b) b.classList.add('active');
   }
-  
+
   if (name === 'analytics' && !analyticsLoaded) {
     analyticsLoaded = true;
     switchAtab('overview', $('atab-btn-overview'));
@@ -115,7 +115,7 @@ function switchAtab(name, btn) {
   const t = $('atab-' + name);
   if (t) t.classList.remove('hidden');
   if (btn) btn.classList.add('active');
-  
+
   if (name === 'overview') loadAnalyticsOverview();
   if (name === 'au') loadAlignmentTab();
   if (name === 'collab') loadCollabTab();
@@ -144,7 +144,7 @@ function applyGlobalInstitutionFilter() {
   invalidateCaches();
   const inst = getInstitutionParam();
   const specCsv = $('sco-csv-btn'); if (specCsv) specCsv.href = '/api/analytics/special-collections/export.csv' + inst;
-  
+
   if (currentAtab === 'overview') loadAnalyticsOverview();
   else if (currentAtab === 'au') { loadAlignmentTab(); }
   else if (currentAtab === 'collab') { loadCollabTab(); }
@@ -158,7 +158,7 @@ function invalidateCaches() {
 }
 
 function loadAnalyticsOverview() {
-  // "Special Collections Overview" tab — SC-focused analytics redesign.
+  // "Special Collections Overview" tab - SC-focused analytics redesign.
   $('sco-loading').classList.remove('hidden');
   $('sco-content').classList.add('hidden');
   safeFetch(withInst('/api/analytics/special-collections/overview'), data => {
@@ -166,7 +166,7 @@ function loadAnalyticsOverview() {
     $('sco-content').classList.remove('hidden');
 
     const k = data.kpis || {};
-    // ── KPI strip ──────────────────────────────────────────────────────
+    // -- KPI strip ------------------------------------------------------
     $('sco-kpis').innerHTML = `
       <div class="surface rounded-xl p-4 stat-card">
         <p class="section-label">Special Items</p>
@@ -186,7 +186,7 @@ function loadAnalyticsOverview() {
         <p class="text-3xl font-bold" style="color:var(--warning)">${k.intra_african_pct || 0}%</p>
       </div>`;
 
-    // ── Thematic composition (doughnut) ────────────────────────────────
+    // -- Thematic composition (doughnut) --------------------------------
     const themes = (data.themes || []).filter(t => t.count > 0);
     destroyChart('sco-themes');
     if (themes.length) {
@@ -207,14 +207,14 @@ function loadAnalyticsOverview() {
       });
     }
 
-    // ── Theme co-occurrence (D3 chord) ─────────────────────────────────
+    // -- Theme co-occurrence (D3 chord) ---------------------------------
     renderScChord(data.co_occurrence || { labels: [], matrix: [] });
 
-    // ── Knowledge sovereignty ──────────────────────────────────────────
+    // -- Knowledge sovereignty ------------------------------------------
     $('sco-intra-african').textContent = `${k.intra_african_pct || 0}% intra-African`;
     $('sco-countries').innerHTML = scHbar(data.countries, 'name', 'papers', '#22c55e');
 
-    // ── SDG alignment (horizontal bar) ─────────────────────────────────
+    // -- SDG alignment (horizontal bar) ---------------------------------
     const sdgs = data.sdgs || [];
     destroyChart('sco-sdg');
     if (sdgs.length) {
@@ -235,10 +235,10 @@ function loadAnalyticsOverview() {
       });
     }
 
-    // ── Custodians ──────────────────────────────────────────────────────
+    // -- Custodians ------------------------------------------------------
     $('sco-custodians').innerHTML = scHbar(data.custodians, 'institution', 'count', '#f59e0b');
 
-    // ── Cultural lexicon ────────────────────────────────────────────────
+    // -- Cultural lexicon ------------------------------------------------
     const kws = data.keywords || [];
     if (kws.length) {
       const maxKw = Math.max(1, ...kws.map(w => w.count));
@@ -251,11 +251,11 @@ function loadAnalyticsOverview() {
       $('sco-lexicon').innerHTML = SC_EMPTY;
     }
 
-    // ── Most influential works ──────────────────────────────────────────
+    // -- Most influential works ------------------------------------------
     const inf = data.influential || [];
     const allZeroCites = inf.length > 0 && inf.every(p => !p.citations);
     $('sco-influential').innerHTML = inf.length ? [
-      allZeroCites ? `<p class="text-[10px] text-muted italic mb-2 px-1">Citation counts populate automatically after the next crawl — ranked by Special Collections relevance score for now.</p>` : '',
+      allZeroCites ? `<p class="text-[10px] text-muted italic mb-2 px-1">Citation counts populate automatically after the next crawl - ranked by Special Collections relevance score for now.</p>` : '',
       ...inf.map((p, i) => `
       <div class="row-hover p-2.5 rounded-lg cursor-pointer flex items-center gap-3" onclick="openPaperModal(${p.id})">
         <span class="text-sm font-bold text-muted" style="min-width:1.5rem">${i + 1}</span>
@@ -270,7 +270,7 @@ function loadAnalyticsOverview() {
     ].join('') : SC_EMPTY;
   });
 
-  // ── PID Coverage (Africa PID Alliance) ─────────────────────────────
+  // -- PID Coverage (Africa PID Alliance) -----------------------------
   safeFetch(withInst('/api/analytics/pid-coverage'), pid => {
     const fmt = (pct, n, label) =>
       `${pct}%<title>${n} of ${pid.total} ${label}</title>`;
@@ -281,7 +281,7 @@ function loadAnalyticsOverview() {
     if ($('pid-total'))     { $('pid-total').textContent = pid.total; }
   });
 
-  // ── Knowledge Repatriation Index ───────────────────────────────────
+  // -- Knowledge Repatriation Index -----------------------------------
   safeFetch(withInst('/api/analytics/knowledge-repatriation'), d => {
     if ($('kri-score'))          { $('kri-score').textContent = d.score; }
     if ($('kri-interpretation')) { $('kri-interpretation').textContent = d.interpretation || ''; }
@@ -299,11 +299,11 @@ function loadAnalyticsOverview() {
     if ($('kri-ns-bar'))       { $('kri-ns-bar').style.width       = Math.round((d.north_south || 0) / classifiable * 100) + '%'; }
   });
 
-  // ── Research Portfolio Diversity ───────────────────────────────────
+  // -- Research Portfolio Diversity -----------------------------------
   safeFetch(withInst('/api/analytics/research-diversity'), d => {
     if ($('rpd-score'))          { $('rpd-score').textContent = d.score; }
     if ($('rpd-interpretation')) { $('rpd-interpretation').textContent = d.interpretation || ''; }
-    if ($('rpd-dominant'))       { $('rpd-dominant').textContent = d.dominant_sdg || '—'; }
+    if ($('rpd-dominant'))       { $('rpd-dominant').textContent = d.dominant_sdg || '-'; }
     if ($('rpd-vs-baseline')) {
       const diff = (d.score || 0) - 45;
       $('rpd-vs-baseline').textContent = (diff >= 0 ? '+' : '') + diff;
@@ -313,14 +313,14 @@ function loadAnalyticsOverview() {
       const gaps = d.gap_sdgs || [];
       $('rpd-gaps').innerHTML = gaps.length
         ? gaps.map(g => `<span class="chip text-[10px] py-0.5 px-2" style="background:rgba(245,158,11,.12);color:var(--warning)">${g}</span>`).join('')
-        : '<span class="text-xs" style="color:var(--text-muted)">None — great coverage!</span>';
+        : '<span class="text-xs" style="color:var(--text-muted)">None - great coverage!</span>';
     }
   });
 
-  // ── Open Science Health Score ──────────────────────────────────────
+  // -- Open Science Health Score --------------------------------------
   safeFetch(withInst('/api/analytics/open-science-health'), d => {
-    if ($('oshs-score'))          { $('oshs-score').textContent = (d.score || '—') + '/100'; }
-    if ($('oshs-grade'))          { $('oshs-grade').textContent = d.grade || '—'; }
+    if ($('oshs-score'))          { $('oshs-score').textContent = (d.score || '-') + '/100'; }
+    if ($('oshs-grade'))          { $('oshs-grade').textContent = d.grade || '-'; }
     if ($('oshs-interpretation')) { $('oshs-interpretation').textContent = d.interpretation || ''; }
     const c = d.components || {};
     const oaPct    = (c.open_access    && c.open_access.value    != null) ? c.open_access.value    : (c.open_access    || 0);
@@ -403,7 +403,7 @@ function loadImpactCards() {
     { id: 'tk_vitality', l: 'TK Vitality Score', c: '#a855f7', api: '/api/analytics/tk-vitality-score', f: d => d.score + '/100' },
     { id: 'ling_div', l: 'Linguistic Diversity', c: '#ec4899', api: '/api/analytics/linguistic-diversity-index', f: d => d.index }
   ];
-  
+
   const advContainer = $('adv-metrics-cards');
   if (advContainer) advContainer.innerHTML = '';
   advMetrics.forEach(metric => {
@@ -596,7 +596,7 @@ function loadNetForAuthor(name) {
   curNetAuthor = name;
   $('network-suggestions').innerHTML = '';
   $('network-search-input').value = name;
-  $('network-researcher-name').textContent = name + ' — Collaboration Graph';
+  $('network-researcher-name').textContent = name + ' - Collaboration Graph';
   $('network-result').classList.remove('hidden');
   safeFetch(withInst('/api/analytics/author-network?author=' + encodeURIComponent(name)), data => {
     networkEdgeData = data.edges;
@@ -611,24 +611,24 @@ function renderD3Net(data, center) {
   const cont = $('network-graph-container');
   const W = cont.offsetWidth || 700, H = 420;
   svg.attr('viewBox', `0 0 ${W} ${H}`);
-  
+
   if (!data.nodes || data.nodes.length <= 1) {
     svg.append('text').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').attr('fill', '#64748b').text('No collaborations found.');
     return;
   }
-  
+
   const nodes = data.nodes.map(n => ({ ...n, x: W / 2, y: H / 2 }));
   const links = data.edges.map(e => ({ ...e }));
-  
+
   const lnk = svg.append('g').selectAll('line').data(links).enter().append('line').attr('stroke', 'rgba(59, 130, 246, 0.2)').attr('stroke-width', d => Math.max(1, Math.min(d.weight, 5)));
-  
+
   const nd = svg.append('g').selectAll('g').data(nodes).enter().append('g').style('cursor', 'pointer')
     .call(d3.drag().on('start', (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }).on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; }).on('end', (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
-    
+
   nd.append('circle').attr('r', d => d.id === center ? 20 : 12).attr('fill', d => d.id === center ? '#3b82f6' : '#8b5cf6').attr('stroke', '#fff').attr('stroke-width', 1.5);
   nd.append('text').attr('text-anchor', 'middle').attr('dy', '.35em').attr('font-size', '10px').attr('fill', '#fff').text(d => d.id.split(' ').pop());
   nd.on('click', (ev, d) => { if (d.id !== center) loadNetForAuthor(d.id); });
-  
+
   const sim = d3.forceSimulation(nodes).force('link', d3.forceLink(links).id(d => d.id).distance(100)).force('charge', d3.forceManyBody().strength(-200)).force('center', d3.forceCenter(W / 2, H / 2))
     .on('tick', () => { lnk.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y); nd.attr('transform', d => `translate(${d.x},${d.y})`); });
   d3Sim = sim;
@@ -790,16 +790,16 @@ function onSubregionChange() {
   const subregion = $('comp-subregion-select').value;
   const countrySel = $('comp-country-select');
   const uniSel = $('comp-university-select');
-  
+
   countrySel.innerHTML = '<option value="">Country...</option>';
   uniSel.innerHTML = '<option value="">University...</option>';
   uniSel.disabled = true;
-  
+
   if (!subregion || !window.universityRegistry || !window.universityRegistry[subregion]) {
     countrySel.disabled = true;
     return;
   }
-  
+
   const countries = Object.keys(window.universityRegistry[subregion]).sort();
   countries.forEach(c => {
     const opt = document.createElement('option');
@@ -814,14 +814,14 @@ function onCountryChange() {
   const subregion = $('comp-subregion-select').value;
   const country = $('comp-country-select').value;
   const uniSel = $('comp-university-select');
-  
+
   uniSel.innerHTML = '<option value="">University...</option>';
-  
+
   if (!subregion || !country || !window.universityRegistry || !window.universityRegistry[subregion] || !window.universityRegistry[subregion][country]) {
     uniSel.disabled = true;
     return;
   }
-  
+
   const unis = window.universityRegistry[subregion][country];
   unis.forEach(u => {
     const opt = document.createElement('option');
@@ -884,7 +884,7 @@ function renderSelectedInstitutions() {
     }
     if (name.length > 25) name = name.substring(0, 22) + '...';
     const safeRor = ror.replace(/'/g, "\\'");
-    return `<div class="chip active">${esc(name)} <button onclick="removeInstitution('${safeRor}')" class="ml-1">×</button></div>`;
+    return `<div class="chip active">${esc(name)} <button onclick="removeInstitution('${safeRor}')" class="ml-1">x</button></div>`;
   }).join('');
 }
 
@@ -917,7 +917,7 @@ function renderComparisonResults(data) {
   $('comp-avg-oa').textContent = data.executive_summary.average_oa_rate + '%';
   $('comp-collaborations').textContent = data.executive_summary.total_collaborations;
 
-  // Table Matrix — Special-Collections metrics
+  // Table Matrix - Special-Collections metrics
   const tbody = $('comp-table-body');
   tbody.innerHTML = data.detailed_comparison.institutions.map(inst => {
     const m = inst.metrics;
@@ -942,7 +942,7 @@ function renderComparisonResults(data) {
         <span class="font-mono text-xs font-bold">${r.value.toLocaleString()}${unit}</span>
       </div>`).join('');
   };
-  
+
   const rankings = data.detailed_comparison.rankings;
   $('comp-rank-volume').innerHTML = renderRanks(rankings.total_papers, ' papers');
   $('comp-rank-oa').innerHTML = renderRanks(rankings.oa_rate, '%');
@@ -977,14 +977,14 @@ function renderComparisonResults(data) {
     });
     html += '</div>';
   }
-  
+
   if (data.recommendations && data.recommendations.length) {
     html += '<p class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Actionable Policy Recommendations</p>';
     html += '<ul class="list-disc pl-5 text-sm space-y-1 text-slate-300">';
     data.recommendations.forEach(rec => { html += `<li>${esc(rec)}</li>`; });
     html += '</ul>';
   }
-  
+
   insightsEl.innerHTML = html || '<p class="text-sm py-4 text-muted">No insights available.</p>';
 
   // Network map
@@ -1032,7 +1032,7 @@ function resolveNodeGeo(node) {
       if (found) break;
     }
   }
-  if (lat === null || lon === null) return null; // unknown location — skip
+  if (lat === null || lon === null) return null; // unknown location - skip
   return { id: node.id, lon, lat, name, region };
 }
 
@@ -1165,7 +1165,7 @@ function generateDecolonialReport() {
   const btn = $('report-gen-btn'); btn.disabled = true; btn.textContent = 'Generating...';
   const container = $('report-output-container'), title = $('report-title'), body = $('report-body');
   container.classList.add('hidden');
-  
+
   safeFetch('/api/reports/unilag-subregion', data => {
     title.textContent = data.title;
     let html = `
@@ -1303,7 +1303,7 @@ function loadAlignmentTab() {
       $('align-content').classList.remove('hidden');
       $('align-narrative').textContent = resp.narrative || '';
 
-      // ── Radar: fixed 0-100 scale (never auto-scale a radar) ──────────
+      // -- Radar: fixed 0-100 scale (never auto-scale a radar) ----------
       destroyChart('align-radar');
       charts['align-radar'] = new Chart($('chart-align-radar'), {
         type: 'radar',
@@ -1335,7 +1335,7 @@ function loadAlignmentTab() {
         },
       });
 
-      // ── Pillar detail cards with evidence chips ──────────────────────
+      // -- Pillar detail cards with evidence chips ----------------------
       $('align-pillars').innerHTML = d.pillars.map(p => `
         <div class="surface rounded-xl p-4" style="border-top:3px solid ${p.is_gap ? '#ef4444' : d.color}">
           <div class="flex justify-between items-start mb-2">
@@ -1380,7 +1380,7 @@ function loadAlignmentGaps() {
           </div>
           <span class="chip text-[10px] py-0.5 px-2 ml-2 flex-shrink-0" style="background:${sev}18;color:${sev}">${g.avg_score}</span>
         </div>`;
-    }).join('') : '<p class="text-xs text-muted italic">No gaps below threshold — strong coverage across all pillars.</p>';
+    }).join('') : '<p class="text-xs text-muted italic">No gaps below threshold - strong coverage across all pillars.</p>';
   });
 }
 
@@ -1404,12 +1404,12 @@ function loadAlignmentMatrix() {
             ${Array(maxPillars - arr.length).fill('<td></td>').join('')}
           </tr>`).join('')}
       </table>
-      <p class="text-[10px] mt-2" style="color:var(--text-dim)">Cell = institutional average alignment score (0–100) per framework pillar. Hover for pillar names.</p>`;
+      <p class="text-[10px] mt-2" style="color:var(--text-dim)">Cell = institutional average alignment score (0-100) per framework pillar. Hover for pillar names.</p>`;
   });
 }
 
 /**
- * Intra-African Collaboration tab — index, choropleth + arc map, citation
+ * Intra-African Collaboration tab - index, choropleth + arc map, citation
  * velocity and Louvain-community author network.
  */
 let collabMap = null;
@@ -1429,12 +1429,12 @@ function loadCollabTab() {
       <div class="surface rounded-xl p-4 stat-card">
         <p class="section-label">Intra-African Index</p>
         <p class="text-2xl font-bold" style="color:${ratioColor}">${d.intra_african_pct || 0}%</p>
-        <p class="text-[10px] text-muted">vs ${d.baseline_pct}% continental avg ${d.ratio_vs_baseline ? `(${d.ratio_vs_baseline}×)` : ''}</p>
+        <p class="text-[10px] text-muted">vs ${d.baseline_pct}% continental avg ${d.ratio_vs_baseline ? `(${d.ratio_vs_baseline}x)` : ''}</p>
       </div>
       <div class="surface rounded-xl p-4 stat-card">
         <p class="section-label">Intra-African Papers</p>
         <p class="text-2xl font-bold" style="color:var(--accent)">${(d.intra_african_count || 0).toLocaleString()}</p>
-        <p class="text-[10px] text-muted">≥2 African countries</p>
+        <p class="text-[10px] text-muted">>=2 African countries</p>
       </div>
       <div class="surface rounded-xl p-4 stat-card">
         <p class="section-label">Partner Countries</p>
@@ -1476,7 +1476,7 @@ function renderCollabMap() {
   });
 
   collabMap.on('load', () => {
-    // ── Choropleth: country fill by paper count ───────────────────────
+    // -- Choropleth: country fill by paper count -----------------------
     safeFetch(withInst('/api/collaboration/countries'), resp => {
       const countries = resp.data.countries || [];
       const counts = {};
@@ -1501,7 +1501,7 @@ function renderCollabMap() {
           collabMap.addLayer({
             id: 'africa-fill', type: 'fill', source: 'africa',
             paint: {
-              // Home country with no collab data → amber glow; otherwise normal choropleth.
+              // Home country with no collab data -> amber glow; otherwise normal choropleth.
               'fill-color': ['case',
                 ['all', ['==', ['get', 'is_home'], 1], ['==', ['get', 'papers'], 0]],
                 'rgba(251,191,36,0.35)',
@@ -1534,7 +1534,7 @@ function renderCollabMap() {
           });
           collabMap.on('mouseleave', 'africa-fill', () => popup.remove());
 
-          // ── Arcs above the fill ─────────────────────────────────────
+          // -- Arcs above the fill -------------------------------------
           safeFetch(withInst('/api/collaboration/arcs'), arcs => {
             if (!collabMap || !arcs.features) return;
             const maxCount = Math.max(1, ...arcs.features.map(f => f.properties.count));
@@ -1566,7 +1566,7 @@ function loadCollabPairs() {
     const pairs = resp.data.pairs || [];
     $('collab-pairs').innerHTML = pairs.length ? pairs.slice(0, 40).map(p => `
       <div class="flex items-center justify-between p-2 rounded-lg row-hover">
-        <p class="text-xs font-medium" style="color:var(--text)">${esc(p.source_name)} – ${esc(p.target_name)}</p>
+        <p class="text-xs font-medium" style="color:var(--text)">${esc(p.source_name)} - ${esc(p.target_name)}</p>
         <span class="chip text-[10px] py-0.5 px-2" style="background:#f59e0b18;color:#f59e0b">${p.count}</span>
       </div>`).join('')
       : '<p class="text-xs text-muted italic">No intra-African co-publications recorded yet. Run the collaboration backfill to enrich affiliation data.</p>';
@@ -1623,7 +1623,7 @@ function loadCollabNetwork() {
       .attr('fill', d => COMMUNITY_COLORS[(d.community || 0) % COMMUNITY_COLORS.length])
       .attr('stroke', '#fff').attr('stroke-width', 0.8)
       .style('cursor', 'pointer');
-    nd.append('title').text(d => `${d.id} — community ${(d.community || 0) + 1}, centrality ${d.centrality || 0}`);
+    nd.append('title').text(d => `${d.id} - community ${(d.community || 0) + 1}, centrality ${d.centrality || 0}`);
 
     d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id).distance(60))
@@ -1638,7 +1638,7 @@ function loadCollabNetwork() {
 }
 
 /**
- * Special Collections — purpose-built analytics for indigenous knowledge,
+ * Special Collections - purpose-built analytics for indigenous knowledge,
  * African literature & cultural-heritage collections. Reframes impact away
  * from the citation-prestige lens of commercial bibliometric platforms.
  */
@@ -1740,7 +1740,7 @@ function renderScChord(data) {
   const group = svg.append('g').selectAll('g').data(chord.groups).enter().append('g');
   group.append('path').attr('d', arc)
     .attr('fill', d => color(d.index)).attr('stroke', 'rgba(0,0,0,0.15)')
-    .append('title').text(d => `${labels[d.index]} — ${d.value} co-tags`);
+    .append('title').text(d => `${labels[d.index]} - ${d.value} co-tags`);
   group.append('text')
     .each(d => { d.angle = (d.startAngle + d.endAngle) / 2; })
     .attr('dy', '0.35em')
@@ -1789,7 +1789,7 @@ function loadLanguageTab() {
         }
       });
     }
-    
+
     // 2. Render Papers List
     const papersEl = $('language-papers');
     if (papersEl) {
@@ -1818,38 +1818,38 @@ function loadLanguageTab() {
 function loadStaffDirectory() {
   const filterInst = $('staff-inst-filter')?.value || '';
   const url = filterInst ? '/api/analytics/staff-directory?institution=' + filterInst : '/api/analytics/staff-directory';
-  
+
   $('staff-loading')?.classList.remove('hidden');
   $('staff-content')?.classList.add('hidden');
-  
+
   safeFetch(url, data => {
     $('staff-loading')?.classList.add('hidden');
     $('staff-content')?.classList.remove('hidden');
-    
+
     const container = $('staff-institutions-list');
     if (!container) return;
-    
+
     if (!data || data.length === 0) {
       container.innerHTML = '<p class="text-sm text-center py-8 text-muted">No staff records found.</p>';
       return;
     }
-    
+
     container.innerHTML = data.map(inst => `
       <div class="surface rounded-2xl p-5 mb-4 border" style="border-color:var(--border)">
         <div class="flex items-center justify-between mb-4 border-b pb-3" style="border-color:var(--border)">
           <div>
             <h3 class="text-lg font-bold" style="color:var(--accent)">${esc(inst.institution)}</h3>
-            <p class="text-xs text-muted mt-1">${inst.staff_count} Dynamic Staff Records • ${inst.staff_with_orcid} with ORCID</p>
+            <p class="text-xs text-muted mt-1">${inst.staff_count} Dynamic Staff Records - ${inst.staff_with_orcid} with ORCID</p>
           </div>
           <span class="badge-oa">${esc(inst.country)}</span>
         </div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           ${(inst.staff || []).map(s => `
             <div class="surface rounded-xl p-3 border hover:border-[var(--accent)] transition-colors" style="border-color:var(--border)">
               <p class="font-semibold text-sm mb-1">${esc(s.name)}</p>
               ${s.department ? `<p class="text-xs text-muted mb-2 line-clamp-1">${esc(s.department)}</p>` : ''}
-              
+
               <div class="space-y-1">
                 ${s.orcid ? `
                   <div class="flex items-center gap-1.5 text-xs">
@@ -1857,7 +1857,7 @@ function loadStaffDirectory() {
                     <span class="font-mono bg-white/5 px-1 rounded">${esc(s.orcid)}</span>
                   </div>
                 ` : `<p class="text-[10px] text-muted italic">No ORCID</p>`}
-                
+
                 ${s.ror ? `
                   <div class="flex items-center gap-1.5 text-xs">
                     <span class="w-10 font-bold" style="color:var(--warning)">ROR</span>
@@ -1865,7 +1865,7 @@ function loadStaffDirectory() {
                   </div>
                 ` : `<p class="text-[10px] text-muted italic">No ROR Verified</p>`}
               </div>
-              
+
               <div class="mt-3 pt-2 border-t flex justify-between" style="border-color:var(--border)">
                 <span class="text-[10px] text-muted">Papers Tracked</span>
                 <span class="text-xs font-bold" style="color:var(--accent)">${s.paper_count}</span>
@@ -1894,7 +1894,7 @@ function startCrawler() {
   const spiderEl = $('crawler-spider');
   const spider = spiderEl ? spiderEl.value : 'openalex';
 
-  appendLog('// Starting ' + spider.toUpperCase() + ' harvest for ' + inst + ' — target: ' + t + ' SC papers');
+  appendLog('// Starting ' + spider.toUpperCase() + ' harvest for ' + inst + ' - target: ' + t + ' SC papers');
   toast('Harvest started for ' + inst + ' (' + spider + ')', 'info');
   updateCrawlerUI({ status: 'initializing' });
 
@@ -1939,7 +1939,7 @@ function pruneNonSC(apply) {
     'Run "Dry Run Prune" first to preview what will be removed.\n\nProceed?'
   )) return;
 
-  const label = apply ? 'Pruning non-SC papers…' : 'Running dry-run prune…';
+  const label = apply ? 'Pruning non-SC papers...' : 'Running dry-run prune...';
   toast(label, 'info');
 
   fetch('/api/admin/prune-non-sc', {
@@ -1956,7 +1956,7 @@ function pruneNonSC(apply) {
       toast(msg, apply ? 'success' : 'warning');
       if (d.sample_dropped && d.sample_dropped.length) {
         console.log('[Prune] sample dropped:', d.sample_dropped);
-        appendLog('[PRUNE] ' + (apply ? 'APPLIED' : 'DRY RUN') + ` — drop=${d.pruned_non_sc} keep=${d.kept_sc}`);
+        appendLog('[PRUNE] ' + (apply ? 'APPLIED' : 'DRY RUN') + ` - drop=${d.pruned_non_sc} keep=${d.kept_sc}`);
         d.sample_dropped.slice(0, 5).forEach(p =>
           appendLog(`  DROP: [${p.institution}] ${p.title}`)
         );
@@ -1967,7 +1967,7 @@ function pruneNonSC(apply) {
 }
 
 function testSMTP() {
-  toast('Sending SMTP test email…', 'info');
+  toast('Sending SMTP test email...', 'info');
   fetch('/api/admin/test-smtp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1982,7 +1982,7 @@ function testSMTP() {
 }
 
 function recomputeAlignment() {
-  toast('Scoring papers against AU framework pillars… this may take 10-30 s', 'info');
+  toast('Scoring papers against AU framework pillars... this may take 10-30 s', 'info');
   fetch('/api/admin/recompute-alignment', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1990,7 +1990,7 @@ function recomputeAlignment() {
     .then(r => r.json())
     .then(d => {
       if (d.status === 'success')
-        toast(`Alignment done — ${d.scored} papers scored, ${d.aggregate_rows} pillar aggregates built`, 'success');
+        toast(`Alignment done - ${d.scored} papers scored, ${d.aggregate_rows} pillar aggregates built`, 'success');
       else
         toast('Alignment error: ' + d.message, 'error');
     })
@@ -2009,7 +2009,7 @@ function updateCrawlerUI(d) {
     st?.classList.remove('hidden');
     bar?.classList.add('active');
   } else if (d.status === 'initializing') {
-    if (badge) badge.textContent = '⟳ Init…';
+    if (badge) badge.textContent = '⟳ Init...';
     s?.classList.add('hidden');
     st?.classList.remove('hidden');
     bar?.classList.add('active');
@@ -2030,11 +2030,11 @@ function appendLog(text, termId = 'terminal-log') {
   const d = document.createElement('div');
   const t = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   d.innerHTML = `<span class="text-slate-500">[${t}]</span> ${esc(text)}`;
-  
+
   if (/\[OK\]|stored|success/i.test(text)) d.style.color = '#4ade80';
   else if (/error|ERROR|\[ERR\]/i.test(text)) d.style.color = '#f87171';
   else if (/skip|duplicate|warn/i.test(text)) d.style.color = '#fbbf24';
-  
+
   term.appendChild(d);
   term.scrollTop = term.scrollHeight;
   while (term.children.length > 200) term.removeChild(term.firstChild);
@@ -2061,7 +2061,7 @@ function renderTree(data, q = '') {
     c.innerHTML = '<p class="text-sm py-10 text-center text-muted">No papers indexed yet.</p>';
     return;
   }
-  
+
   let html = '', total = 0;
   for (const [fac, depts] of Object.entries(data)) {
     let fhtml = '', fc = 0;
@@ -2108,29 +2108,29 @@ function renderTree(data, q = '') {
 function openPaperModal(id) {
   $('paper-modal').classList.add('open');
   $('modal-body').innerHTML = '<div class="flex justify-center py-12"><div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div></div>';
-  
+
   Promise.all([
     fetch('/api/papers/' + id).then(r => r.json()),
     fetch('/api/citations/' + id).then(r => r.json()).catch(() => ({ citation_count: 0 }))
   ]).then(([p, cit]) => {
     $('modal-title').textContent = p.title;
     const authors = (p.authors || []).map(a => esc(a.name)).join('; ');
-    
+
     const fileBtn = p.file?.has_local_pdf
       ? `<a href="${p.file.download_url}" class="btn-primary text-sm">Download PDF</a>`
       : (p.pdf_url ? `<a href="${p.pdf_url}" target="_blank" class="btn-primary text-sm">View PDF</a>` : '');
-      
+
     $('modal-body').innerHTML = `
       <div class="space-y-6">
         <div class="flex gap-2 flex-wrap">${fileBtn} ${p.doi ? `<a href="https://doi.org/${p.doi}" target="_blank" class="btn-ghost text-xs">View DOI</a>` : ''}</div>
-        
+
         <div class="surface p-5 rounded-xl space-y-3">
           <p class="section-label mb-2">Metadata</p>
           ${metadataRow('Title', p.title)}
           ${metadataRow('Authors', authors)}
-          ${metadataRow('Date', p.publication_date?.split('T')[0] || '—')}
-          ${metadataRow('DOI', p.doi || '—')}
-          ${metadataRow('Source', p.source_repository || '—')}
+          ${metadataRow('Date', p.publication_date?.split('T')[0] || '-')}
+          ${metadataRow('DOI', p.doi || '-')}
+          ${metadataRow('Source', p.source_repository || '-')}
           ${metadataRow('Citations', cit.citation_count)}
         </div>
 
@@ -2162,26 +2162,26 @@ function runAdvancedSearch() {
   const sort = $('search-sort').value || 'relevance';
   const yf = $('search-year-from').value, yt = $('search-year-to').value;
   const oa = $('search-oa-only').checked;
-  
+
   const hasPdf = $('search-has-pdf') && $('search-has-pdf').checked;
   let url = `/api/search/advanced?limit=50&q=${encodeURIComponent(q)}&sort=${sort}`;
   if (yf) url += '&year_from=' + yf;
   if (yt) url += '&year_to=' + yt;
   if (oa) url += '&oa_only=true';
   if (hasPdf) url += '&has_pdf=true';
-  
+
   const el = $('search-results'), cnt = $('search-result-count');
   el.innerHTML = '<div class="flex justify-center py-12"><div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div></div>';
-  
+
   safeFetch(url, data => {
     const items = data.results || [];
     if (cnt) cnt.textContent = `${data.total || 0} results in ${data.took_ms || 0}ms`;
-    
+
     if (!items.length) {
       el.innerHTML = '<p class="text-sm text-center py-10 text-muted">No results found.</p>';
       return;
     }
-    
+
     el.innerHTML = items.map(i => `
       <div class="surface rounded-xl p-5 row-hover cursor-pointer mb-3" onclick="openPaperModal(${i.id})">
         <div class="flex justify-between items-start gap-4">
@@ -2230,7 +2230,7 @@ function fetchOverview() {
     animCount($('stat-total'), d.total_papers);
     animCount($('stat-authors'), d.total_authors);
     animCount($('stat-oa'), d.open_access_papers);
-    
+
     // Impact Cards
     animCount($('ic-total'), d.total_papers);
     animCount($('ic-authors'), d.total_authors);
@@ -2284,11 +2284,11 @@ function loadCrawlerSources() {
         if (info.available) {
           opt.disabled = false;
           // Strip any previously-appended unavailable marker.
-          opt.textContent = opt.textContent.replace(/\s*—\s*(?:API key required|unavailable).*$/i, '');
+          opt.textContent = opt.textContent.replace(/\s*-\s*(?:API key required|unavailable).*$/i, '');
         } else {
           opt.disabled = true;
           if (!/API key required/i.test(opt.textContent)) {
-            opt.textContent = `${opt.textContent} — API key required`;
+            opt.textContent = `${opt.textContent} - API key required`;
           }
           if (opt.selected) activeDisabled = true;
         }
@@ -2378,7 +2378,7 @@ function downloadNetData() {
 }
 
 /**
- * Faculty / Department comparison (analytics → Compare sub-tab)
+ * Faculty / Department comparison (analytics -> Compare sub-tab)
  */
 function runFacComparison() {
   const facs = ['cmp-faculty-a', 'cmp-faculty-b', 'cmp-faculty-c']
@@ -2430,7 +2430,7 @@ function runDeptComparison() {
 }
 
 /**
- * Lecturer / Researcher profile (analytics → Lecturer sub-tab)
+ * Lecturer / Researcher profile (analytics -> Lecturer sub-tab)
  */
 let authorSearchTimer = null;
 function debAuthorSearch() { clearTimeout(authorSearchTimer); authorSearchTimer = setTimeout(searchLecturer, 300); }
@@ -2483,7 +2483,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Restore theme
   const savedTheme = localStorage.getItem('uraas-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
-  
+
   fetchOverview();
   fetchArchive();
   fetchRecentPapers();
@@ -2496,7 +2496,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (paperParam && /^\d+$/.test(paperParam)) {
     setTimeout(() => openPaperModal(parseInt(paperParam, 10)), 300);
   }
-  
+
   // Stats Auto-Refresh
   setInterval(() => {
     const badge = $('crawler-badge');
@@ -2519,9 +2519,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 't' || e.key === 'T') toggleTheme();
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Phase 6: CREDIBILITY LAYER — Methodology Tooltips, ARK PIDs, Benchmarks
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Phase 6: CREDIBILITY LAYER - Methodology Tooltips, ARK PIDs, Benchmarks
+// -----------------------------------------------------------------------------
 
 let _methodologyCache = null;
 
@@ -2551,7 +2551,7 @@ function initMethodologyTooltips() {
       <div class="method-tooltip-inner">
         <div class="flex justify-between items-start mb-2">
           <p id="method-tooltip-title" class="text-xs font-bold" style="color:var(--accent)"></p>
-          <button onclick="closeMethodologyTooltip()" class="text-muted ml-2 hover:text-white" style="font-size:14px;line-height:1">×</button>
+          <button onclick="closeMethodologyTooltip()" class="text-muted ml-2 hover:text-white" style="font-size:14px;line-height:1">x</button>
         </div>
         <p id="method-tooltip-formula" class="text-xs leading-relaxed mb-2" style="color:var(--text)"></p>
         <div id="method-tooltip-bench" class="hidden text-xs mb-2 p-2 rounded" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2)"></div>
@@ -2657,7 +2657,7 @@ function showMethodologyTooltip(key, anchorEl) {
 }
 
 /**
- * Phase 6 — Enhanced paper modal with ARK / DocID persistent identifiers.
+ * Phase 6 - Enhanced paper modal with ARK / DocID persistent identifiers.
  * Override the metadataRow helper to optionally render ARK as a link.
  */
 function renderArkBadge(ark) {
@@ -2694,7 +2694,7 @@ function openPaperModal(id) {
     // Pan-African citation share badge
     const paShare = cit.african_citation_share != null
       ? `<span class="chip text-[10px] py-0.5 px-2" style="background:rgba(34,197,94,0.1);color:#22c55e">
-           🌍 ${cit.african_citation_share}% Pan-African citations
+            ${cit.african_citation_share}% Pan-African citations
            <span class="info-icon" data-method="pan_african_citation_share">&#9432;</span>
          </span>`
       : '';
@@ -2711,9 +2711,9 @@ function openPaperModal(id) {
           <p class="section-label mb-2">Metadata</p>
           ${metadataRow('Title', p.title)}
           ${metadataRow('Authors', authors)}
-          ${metadataRow('Date', p.publication_date?.split('T')[0] || '—')}
-          ${metadataRow('DOI', p.doi || '—')}
-          ${metadataRow('Source', p.source_repository || '—')}
+          ${metadataRow('Date', p.publication_date?.split('T')[0] || '-')}
+          ${metadataRow('DOI', p.doi || '-')}
+          ${metadataRow('Source', p.source_repository || '-')}
           ${metadataRow('Citations', cit.citation_count)}
           ${cit.docid ? metadataRow('DocID™', cit.docid) : ''}
         </div>
@@ -2732,7 +2732,7 @@ function openPaperModal(id) {
 }
 
 /**
- * Phase 4 — Pan-African share stat card + CSV download in citation velocity panel.
+ * Phase 4 - Pan-African share stat card + CSV download in citation velocity panel.
  * Patches loadCitationVelocity to also render a share badge below the chart.
  */
 const _origLoadCitationVelocity = loadCitationVelocity;
@@ -2743,7 +2743,7 @@ function loadCitationVelocity() {
     const series = d.by_year || [];
     destroyChart('citation-velocity');
 
-    // ── Pan-African share card ────────────────────────────────────────────────
+    // -- Pan-African share card ------------------------------------------------
     let shareEl = $('pan-african-share-card');
     if (!shareEl) {
       const parent = $('velocity-narrative')?.parentElement;
@@ -2755,7 +2755,7 @@ function loadCitationVelocity() {
                 Pan-African Citation Share
                 <span class="info-icon" data-method="pan_african_citation_share">&#9432;</span>
               </p>
-              <p id="pan-african-share-value" class="text-2xl font-bold" style="color:#22c55e">—</p>
+              <p id="pan-african-share-value" class="text-2xl font-bold" style="color:#22c55e">-</p>
               <p id="pan-african-share-sub" class="text-[10px]" style="color:var(--text-muted)"></p>
             </div>
             <a id="citation-velocity-csv-btn" href="/api/citations/velocity/export.csv" class="btn-ghost text-xs ml-auto flex-shrink-0">

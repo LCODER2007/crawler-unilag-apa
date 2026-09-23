@@ -1,5 +1,5 @@
 """
-Staff Harvester — fetches real staff names, ORCIDs, departments from OpenAlex
+Staff Harvester - fetches real staff names, ORCIDs, departments from OpenAlex
 for every configured institution. Saves enriched JSON to data/{inst}_staff.json.
 
 Usage:
@@ -41,7 +41,7 @@ def _get(url: str, retries: int = 3) -> dict:
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 wait = 5 * (attempt + 1)
-                log.warning(f"Rate limited, waiting {wait}s …")
+                log.warning(f"Rate limited, waiting {wait}s ...")
                 time.sleep(wait)
             else:
                 log.error(f"HTTP {e.code} for {url}")
@@ -56,18 +56,17 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
     """
     Harvest researchers via OpenAlex's direct /authors endpoint, filtered by
     `last_known_institutions.ror` (an author's most recent known
-    affiliation — the closest OpenAlex signal to "current staff").
+    affiliation - the closest OpenAlex signal to "current staff").
 
     This replaced an approach that derived unique authors indirectly from a
-    500-author-capped, 50-page scan of individual WORKS — which, for a
+    500-author-capped, 50-page scan of individual WORKS - which, for a
     university the size of UNILAG, was capturing under 5% of its real
     author population. Live-checked 2026-07-20: `affiliations.institution.
     ror:05rk03822` (ever affiliated) = 16,557 authors;
     `last_known_institutions.ror:05rk03822` (current/most-recent) = 11,854.
-    Neither number is a perfect "official current academic staff count" —
-    OpenAlex has no such registry, and this authorship-derived figure
+    Neither number is a perfect "official current academic staff count" - OpenAlex has no such registry, and this authorship-derived figure
     necessarily includes some postgraduate students and historically-
-    affiliated researchers alongside genuine current staff — but it's the
+    affiliated researchers alongside genuine current staff - but it's the
     most complete data-driven approximation available, and is what
     downstream ORCID-employment verification (see orcid_spider.py) is
     designed to further refine per-paper, not something to solve by
@@ -75,7 +74,7 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
 
     Returns list of rich staff dicts:
         {name, orcid, department, faculty, openalex_id, paper_count}
-    (department/faculty are always None here — filled in by
+    (department/faculty are always None here - filled in by
     scripts/merge_staff_department_data.py and preserved across re-harvests
     by save_staff()'s merge-by-ORCID/name logic.)
     """
@@ -91,7 +90,7 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
     while True:
         # Unlike institutions.ror (used elsewhere in this codebase, e.g.
         # openalex_spider.py), last_known_institutions.ror requires the FULL
-        # "https://ror.org/..." form — the bare short ID silently matches
+        # "https://ror.org/..." form - the bare short ID silently matches
         # zero authors instead of erroring. Confirmed live 2026-07-20.
         url = (
             f"{OPENALEX_BASE}/authors"
@@ -140,7 +139,7 @@ def harvest_institution(inst_config, dry_run: bool = False) -> list:
 
 
 def _map_concept_to_faculty(concept: str, faculties: list) -> str:
-    """Rough concept→faculty mapping via keyword overlap."""
+    """Rough concept->faculty mapping via keyword overlap."""
     concept_lower = concept.lower()
     faculty_map = {
         "medicine": ["health", "medicine", "clinical", "nursing", "pharmacy", "dental"],
@@ -220,7 +219,7 @@ def save_staff(inst_config, staff: list, dry_run: bool = False):
     """Save staff list to data/{short_name_lower}_staff.json.
 
     Merges onto any existing file by ORCID (falling back to normalized name)
-    instead of overwriting outright — a re-harvest must not wipe
+    instead of overwriting outright - a re-harvest must not wipe
     department/faculty data already populated by
     scripts/merge_staff_department_data.py or discovered live via ORCID
     /employments lookups in orcid_spider.py.
@@ -258,7 +257,7 @@ def save_staff(inst_config, staff: list, dry_run: bool = False):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(merged, f, indent=2, ensure_ascii=False)
-    log.info(f"Saved {len(merged)} staff records → {out_path}")
+    log.info(f"Saved {len(merged)} staff records -> {out_path}")
 
 
 def main():
@@ -290,7 +289,7 @@ def main():
         target_insts = all_insts
 
     print(f"\n{'='*60}")
-    print(f"URAAS Staff Harvester — OpenAlex")
+    print(f"URAAS Staff Harvester - OpenAlex")
     print(f"Institutions: {len(target_insts)}")
     print(f"{'='*60}\n")
 

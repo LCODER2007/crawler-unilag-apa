@@ -20,7 +20,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
     DataCite's public search API requires no auth key. Despite the module's
     original assumption that these are "datasets/software, not papers", a
     live 25-record sample of the plain ROR-wave query (2026-07-18) was 44%
-    Text/JournalArticle and only 24% actually Dataset — every record's real
+    Text/JournalArticle and only 24% actually Dataset - every record's real
     `attributes.types.resourceTypeGeneral` is used instead of a blanket
     "dataset" (see _resource_type_to_content_type()) so real journal-article/
     text DOIs stop being silently relabeled as datasets in storage.
@@ -67,7 +67,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
     ):
         """
         boost_special: fan out extra DataCite queries seeded with SC keywords
-                       (default True — heavy SC weight).
+                       (default True - heavy SC weight).
         sc_only:       skip the plain-affiliation query; crawl only SC-seeded fan-outs.
         """
         super().__init__(*args, **kwargs)
@@ -108,10 +108,10 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
         )
 
     async def start(self):
-        # Wave 1 — plain affiliation query
+        # Wave 1 - plain affiliation query
         if not self.sc_only:
             url = self._build_url()
-            # DEBUG not INFO — with 300+ SC seed waves, logging every raw
+            # DEBUG not INFO - with 300+ SC seed waves, logging every raw
             # query URL at INFO level floods the dashboard's live feed
             # (which runs at LOG_LEVEL=INFO) with unreadable noise; still
             # available for real debugging via LOG_LEVEL=DEBUG.
@@ -122,7 +122,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 meta={"wave": "ror", "query": "", "scanned_this_wave": 0},
             )
 
-        # Wave 2 — one fan-out request per SC seed phrase, AND-ed with affiliation.
+        # Wave 2 - one fan-out request per SC seed phrase, AND-ed with affiliation.
         if self.boost_special:
             for seed in SC_SEED_KEYWORDS:
                 url = self._build_url(extra_query=seed)
@@ -198,10 +198,10 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                     continue
             else:
                 # Live-tested 2026-07-19: essentially never happens (0/25 on
-                # a real sample — the creators.affiliation.name: query
+                # a real sample - the creators.affiliation.name: query
                 # already restricts to structured-affiliation matches), but
                 # when it does, fall back to a text match instead of
-                # trusting the query blind — same belt-and-suspenders
+                # trusting the query blind - same belt-and-suspenders
                 # pattern as core_spider.py/openaire_spider.py.
                 combined = f"{title} {abstract}".lower()
                 if not any(
@@ -214,7 +214,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
             if sc_score_of(title, abstract) <= 0.0:
                 continue
 
-            # Dedup gate — skip (don't count, but keep paginating past) records
+            # Dedup gate - skip (don't count, but keep paginating past) records
             # already in the DB.
             if self._is_known(doi=doi, url=url, title=title):
                 continue
@@ -249,7 +249,7 @@ class DataCiteSpider(DedupAwareSpiderMixin, scrapy.Spider):
                 "institution": self.institution_name,
                 "institution_ror": self.ror_id,
                 # "strong" only when a structured creators.affiliation entry
-                # was actually present and verified — the title/abstract
+                # was actually present and verified - the title/abstract
                 # fallback (rare, see above) can't distinguish authored-there
                 # from written-about.
                 "affiliation_confidence": "strong" if raw_affs else "weak",

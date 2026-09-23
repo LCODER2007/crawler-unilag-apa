@@ -6,7 +6,7 @@ The platform is Special-Collections-only: papers that the engine scores 0 are
 research noise (STEM/medical/jargon) and must be removed.
 
 Usage:
-    python scripts/reclassify_and_prune_sc.py            # DRY RUN (default) — no writes
+    python scripts/reclassify_and_prune_sc.py            # DRY RUN (default) - no writes
     python scripts/reclassify_and_prune_sc.py --apply    # re-score + delete non-SC
 
 The --apply pass:
@@ -45,7 +45,7 @@ from uraas.utils.analytics_cache import analytics_cache
 def backup_sqlite():
     url = (config.DATABASE_URL or "").lower()
     if not url.startswith("sqlite"):
-        print(f"[backup] Non-SQLite DB ({url[:30]}...) — skipping file backup.")
+        print(f"[backup] Non-SQLite DB ({url[:30]}...) - skipping file backup.")
         return
     db_path = config.DATABASE_URL.split("///")[-1]
     if not os.path.exists(db_path):
