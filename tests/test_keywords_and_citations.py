@@ -329,3 +329,24 @@ def test_admin_write_routes_reject_a_viewer_session(viewer_client):
         ).status_code
         == 403
     )
+
+
+def test_graph_and_counts_endpoints_agree_on_citation_count(admin_client):
+    """/api/citations/<id> and /<id>/graph must not disagree.
+
+    The graph endpoint originally read only CitationMetrics, so a record with
+    a crawl-time cited_by_count but no synced graph reported a real count on
+    one endpoint and 0 on the other - live-verified on the deployed Space.
+    """
+    session = SessionLocal()
+    try:
+        row = session.query(Item.id).filter(Item.cited_by_count > 0).first()
+    finally:
+        session.close()
+    if not row:
+        pytest.skip("no cited record in the database")
+    item_id = row[0]
+    counts = admin_client.get(f"/api/citations/{item_id}").get_json()
+    graph = admin_client.get(f"/api/citations/{item_id}/graph").get_json()
+    assert graph["citation_count"] == counts["citation_count"]
+    assert graph["citation_count"] > 0

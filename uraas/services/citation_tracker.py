@@ -864,6 +864,13 @@ def get_paper_citations(item_id: int, limit: int = 200) -> Dict:
     session = SessionLocal()
     try:
         metrics = session.query(CitationMetrics).filter_by(item_id=item_id).first()
+        # Item.cited_by_count is captured at crawl time from OpenAlex and is
+        # authoritative; CitationMetrics only exists once a sync has run. Take
+        # the higher of the two, so this agrees with /api/citations/<id>
+        # instead of reporting 0 for a cited record whose graph is unsynced.
+        crawled_count = (
+            session.query(Item.cited_by_count).filter(Item.id == item_id).scalar() or 0
+        )
 
         inbound = (
             session.query(Citation)
@@ -901,7 +908,9 @@ def get_paper_citations(item_id: int, limit: int = 200) -> Dict:
             }
 
         return {
-            "citation_count": metrics.citation_count if metrics else 0,
+            "citation_count": max(
+                crawled_count, (metrics.citation_count or 0) if metrics else 0
+            ),
             "last_updated": metrics.last_updated.isoformat() if metrics else None,
             "citing_papers": [inbound_row(e) for e in inbound],
             "references": [outbound_row(e) for e in outbound],
