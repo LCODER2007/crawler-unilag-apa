@@ -54,10 +54,18 @@ def test_staff_validator_constructs_for_unilag(registry):
     unilag = registry.get("unilag")
     validator = StaffValidator(institution_config=unilag)
     assert validator.institution_name == unilag.name
+    if not validator.staff_names:
+        pytest.skip("no staff roster in data/ - see data/README.md")
     # Live-verified 2026-08: 11,854 UNILAG staff records harvested via ROR.
     assert len(validator.staff_names) > 1000
 
 
 def test_staff_validator_rejects_non_staff():
+    # With no roster loaded, is_staff_member deliberately returns True for
+    # everything and defers to the ROR and affiliation gates, so there is no
+    # rejection to assert. data/ is not in version control (it names real
+    # people), so that is the normal state of a fresh clone and of CI.
+    if not staff_validator.normalized_staff:
+        pytest.skip("no staff roster in data/ - see data/README.md")
     # A name with no plausible relation to any real UNILAG staff record.
     assert not staff_validator.is_staff_member("Zzyzx Qqvraxk Nonexistentname")

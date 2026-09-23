@@ -160,16 +160,22 @@ class TestStaffValidation:
     """Test staff validation accuracy"""
 
     def test_staff_cache_loaded(self):
-        """Verify staff cache can be loaded from the data directory"""
+        """The staff roster loads when it is present.
+
+        data/ is not in version control - the rosters name real people, and
+        this repository is public - so a fresh clone and CI legitimately have
+        no roster at all. StaffValidator degrades to an empty name set with a
+        warning in that case, which is the wanted behaviour, so this skips
+        rather than failing. It asserts the file loads only where one exists.
+        """
         import os
 
         # The data file is always relative to the project root
         staff_path = os.path.join(
             os.path.dirname(__file__), "..", "data", "unilag_staff.json"
         )
-        assert os.path.exists(
-            staff_path
-        ), f"Staff data file should exist at {staff_path}"
+        if not os.path.exists(staff_path):
+            pytest.skip("no staff roster in data/ - see data/README.md")
         # If staff_validator already loaded correctly, that is the best evidence
         if len(staff_validator.staff_names) == 0:
             # Reload using absolute path so tests pass regardless of working dir

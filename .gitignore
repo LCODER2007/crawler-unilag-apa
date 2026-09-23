@@ -22,7 +22,12 @@ env/
 
 # Crawled content and generated data
 storage/
-data/
+# data/ holds staff rosters naming real people - ignored wholesale except
+# for the README explaining what belongs there. A bare `data/` rule would
+# stop git descending into the directory at all, so the README could only
+# ever be force-added; `data/*` lets the negation below take effect.
+data/*
+!data/README.md
 logs/
 exports.csv
 senate.csv
