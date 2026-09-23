@@ -459,6 +459,20 @@ The full key value is shown exactly once, at creation - only its hash is
 stored. If a key is lost or compromised, revoke it and issue a new one; there
 is no way to recover a lost key's value.
 
+### Populating the citation graph
+
+Nothing syncs itself: a sync fans out to OpenAlex and writes, so it is an
+admin action. The Space has no shell, so drive it over HTTP:
+
+```bash
+python scripts/sync_live_citation_graph.py --limit 200
+```
+
+It prompts for the admin login (or reads `URAAS_ADMIN_USERNAME` and
+`URAAS_ADMIN_PASSWORD`), starts the background sync, and polls
+`/api/citations/coverage` until the edge count stops moving. Re-run with a
+larger `--limit` to continue through the corpus.
+
 To add a new endpoint to partner access, add its Flask endpoint (function)
 name to `PARTNER_ENDPOINTS` in `uraas/dashboard/app.py` - nothing is reachable
 via API key unless explicitly listed there.
