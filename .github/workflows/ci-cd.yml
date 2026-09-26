@@ -106,7 +106,7 @@ jobs:
           python scripts/init_db.py 2>&1 | tee initdb.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            echo "::error title=init_db failed::$(tail -c 1500 initdb.log | tr -s '[:space:]' ' ')"
+            echo "::error title=init_db failed::$(tail -n 3 initdb.log | tr -s '[:space:]' ' ')"
           fi
           exit "$status"
 
