@@ -428,3 +428,77 @@ def test_viewer_cannot_start_an_ingest(viewer_client):
         viewer_client.post("/api/admin/docid/ingest/backfill", json={}).status_code
         == 403
     )
+
+
+# -- Circular-ingest guard -------------------------------------------------
+
+
+def test_partner_requests_exclude_ingested_sources():
+    """A DOCiD record must never be served back to DOCiD.
+
+    DOCiD pulls records from URAAS, and URAAS now ingests records from DOCiD.
+    Without a guard, a DOCiD record would come back to them through the
+    partner API and be re-ingested as though it were a UNILAG record, with
+    each side crediting the other as the source and no way to tell afterwards
+    which of them actually holds it.
+    """
+    from flask import g
+
+    from uraas.dashboard.app import _partner_excluded_sources, app
+
+    with app.test_request_context("/api/papers/tree"):
+        # A browser session sees everything - looking at the ingested corpus
+        # is the entire point of ingesting it.
+        assert _partner_excluded_sources() is None
+
+    with app.test_request_context("/api/papers/tree"):
+        g.partner_name = "Africa PID Alliance / DOCiD"
+        assert "DOCiD" in _partner_excluded_sources()
+
+
+def test_exclusion_matches_every_docid_environment_label():
+    """One rule has to cover demo and production.
+
+    The label is part of a record's identity, so the two environments carry
+    different ones; matching the exact string would let production records
+    leak once someone switched DOCID_SOURCE_LABEL.
+    """
+    from uraas.dashboard.app import PARTNER_EXCLUDED_SOURCE_PREFIXES
+
+    for label in ("DOCiD (demo)", "DOCiD (production)", "DOCiD"):
+        assert any(label.startswith(p) for p in PARTNER_EXCLUDED_SOURCE_PREFIXES)
+    # ...without swallowing the local crawl.
+    for label in ("UNILAG IR (OAI-PMH)", "OpenAlex", "Crossref"):
+        assert not any(label.startswith(p) for p in PARTNER_EXCLUDED_SOURCE_PREFIXES)
+
+
+def test_exclude_sources_filters_the_query(dspace_record):
+    """The filter must actually drop ingested rows, not just be plumbed in."""
+    from sqlalchemy import or_
+
+    from uraas.analytics.engine import analytics
+
+    upsert_publication(dspace_record)
+    session = SessionLocal()
+    try:
+        total = session.query(Item).count()
+        kept = (
+            session.query(Item)
+            .filter(
+                or_(
+                    Item.source_repository.is_(None),
+                    ~Item.source_repository.startswith("DOCiD"),
+                )
+            )
+            .count()
+        )
+    finally:
+        session.close()
+    assert kept < total, "the ingested record was not excluded"
+
+    # And the analytics entry point accepts the argument the partner path
+    # passes, rather than silently ignoring an unknown keyword.
+    assert isinstance(
+        analytics.get_papers_by_faculty_and_department(exclude_sources=["DOCiD"]),
+        dict,
+    )

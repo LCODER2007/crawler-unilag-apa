@@ -257,6 +257,29 @@ on a worker" from "ran inline and blocked the request".
 
 ---
 
+## The circular-ingest guard
+
+DOCiD pulls records from URAAS through the partner API, and URAAS now
+ingests records from DOCiD. Nothing in either direction knows about the
+other, so without a guard a DOCiD record would be served straight back to
+DOCiD and re-ingested as though it were a UNILAG record - each side
+crediting the other as the source, with no way to tell afterwards which of
+them actually holds it.
+
+`GET /api/papers/tree`, the enumeration endpoint a full partner pull starts
+from, therefore excludes records whose `source_repository` starts with
+`DOCiD` **for partner-key callers only**. A browser session sees everything:
+looking at the ingested corpus is the entire point of ingesting it.
+
+The match is on the prefix, not the exact label, so `DOCiD (demo)` and
+`DOCiD (production)` are both covered by one rule and switching
+`DOCID_SOURCE_LABEL` cannot leak records.
+
+This guard lives at the partner API boundary
+(`PARTNER_EXCLUDED_SOURCE_PREFIXES` in `uraas/dashboard/app.py`), not in the
+ingest and not in the analytics engine, because it is a statement about who
+is asking rather than about the data.
+
 ## Open questions for the Africa PID Alliance
 
 In priority order:

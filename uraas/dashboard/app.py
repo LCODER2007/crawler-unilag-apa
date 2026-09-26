@@ -15,6 +15,7 @@ from datetime import datetime
 from flask import (
     Flask,
     Response,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -234,6 +235,28 @@ def _check_api_key():
         session_db.close()
 
 
+# Source prefixes a partner must never be served back. DOCiD pulls records
+# from URAAS, and URAAS now ingests records from DOCiD
+# (uraas.services.docid_ingest), so a DOCiD record surfacing in the partner
+# API would be handed straight back to DOCiD and re-ingested as though it
+# were a UNILAG record - each side crediting the other as the source, with no
+# way to tell afterwards which of them actually holds it. Matched on the
+# prefix so every DOCiD environment label ("DOCiD (demo)", "DOCiD
+# (production)") is covered by one rule.
+PARTNER_EXCLUDED_SOURCE_PREFIXES = ("DOCiD",)
+
+
+def _partner_excluded_sources():
+    """Source prefixes to hide from this request, or None for a full view.
+
+    The dashboard sees everything - the whole point of ingesting DOCiD's
+    corpus is to look at it. Only partner-key callers get the narrowed view.
+    """
+    if getattr(g, "partner_name", None):
+        return list(PARTNER_EXCLUDED_SOURCE_PREFIXES)
+    return None
+
+
 @app.before_request
 def _enforce_authentication():
     endpoint = request.endpoint
@@ -258,6 +281,10 @@ def _enforce_authentication():
         ok, result = _check_api_key()
         if not ok:
             return result
+        # Record that this request came from a partner key rather than a
+        # browser session. Some endpoints serve a deliberately narrower view
+        # to partners than to the dashboard - see papers_tree.
+        g.partner_name = result
         return None  # valid partner key, allowlisted endpoint
 
     role = current_role()
@@ -652,7 +679,8 @@ def papers_tree():
             {
                 "status": "success",
                 "data": analytics.get_papers_by_faculty_and_department(
-                    institution=institution
+                    institution=institution,
+                    exclude_sources=_partner_excluded_sources(),
                 ),
             }
         )

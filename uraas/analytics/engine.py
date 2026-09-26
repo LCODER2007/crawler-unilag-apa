@@ -267,8 +267,19 @@ class URAASAnalyticsEngine:
             session.close()
 
     def get_papers_by_faculty_and_department(
-        self, institution: Optional[str] = None
+        self,
+        institution: Optional[str] = None,
+        exclude_sources: Optional[List[str]] = None,
     ) -> Dict:
+        """The faculty/department tree of Special Collections papers.
+
+        `exclude_sources` drops records whose source_repository starts with
+        any of the given prefixes. It exists for the partner API: DOCiD pulls
+        records from URAAS, and URAAS now ingests records from DOCiD, so
+        without it a DOCiD record would be handed straight back to DOCiD and
+        re-ingested as though it were ours. The dashboard passes nothing and
+        sees everything.
+        """
         inst_name = self._resolve_institution_name(institution)
         session = SessionLocal()
         try:
@@ -295,6 +306,13 @@ class URAASAnalyticsEngine:
                     )
                     if inst_name:
                         q = q.filter(Item.institution.ilike(f"%{inst_name}%"))
+                    for prefix in exclude_sources or []:
+                        q = q.filter(
+                            or_(
+                                Item.source_repository.is_(None),
+                                ~Item.source_repository.startswith(prefix),
+                            )
+                        )
 
                     papers = q.all()
                     paper_list = []

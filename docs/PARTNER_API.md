@@ -103,6 +103,12 @@ identifier is recorded internally for most sources and could be exposed.
   the institution - not items held in the institution's own repository. A
   minority (`source_repository: "UNILAG IR (OAI-PMH)"`) *are* harvested from
   UNILAG's repository. The `source_repository` field distinguishes them.
+- **Records URAAS ingested from DOCiD are not served back to you.** URAAS
+  now also pulls the DOCiD corpus in, for analysis. Those records are
+  excluded from `GET /api/papers/tree` for API-key callers, so a full pull
+  cannot re-ingest DOCiD's own records as though they were UNILAG's. If you
+  ever see a record whose `source_repository` begins with `DOCiD`, tell us -
+  it means the guard has a hole.
 - **The database is multi-institution.** URAAS is built to serve several
   institutions; records carry `institution`/`ror`. The partner crawl trigger
   is locked to UNILAG, but that doesn't change what earlier crawls already
