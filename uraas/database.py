@@ -443,6 +443,18 @@ def _build_engine():
     # Render exposes postgres:// but SQLAlchemy 2.x wants postgresql://
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
+    # Name the driver rather than relying on SQLAlchemy's default for a bare
+    # postgresql:// URL, because that default is not stable: SQLAlchemy 2.1
+    # changed it from psycopg2 to psycopg (v3). requirements.txt ships
+    # psycopg2-binary, so the moment CI resolved SQLAlchemy 2.1.1 every
+    # Postgres connection died with "No module named 'psycopg'" - on an
+    # unchanged URL, from an unpinned dependency, with nothing in this
+    # repository having changed. Confirmed 2026-09-26.
+    #
+    # Only a URL with no driver is rewritten, so postgresql+psycopg:// still
+    # selects v3 for anyone who wants it.
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     if url.startswith("sqlite"):
         return create_engine(url, connect_args={"check_same_thread": False})
     return create_engine(url, pool_pre_ping=True, pool_recycle=3600)
