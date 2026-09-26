@@ -52,6 +52,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
       REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+      # Must match celery-worker's, or the web container will run tasks
+      # inline and the workers will sit idle.
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/2
+      DOCID_INGEST_API_URL: ${DOCID_INGEST_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
+      DOCID_SOURCE_LABEL: ${DOCID_SOURCE_LABEL:-DOCiD (demo)}
       STORAGE_PATH: /app/storage/pdfs
       DASHBOARD_SECRET_KEY: ${DASHBOARD_SECRET_KEY:-change-this-in-production}
       FLASK_ENV: production
@@ -99,49 +105,70 @@ services:
     networks:
       - uraas-network
 
-  # NOTE: Celery services are commented out - uraas.tasks does not yet exist and
-  # celery is not listed in requirements.txt. Uncomment only after implementing
-  # uraas/tasks.py and adding celery to requirements.txt.
+  # Celery worker - runs the DOCiD ingest and anything else in uraas.tasks.
+  # Without this (and the broker below) the web container falls back to
+  # running tasks inline, which is fine for a handful of records and useless
+  # for a corpus: an ingest is one upstream request per record at roughly
+  # 1.6s each.
   #
-  # celery-worker:
-  #   build:
-  #     context: ..
-  #     dockerfile: Dockerfile
-  #   container_name: uraas-celery-worker
-  #   command: celery -A uraas.tasks worker --loglevel=info --concurrency=4
-  #   environment:
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
-  #     REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
-  #     STORAGE_PATH: /app/storage/pdfs
-  #   volumes:
-  #     - ../storage:/app/storage
-  #     - ../data:/app/data
-  #     - ../logs:/app/logs
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   networks:
-  #     - uraas-network
+  # CELERY_BROKER_URL is set explicitly rather than inherited from REDIS_URL:
+  # uraas.tasks refuses to treat REDIS_URL as a broker, because that variable
+  # is the analytics cache's address and is set on developer machines where
+  # nothing is listening, which would make queued work vanish silently.
   #
-  # celery-beat:
-  #   build:
-  #     context: ..
-  #     dockerfile: Dockerfile
-  #   container_name: uraas-celery-beat
-  #   command: celery -A uraas.tasks beat --loglevel=info
-  #   environment:
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
-  #     REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
-  #   volumes:
-  #     - ../logs:/app/logs
-  #   depends_on:
-  #     - redis
-  #   restart: unless-stopped
-  #   networks:
-  #     - uraas-network
+  # --concurrency is the number of simultaneous upstream requests. The DOCiD
+  # API advertises no rate limit and returned no 429 under a burst, so
+  # nothing throttles us but us: raise this only after agreeing a rate with
+  # the Africa PID Alliance.
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: uraas-celery-worker
+    command: celery -A uraas.tasks worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/2
+      DOCID_INGEST_API_URL: ${DOCID_INGEST_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
+      DOCID_SOURCE_LABEL: ${DOCID_SOURCE_LABEL:-DOCiD (demo)}
+      STORAGE_PATH: /app/storage/pdfs
+    volumes:
+      - ../storage:/app/storage
+      - ../data:/app/data
+      - ../logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - uraas-network
+
+  # Scheduler for the hourly incremental catch-up in
+  # uraas.tasks.celery_app.conf.beat_schedule. Exactly one beat container
+  # must run: two would double every scheduled ingest.
+  celery-beat:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: uraas-celery-beat
+    command: celery -A uraas.tasks beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uraas_user}:${POSTGRES_PASSWORD:-uraas_pass}@postgres:5432/${POSTGRES_DB:-uraas_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/2
+    volumes:
+      - ../logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - uraas-network
 
 volumes:
   postgres_data:

@@ -251,6 +251,21 @@ class Item(Base):
     # "handle" (harvested from our own IR, which already assigns a Handle).
     pid_source = Column(String(20))
 
+    # The source system's own primary key for this record, paired with
+    # source_repository to form a stable external identity.
+    #
+    # Item.id is a local database key and is explicitly not stable: admin
+    # prune and clear-half-recrawl delete rows, and SQLite reuses the ids of
+    # deleted rows, so an id can later point at a different record. doi is
+    # absent on a large minority. Neither can carry an idempotent upsert, so
+    # re-ingesting a source either duplicated records or silently overwrote
+    # the wrong one. (source_repository, source_record_id) can, and it is
+    # what docs/PARTNER_API.md told partners to ask for.
+    #
+    # Set by any ingest that has a remote id to record - DOCiD publication
+    # ids today. Null for records whose source never exposed one.
+    source_record_id = Column(String(128), index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     authors = relationship("Author", secondary=item_authors, back_populates="items")

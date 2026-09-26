@@ -159,6 +159,49 @@ class Config:
     DOCID_EMAIL = os.getenv("DOCID_EMAIL", "")
     DOCID_PASSWORD = os.getenv("DOCID_PASSWORD", "")
 
+    # -- DOCiD ingest (pulling THEIR records into URAAS) ---------------------
+    # The opposite direction to DOCID_API_URL above, which is the push/
+    # registration client. This reads the platform's publications so URAAS's
+    # analytics, keyword and citation services can run over DOCiD's corpus
+    # instead of only the local crawl.
+    #
+    # Demo instance (2026-09, credentials supplied by Africa PID Alliance):
+    #   https://docid-demo.africapidalliance.org/api/v1
+    # Production is the same API shape on docid-core.africapidalliance.org.
+    # Reads are unauthenticated on both - confirmed live against demo.
+    DOCID_INGEST_API_URL = os.getenv(
+        "DOCID_INGEST_API_URL", "https://docid-demo.africapidalliance.org/api/v1"
+    ).rstrip("/")
+
+    # Stamped onto every ingested record's source_repository, so DOCiD records
+    # are always distinguishable from the local crawl and from each other's
+    # environments. Changing it makes previously ingested records look like a
+    # different source, so it is part of the record identity, not cosmetic.
+    DOCID_SOURCE_LABEL = os.getenv("DOCID_SOURCE_LABEL", "DOCiD (demo)")
+
+    # Records per list page. 1000 is accepted (verified live) and costs about
+    # 5.7s; the per-record detail fetch dominates regardless.
+    DOCID_INGEST_PAGE_SIZE = int(os.getenv("DOCID_INGEST_PAGE_SIZE", "100"))
+
+    # The platform advertises no rate limit and returned no 429 under a burst,
+    # so throttling is entirely our responsibility. This is the per-worker
+    # delay between detail fetches; real concurrency is the Celery worker
+    # count multiplied by this.
+    DOCID_INGEST_DELAY_S = float(os.getenv("DOCID_INGEST_DELAY_S", "0.2"))
+    DOCID_INGEST_TIMEOUT_S = int(os.getenv("DOCID_INGEST_TIMEOUT_S", "45"))
+
+    # -- Celery ----------------------------------------------------------------
+    # Ingest is a background job: a full pull is one detail request per record
+    # at roughly 1.6s each, which no HTTP request can wait for and which has
+    # to survive a restart at corpus scale.
+    #
+    # With no broker configured, uraas.tasks runs every task eagerly, in
+    # process, so local development and the single-container Hugging Face
+    # Space keep working unchanged - just synchronously, and so only at small
+    # scale. A real backfill needs the Compose stack (Redis + workers).
+    CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
+    CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "")
+
     # -- SMTP for batch approval emails ----------------------------------------
     SMTP_HOST = os.getenv("SMTP_HOST", "")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

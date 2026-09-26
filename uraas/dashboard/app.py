@@ -130,6 +130,9 @@ ADMIN_ENDPOINTS = {
     "admin_backfill_keywords",
     "admin_sync_citation_graph",
     "admin_sync_citation_graphs",
+    "admin_docid_backfill",
+    "admin_docid_incremental",
+    "admin_docid_ingest_record",
     # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) - # that path is checked earlier in _enforce_authentication and returns
     # before this set is ever consulted. Listing them here only closes the
     # session-cookie path: without this, any logged-in VIEWER (meant to be
@@ -169,6 +172,9 @@ PARTNER_ENDPOINTS = {
     "get_citations",
     "citation_graph",
     "citation_coverage",
+    # DOCiD ingest status (uraas.services.docid_ingest). Read only - starting
+    # an ingest writes and hits the DOCiD API, so it stays admin-only.
+    "docid_ingest_coverage",
 }
 
 # Simple in-memory sliding-window limiter for API-key traffic, separate from
@@ -2169,6 +2175,147 @@ def admin_sync_citation_graph(item_id):
         return jsonify(CitationTracker.sync_citation_graph(item_id))
     except Exception as e:
         logger.error(f"admin_sync_citation_graph({item_id}): {e}")
+        return api_error(str(e))
+
+
+# DOCiD ingest - pulling Africa PID Alliance records into URAAS
+
+
+@app.route("/api/docid/ingest/coverage")
+def docid_ingest_coverage():
+    """How much of the DOCiD corpus URAAS holds, and whether a real worker
+    is available to pull the rest.
+
+    `?remote=0` answers from the local database alone, skipping the live
+    call to the DOCiD platform that fetches their total.
+    """
+    probe = request.args.get("remote", "1").lower() not in ("0", "false", "no")
+    try:
+        from uraas.services.docid_ingest import ingest_coverage
+        from uraas.tasks import queue_status
+
+        return jsonify({**ingest_coverage(probe_remote=probe), "queue": queue_status()})
+    except Exception as e:
+        logger.error(f"docid_ingest_coverage: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/docid/ingest/backfill", methods=["POST"])
+def admin_docid_backfill():
+    """Pull the DOCiD corpus into URAAS (admin only).
+
+    Dispatches one Celery task per index page and returns immediately. With
+    no broker configured the tasks run inline instead, which for anything
+    beyond a few pages will outlast the request - the response says which
+    mode is in effect via `queue.eager`, and `max_pages` is there to keep an
+    eager run bounded.
+    """
+    payload = request.get_json(silent=True) or {}
+
+    def _int(name, default, lo, hi):
+        try:
+            return max(lo, min(int(payload.get(name, default)), hi))
+        except (TypeError, ValueError):
+            return default
+
+    start_page = _int("start_page", 1, 1, 10_000_000)
+    page_size = _int("page_size", config.DOCID_INGEST_PAGE_SIZE, 1, 1000)
+    max_pages = payload.get("max_pages")
+    max_pages = _int("max_pages", 5, 1, 100_000) if max_pages is not None else None
+
+    try:
+        from uraas.tasks import EAGER, docid_backfill, queue_status
+
+        if EAGER and max_pages is None:
+            # An unbounded eager backfill is one upstream request per record
+            # in the request thread. Refuse rather than hang: the caller
+            # almost certainly meant to run this against a real worker.
+            return api_error(
+                "No Celery broker configured, so this would run inline. "
+                "Pass max_pages to bound it, or start the Compose stack "
+                "(deploy/docker-compose.prod.yml) for a real backfill.",
+                400,
+            )
+
+        def run():
+            try:
+                result = docid_backfill(
+                    start_page=start_page, max_pages=max_pages, page_size=page_size
+                )
+                logger.info("docid backfill finished dispatching: %s", result)
+                analytics_cache.invalidate_all()
+            except Exception as exc:
+                logger.error("docid backfill failed: %s", exc)
+
+        threading.Thread(target=run, daemon=True).start()
+        return jsonify(
+            {
+                "status": "started",
+                "start_page": start_page,
+                "page_size": page_size,
+                "max_pages": max_pages,
+                "queue": queue_status(),
+                "poll": "/api/docid/ingest/coverage",
+            }
+        )
+    except Exception as e:
+        logger.error(f"admin_docid_backfill: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/docid/ingest/incremental", methods=["POST"])
+def admin_docid_incremental():
+    """Catch up on DOCiD records published since the last ingest (admin only).
+
+    The API exposes no modified_since filter, so this walks newest-first and
+    stops at the first page holding nothing new. It therefore picks up new
+    records only - edits to existing ones keep their original published
+    timestamp and need a re-ingest of that record.
+    """
+    payload = request.get_json(silent=True) or {}
+    try:
+        max_pages = max(1, min(int(payload.get("max_pages", 5)), 500))
+    except (TypeError, ValueError):
+        max_pages = 5
+
+    try:
+        from uraas.tasks import docid_incremental, queue_status
+
+        def run():
+            try:
+                logger.info(
+                    "docid incremental: %s", docid_incremental(max_pages=max_pages)
+                )
+                analytics_cache.invalidate_all()
+            except Exception as exc:
+                logger.error("docid incremental failed: %s", exc)
+
+        threading.Thread(target=run, daemon=True).start()
+        return jsonify(
+            {
+                "status": "started",
+                "max_pages": max_pages,
+                "queue": queue_status(),
+                "poll": "/api/docid/ingest/coverage",
+            }
+        )
+    except Exception as e:
+        logger.error(f"admin_docid_incremental: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/docid/ingest/record/<publication_id>", methods=["POST"])
+def admin_docid_ingest_record(publication_id):
+    """Pull one DOCiD publication by its remote id (admin only).
+
+    The re-drive path for records a page task listed in `failed_ids`.
+    """
+    try:
+        from uraas.services.docid_ingest import ingest_record
+
+        return jsonify(ingest_record(publication_id))
+    except Exception as e:
+        logger.error(f"admin_docid_ingest_record({publication_id}): {e}")
         return api_error(str(e))
 
 

@@ -1,0 +1,90 @@
+{
+  "abstract_text": null,
+  "avatar": null,
+  "citation_count": null,
+  "collection_name": "Cultural Heritage; Traditional Knowledge",
+  "document_description": "",
+  "document_docid": "uon/0ed2b8a0-3a5e-4b27-a761-24604ee90bd4",
+  "document_title": "Skills and Literacy Training for Better Livelihoods: A Review of Approaches and Experiences",
+  "doi": null,
+  "handle_url": "https://erepository.uonbi.ac.ke/items/0ed2b8a0-3a5e-4b27-a761-24604ee90bd4",
+  "id": 4185,
+  "influential_citation_count": null,
+  "open_access_status": null,
+  "open_access_url": null,
+  "openaire_id": null,
+  "openalex_id": null,
+  "openalex_topics": null,
+  "owner": "University of Nairobi",
+  "publication_creators": [
+    {
+      "affiliation": null,
+      "family_name": "Oxenham",
+      "given_name": "John",
+      "id": 5952,
+      "identifier": null,
+      "identifier_type": null,
+      "role": "8"
+    },
+    {
+      "affiliation": null,
+      "family_name": "Diallo",
+      "given_name": "Abdoul Hamid",
+      "id": 5953,
+      "identifier": null,
+      "identifier_type": null,
+      "role": "8"
+    },
+    {
+      "affiliation": null,
+      "family_name": "Katahoire",
+      "given_name": "Anne Ruhweza",
+      "id": 5954,
+      "identifier": null,
+      "identifier_type": null,
+      "role": "8"
+    },
+    {
+      "affiliation": null,
+      "family_name": "Mwangi",
+      "given_name": "Anna Petkova",
+      "id": 5955,
+      "identifier": null,
+      "identifier_type": null,
+      "role": "8"
+    },
+    {
+      "affiliation": null,
+      "family_name": "Sall",
+      "given_name": "Oumar",
+      "id": 5956,
+      "identifier": null,
+      "identifier_type": null,
+      "role": "8"
+    }
+  ],
+  "publication_documents": [],
+  "publication_funders": [],
+  "publication_organizations": [
+    {
+      "country": "Kenya",
+      "id": 2960,
+      "identifier": "https://ror.org/02y9nww90",
+      "identifier_type": "ror",
+      "isni": "0000 0001 2019 0495",
+      "name": "University of Nairobi",
+      "other_name": "UON",
+      "ringgold_id": null,
+      "rrid": null,
+      "type": "education"
+    }
+  ],
+  "publication_poster_url": null,
+  "publication_projects": [],
+  "publications_files": [],
+  "published": 1788954245,
+  "research_resources": [],
+  "resource_type_id": 1,
+  "semantic_scholar_id": null,
+  "user_id": 158
+}

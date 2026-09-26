@@ -1,0 +1,63 @@
+{
+  "abstract_text": null,
+  "avatar": "https://www.shutterstock.com/image-illustration/default-avatar-profile-icon-social-260nw-2221359783.jpg",
+  "citation_count": null,
+  "collection_name": null,
+  "document_description": "<p>Describe </p>",
+  "document_docid": "20.500.14351/4eff6b533454fdcb58e8",
+  "document_title": "test1",
+  "doi": null,
+  "handle_url": null,
+  "id": 5253,
+  "influential_citation_count": null,
+  "open_access_status": null,
+  "open_access_url": null,
+  "openaire_id": null,
+  "openalex_id": null,
+  "openalex_topics": null,
+  "owner": "Morris Mutinda",
+  "publication_creators": [
+    {
+      "affiliation": "Kenyatta University",
+      "family_name": "Mutinda Kimele",
+      "given_name": "Morris",
+      "id": 8870,
+      "identifier": "https://orcid.org/0009-0007-7990-1344",
+      "identifier_type": "orcid",
+      "role": "6"
+    }
+  ],
+  "publication_documents": [],
+  "publication_funders": [
+    {
+      "country": "Kenya",
+      "funder_type": 1,
+      "id": 219,
+      "name": "Training Centre in Communication",
+      "other_name": "TCC Africa",
+      "type": "1"
+    }
+  ],
+  "publication_organizations": [
+    {
+      "country": "Kenya",
+      "id": 4012,
+      "identifier": "https://ror.org/05p2z3x69",
+      "identifier_type": "ror",
+      "isni": null,
+      "name": "Kenyatta University",
+      "other_name": "KU",
+      "ringgold_id": null,
+      "rrid": null,
+      "type": "Education"
+    }
+  ],
+  "publication_poster_url": "https://docid-demo.africapidalliance.org/uploads/logo2 (1).webp",
+  "publication_projects": [],
+  "publications_files": [],
+  "published": 1790157399,
+  "research_resources": [],
+  "resource_type_id": 3,
+  "semantic_scholar_id": null,
+  "user_id": 104
+}
