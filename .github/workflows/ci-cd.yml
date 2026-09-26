@@ -98,7 +98,17 @@ jobs:
       - name: Initialize Database
         env:
           DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
-        run: python scripts/init_db.py
+        # The traceback is echoed back as a workflow error annotation, not
+        # just left in the log: annotations are readable through the public
+        # API, so a failure here can be diagnosed without log access.
+        run: |
+          set +e
+          python scripts/init_db.py 2>&1 | tee initdb.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=init_db failed::$(tail -c 1500 initdb.log | tr -s '[:space:]' ' ')"
+          fi
+          exit "$status"
 
       - name: Run Tests
         env:
