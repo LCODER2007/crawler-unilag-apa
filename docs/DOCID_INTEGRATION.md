@@ -257,6 +257,78 @@ on a worker" from "ran inline and blocked the request".
 
 ---
 
+## Serving enrichment back to DOCiD
+
+The point of ingesting DOCiD's corpus is not to hold it. It is so URAAS can
+run its keyword and citation services over their records and serve the
+results back. Two endpoints do that, both partner-readable:
+
+```
+GET /api/docid/enrichment/<their_publication_id>
+GET /api/docid/enrichment?page=1&page_size=100[&citations=1]
+```
+
+**Addressed by their id, not ours.** DOCiD knows publication 4185; it has no
+idea that is URAAS item 58. `(source_repository, source_record_id)` is what
+makes their id addressable, which is why that column exists. A `404` means
+that record has not been ingested yet, not that it does not exist.
+
+The bulk feed is ordered by `source_record_id` so paging stays stable while
+more records are still being ingested, and omits citations by default: they
+are a per-record read that is empty for most of this corpus.
+
+Keywords are populated **at ingest**, not lazily on first read. Lazy
+extraction is fine for a record someone opens in the dashboard; it is wrong
+for a corpus served as a bulk feed, where every record would come back empty
+until something happened to touch it one at a time.
+
+### What each service can actually deliver on this corpus
+
+Measured across all 3,726 demo records on 2026-09-28:
+
+| | Coverage | Verdict |
+|---|---|---|
+| Title | 100% | |
+| Text body (`document_description`) | ~95% | **Keywords work** |
+| Creators | ~82% | |
+| DOI | 66 / 3,726 (1.8%) | |
+| OpenAlex id | ~2% | **Citations do not** |
+
+Citation lookup resolves a record against OpenAlex or Crossref via its DOI or
+OpenAlex id. ~98% of this corpus has neither, so there is nothing to query
+with. That is not a missing-identifier problem that minting DOIs would fix:
+the corpus is 1,970 Cultural Heritage plus 1,743 Indigenous Knowledge records
+out of 3,726, and citation databases do not index heritage and IK material at
+all.
+
+So the enrichment payload states it outright rather than returning an empty
+list that reads as "uncited":
+
+```json
+"citations": {
+  "available": false,
+  "reason": "no DOI or OpenAlex id on this record, so no citation source to query",
+  "citation_count": 0, "citing": [], "references": []
+}
+```
+
+Citation tracking is meaningful for the 66 records with a DOI and the handful
+of Manuscript and Project records. It is the wrong service for the rest, and
+saying so up front is better than shipping thousands of empty edge lists.
+
+### Running the ingest against a deployed instance
+
+```bash
+python scripts/ingest_docid_to_live.py
+```
+
+It prompts for the admin login, submits the backfill in bounded chunks and
+waits for each to land. Chunked because a Space with no broker runs the
+ingest inline: one unbounded request would be refused, and a very long one
+risks the Space sleeping underneath it. Re-running is safe - ingest upserts
+on (source_repository, source_record_id), so a partly-completed chunk is just
+finished on the next pass.
+
 ## The circular-ingest guard
 
 DOCiD pulls records from URAAS through the partner API, and URAAS now
@@ -270,6 +342,14 @@ them actually holds it.
 from, therefore excludes records whose `source_repository` starts with
 `DOCiD` **for partner-key callers only**. A browser session sees everything:
 looking at the ingested corpus is the entire point of ingesting it.
+
+This does **not** hide DOCiD's records from DOCiD. The enrichment endpoints
+above serve them deliberately, addressed by DOCiD's own publication id. The
+guard governs one thing: the tree that enumerates *URAAS's* corpus, so a
+partner pulling our records cannot scoop up their own back out of it. (In
+practice the tree also joins `Item.collections`, and ingested records belong
+to no UNILAG collection, so they would not appear there in any case - the
+guard makes that explicit rather than incidental.)
 
 The match is on the prefix, not the exact label, so `DOCiD (demo)` and
 `DOCiD (production)` are both covered by one rule and switching

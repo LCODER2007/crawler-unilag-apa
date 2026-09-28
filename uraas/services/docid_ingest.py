@@ -52,7 +52,7 @@ from urllib3.util.retry import Retry
 
 from uraas.config import config
 from uraas.database import Author, Item, SessionLocal
-from uraas.utils.ai_classifier import sanitize_text
+from uraas.utils.ai_classifier import extract_keywords, sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +337,32 @@ def map_publication(payload: Dict) -> Dict:
 # -- Persistence ---------------------------------------------------------------
 
 
+def keywords_for(title: Optional[str], abstract: Optional[str]) -> Optional[str]:
+    """Extract keywords for a record at ingest time.
+
+    Ingest populates ai_keywords rather than leaving the keyword service to
+    fill it lazily on first read. Lazy extraction is fine for a record someone
+    opens in the dashboard; it is wrong for a corpus served as a bulk
+    enrichment feed, where every record would come back empty until something
+    happened to touch it one at a time.
+
+    Extraction is pure Python over the record's own text - no corpus, no
+    network - so it costs nothing next to the API request that fetched the
+    record.
+    """
+    from uraas.services.keyword_service import PER_ITEM_TOP_N, SEPARATOR
+
+    if not (title or abstract):
+        return None
+    try:
+        results = extract_keywords(title or "", abstract or "", top_n=PER_ITEM_TOP_N)
+    except Exception as exc:
+        logger.error("keyword extraction failed during ingest: %s", exc)
+        return None
+    words = [r["word"] for r in results if r.get("word")]
+    return SEPARATOR.join(words) if words else None
+
+
 def _find_existing(session, fields: Dict) -> Optional[Item]:
     """Locate a record already held for this DOCiD publication.
 
@@ -415,6 +441,7 @@ def upsert_publication(payload: Dict, session=None) -> Dict:
     """
     mapped = map_publication(payload)
     fields = mapped["item"]
+    fields["ai_keywords"] = keywords_for(fields.get("title"), fields.get("abstract"))
     owns_session = session is None
     session = session or SessionLocal()
     try:
@@ -459,6 +486,133 @@ def ingest_record(publication_id, client: Optional[DocIDReadClient] = None) -> D
     client = client or DocIDReadClient()
     payload = client.get_publication(publication_id)
     return upsert_publication(payload)
+
+
+def _enrichment_for(item: Item, include_citations: bool = True) -> Dict:
+    """Keywords and citation data for one already-ingested record."""
+    from uraas.services.citation_tracker import get_paper_citations
+    from uraas.services.keyword_service import _split
+
+    payload = {
+        "docid_publication_id": item.source_record_id,
+        "uraas_item_id": item.id,
+        "docid": item.docid or "",
+        "title": item.title,
+        "keywords": _split(item.ai_keywords),
+        "subjects": _split(item.dc_subject),
+    }
+    if not include_citations:
+        return payload
+
+    # Almost every record in this corpus is Cultural Heritage or Indigenous
+    # Knowledge with no DOI and no OpenAlex id (1.8% DOI coverage, measured
+    # 2026-09-28). There is nothing to resolve against OpenAlex or Crossref
+    # for those, so `citations.available` states plainly whether a lookup was
+    # even possible - an empty edge list otherwise reads as "no citations"
+    # when it means "not a citable record type".
+    has_identifier = bool(item.doi or item.openalex_id)
+    citations = {
+        "available": has_identifier,
+        "reason": (
+            None
+            if has_identifier
+            else "no DOI or OpenAlex id on this record, so no citation source to query"
+        ),
+        "citation_count": item.cited_by_count or 0,
+        "citing": [],
+        "references": [],
+    }
+    if has_identifier:
+        try:
+            graph = get_paper_citations(item.id)
+            citations["citation_count"] = graph.get("citation_count", 0)
+            citations["citing"] = graph.get("citing_papers", [])
+            citations["references"] = graph.get("references", [])
+            citations["edges_stored"] = graph.get("edges_stored", {})
+        except Exception as exc:
+            logger.error("citation lookup failed for item %s: %s", item.id, exc)
+            citations["reason"] = f"citation lookup failed: {exc}"
+    payload["citations"] = citations
+    return payload
+
+
+def enrichment_by_source_id(
+    publication_id, source_label: Optional[str] = None
+) -> Optional[Dict]:
+    """Enrichment for one record, addressed by DOCiD's own publication id.
+
+    DOCiD knows publication 4185; it has no idea that is URAAS item 58.
+    (source_repository, source_record_id) is what makes their id addressable
+    here, which is the whole reason that column exists.
+    """
+    label = source_label or config.DOCID_SOURCE_LABEL
+    session = SessionLocal()
+    try:
+        item = (
+            session.query(Item)
+            .filter(
+                Item.source_repository == label,
+                Item.source_record_id == str(publication_id),
+            )
+            .first()
+        )
+        if not item:
+            return None
+        return _enrichment_for(item)
+    finally:
+        session.close()
+
+
+def enrichment_page(
+    page: int = 1,
+    page_size: int = 100,
+    source_label: Optional[str] = None,
+    include_citations: bool = False,
+) -> Dict:
+    """A page of enrichment for every ingested record.
+
+    Pulling enrichment for thousands of records one call at a time is absurd,
+    so this is the bulk feed. Citations are off by default: they are a
+    per-record database read that is empty for ~98% of this corpus anyway,
+    and including them makes a page of 100 markedly slower for no benefit.
+
+    Ordered by source_record_id so paging is stable while further records are
+    being ingested.
+    """
+    from sqlalchemy import func
+
+    label = source_label or config.DOCID_SOURCE_LABEL
+    page = max(1, int(page))
+    page_size = max(1, min(int(page_size), 500))
+    session = SessionLocal()
+    try:
+        base = session.query(Item).filter(Item.source_repository == label)
+        total = (
+            session.query(func.count(Item.id))
+            .filter(Item.source_repository == label)
+            .scalar()
+            or 0
+        )
+        rows = (
+            base.order_by(Item.source_record_id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return {
+            "source": label,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": (total + page_size - 1) // page_size if total else 0,
+            },
+            "data": [
+                _enrichment_for(r, include_citations=include_citations) for r in rows
+            ],
+        }
+    finally:
+        session.close()
 
 
 def known_source_ids(source_label: Optional[str] = None) -> set:

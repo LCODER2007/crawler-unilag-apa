@@ -173,9 +173,13 @@ PARTNER_ENDPOINTS = {
     "get_citations",
     "citation_graph",
     "citation_coverage",
-    # DOCiD ingest status (uraas.services.docid_ingest). Read only - starting
-    # an ingest writes and hits the DOCiD API, so it stays admin-only.
+    # DOCiD ingest status and the enrichment DOCiD consumes (keywords and
+    # citations over their own corpus, addressed by their publication id).
+    # Read only - starting an ingest writes and hits the DOCiD API, so that
+    # stays admin-only.
     "docid_ingest_coverage",
+    "docid_enrichment_one",
+    "docid_enrichment_bulk",
 }
 
 # Simple in-memory sliding-window limiter for API-key traffic, separate from
@@ -2225,6 +2229,53 @@ def docid_ingest_coverage():
         return jsonify({**ingest_coverage(probe_remote=probe), "queue": queue_status()})
     except Exception as e:
         logger.error(f"docid_ingest_coverage: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/docid/enrichment/<publication_id>")
+def docid_enrichment_one(publication_id):
+    """Keywords and citations for one DOCiD record, by THEIR publication id.
+
+    DOCiD knows publication 4185, not URAAS item 58, so this is addressed by
+    their id rather than ours. 404 means the record has not been ingested
+    yet, which /api/docid/ingest/coverage will confirm.
+    """
+    try:
+        from uraas.services.docid_ingest import enrichment_by_source_id
+
+        data = enrichment_by_source_id(publication_id)
+        if data is None:
+            return api_error(
+                "No such DOCiD record has been ingested into URAAS. "
+                "See /api/docid/ingest/coverage.",
+                404,
+            )
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"docid_enrichment_one({publication_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/docid/enrichment")
+def docid_enrichment_bulk():
+    """Paginated enrichment for every ingested DOCiD record.
+
+    The bulk feed, so a partner does not have to make one request per record
+    across a corpus. `?citations=1` includes citation data, which is off by
+    default because it is a per-record read that is empty for the large
+    majority of this corpus.
+    """
+    page = clamped_int("page", 1, 1, 1_000_000)
+    page_size = clamped_int("page_size", 100, 1, 500)
+    citations = request.args.get("citations", "").lower() in ("1", "true", "yes")
+    try:
+        from uraas.services.docid_ingest import enrichment_page
+
+        return jsonify(
+            enrichment_page(page=page, page_size=page_size, include_citations=citations)
+        )
+    except Exception as e:
+        logger.error(f"docid_enrichment_bulk: {e}")
         return api_error(str(e))
 
 

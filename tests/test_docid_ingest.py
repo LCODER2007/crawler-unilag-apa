@@ -502,3 +502,128 @@ def test_exclude_sources_filters_the_query(dspace_record):
         analytics.get_papers_by_faculty_and_department(exclude_sources=["DOCiD"]),
         dict,
     )
+
+
+# -- Enrichment: what DOCiD actually consumes ------------------------------
+
+
+def test_ingest_populates_keywords(dspace_record):
+    """Keywords must be on the record at ingest, not filled in lazily later.
+
+    Lazy extraction is fine for a record someone opens in the dashboard. It is
+    wrong for a corpus served as a bulk feed, where every record would come
+    back empty until something happened to touch it one at a time.
+    """
+    from uraas.services.docid_ingest import keywords_for
+
+    result = upsert_publication(dspace_record)
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter(Item.id == result["item_id"]).first()
+        stored = item.ai_keywords
+    finally:
+        session.close()
+    assert stored, "ingest left ai_keywords empty"
+    assert len(stored.split(",")) > 1
+
+    assert keywords_for(None, None) is None
+    assert keywords_for("Sacred landscapes and indigenous geoconservation", None)
+
+
+def test_enrichment_is_addressed_by_docid_own_id(dspace_record):
+    """DOCiD knows publication 4185, not URAAS item 58.
+
+    (source_repository, source_record_id) is what makes their id addressable,
+    which is the reason that column exists.
+    """
+    from uraas.services.docid_ingest import enrichment_by_source_id
+
+    upsert_publication(dspace_record)
+    data = enrichment_by_source_id(4185)
+    assert data is not None
+    assert data["docid_publication_id"] == "4185"
+    assert data["uraas_item_id"]
+    assert isinstance(data["keywords"], list)
+
+
+def test_enrichment_returns_none_for_an_uningested_record():
+    from uraas.services.docid_ingest import enrichment_by_source_id
+
+    assert enrichment_by_source_id(999999999) is None
+
+
+def test_citations_say_why_they_are_empty(dspace_record):
+    """An empty edge list must not read as "no citations".
+
+    Only 1.8% of this corpus carries a DOI and ~2% an OpenAlex id (measured
+    2026-09-28), and 99.6% is Cultural Heritage or Indigenous Knowledge,
+    which citation databases do not index at all. Without an explicit
+    `available: false`, a consumer cannot tell "uncited" from "not a citable
+    record type".
+    """
+    from uraas.services.docid_ingest import enrichment_by_source_id
+
+    assert not (dspace_record.get("doi") or "").strip()
+    upsert_publication(dspace_record)
+    citations = enrichment_by_source_id(4185)["citations"]
+    assert citations["available"] is False
+    assert "no DOI or OpenAlex id" in citations["reason"]
+    assert citations["citing"] == []
+
+
+def test_bulk_feed_is_paginated_and_stable(dspace_record, minimal_record):
+    """Ordered by source_record_id so paging does not shuffle while more
+    records are still being ingested."""
+    from uraas.services.docid_ingest import enrichment_page
+
+    upsert_publication(dspace_record)
+    upsert_publication(minimal_record)
+    page = enrichment_page(page=1, page_size=1)
+    assert page["pagination"]["page_size"] == 1
+    assert page["pagination"]["total"] >= 2
+    assert len(page["data"]) == 1
+
+    ids = []
+    for p in (1, 2):
+        ids += [
+            r["docid_publication_id"]
+            for r in enrichment_page(page=p, page_size=1)["data"]
+        ]
+    assert ids == sorted(ids), "bulk feed is not ordered stably"
+    assert len(set(ids)) == len(ids), "a record appeared on two pages"
+
+
+def test_bulk_feed_omits_citations_by_default(dspace_record):
+    """Citations are a per-record read that is empty for most of this corpus;
+    including them by default makes a page of 100 slower for no benefit."""
+    from uraas.services.docid_ingest import enrichment_page
+
+    upsert_publication(dspace_record)
+    assert "citations" not in enrichment_page(page=1, page_size=5)["data"][0]
+    with_c = enrichment_page(page=1, page_size=5, include_citations=True)
+    assert "citations" in with_c["data"][0]
+
+
+def test_enrichment_endpoints_are_partner_readable():
+    """DOCiD consumes these with their partner key, so they must be on the
+    allowlist and must not be admin-gated."""
+    from uraas.dashboard.app import ADMIN_ENDPOINTS, PARTNER_ENDPOINTS
+
+    for endpoint in ("docid_enrichment_one", "docid_enrichment_bulk"):
+        assert endpoint in PARTNER_ENDPOINTS
+        assert endpoint not in ADMIN_ENDPOINTS
+
+
+def test_enrichment_http_surface(admin_client, dspace_record):
+    upsert_publication(dspace_record)
+    r = admin_client.get("/api/docid/enrichment/4185")
+    assert r.status_code == 200
+    assert r.get_json()["docid_publication_id"] == "4185"
+
+    assert admin_client.get("/api/docid/enrichment/999999999").status_code == 404
+
+    b = admin_client.get("/api/docid/enrichment?page=1&page_size=2")
+    assert b.status_code == 200
+    body = b.get_json()
+    assert "pagination" in body and "data" in body
+    assert len(body["data"]) <= 2
