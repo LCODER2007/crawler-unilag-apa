@@ -190,6 +190,34 @@ class Config:
     DOCID_INGEST_DELAY_S = float(os.getenv("DOCID_INGEST_DELAY_S", "0.2"))
     DOCID_INGEST_TIMEOUT_S = int(os.getenv("DOCID_INGEST_TIMEOUT_S", "45"))
 
+    # Keep the ingested DOCiD corpus current without a scheduler.
+    #
+    # The hourly catch-up in uraas.tasks.beat_schedule only fires where celery
+    # beat runs, which is the Compose stack. The Hugging Face Space runs
+    # gunicorn and nothing else, so on the Space an ingested corpus is a
+    # frozen snapshot of whenever someone last ran a backfill by hand.
+    #
+    # With this on, the dashboard process runs the incremental walk itself in
+    # a background thread. That fits the Space specifically: it sleeps when
+    # idle and restarts on the next request, so the catch-up runs whenever
+    # someone wakes it, and the periodic loop covers instances that stay up.
+    #
+    # Off by default - it sends recurring traffic to a third party's API, so
+    # it is opted into deliberately rather than inherited by every deployment.
+    DOCID_AUTO_SYNC = os.getenv("DOCID_AUTO_SYNC", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    # Wait before the first run so a cold start serves requests before it
+    # begins hitting an external API.
+    DOCID_AUTO_SYNC_DELAY_S = int(os.getenv("DOCID_AUTO_SYNC_DELAY_S", "120"))
+    DOCID_AUTO_SYNC_INTERVAL_S = int(os.getenv("DOCID_AUTO_SYNC_INTERVAL_S", "3600"))
+    # Pages of newest-first records to walk per run. The walk stops early at
+    # the first page holding nothing new, so this is only a ceiling for the
+    # case where a great many records appeared at once.
+    DOCID_AUTO_SYNC_MAX_PAGES = int(os.getenv("DOCID_AUTO_SYNC_MAX_PAGES", "5"))
+
     # -- Celery ----------------------------------------------------------------
     # Ingest is a background job: a full pull is one detail request per record
     # at roughly 1.6s each, which no HTTP request can wait for and which has

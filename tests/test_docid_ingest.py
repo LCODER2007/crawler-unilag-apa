@@ -627,3 +627,63 @@ def test_enrichment_http_surface(admin_client, dspace_record):
     body = b.get_json()
     assert "pagination" in body and "data" in body
     assert len(body["data"]) <= 2
+
+
+# -- Auto-sync: keeping the corpus current without a scheduler -------------
+
+
+def test_auto_sync_is_off_unless_asked_for():
+    """It sends recurring traffic to a third party's API, so no deployment
+    inherits it by accident."""
+    import uraas.dashboard.app as app_module
+
+    if app_module.config.DOCID_AUTO_SYNC:
+        pytest.skip("auto-sync explicitly enabled in this environment")
+    assert app_module.start_docid_auto_sync() is False
+    assert app_module._docid_auto_sync_started is False
+
+
+def test_auto_sync_starts_at_most_once_per_process(monkeypatch):
+    """gunicorn imports the module once per worker; a second call must not
+    add a second thread hitting the same API twice as often."""
+    import uraas.dashboard.app as app_module
+
+    started = []
+    monkeypatch.setattr(app_module.config, "DOCID_AUTO_SYNC", True)
+    monkeypatch.setattr(app_module, "_docid_auto_sync_started", False)
+
+    class FakeThread:
+        def __init__(self, *a, **k):
+            started.append(k.get("name"))
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(app_module.threading, "Thread", FakeThread)
+    assert app_module.start_docid_auto_sync() is True
+    assert app_module.start_docid_auto_sync() is False
+    assert started == ["docid-auto-sync"]
+
+
+def test_coverage_reports_whether_auto_sync_is_running(admin_client):
+    """An operator has to be able to tell a live corpus from a frozen one."""
+    body = admin_client.get("/api/docid/ingest/coverage?remote=0").get_json()
+    assert "auto_sync" in body
+    for field in ("enabled", "running", "interval_s", "runs", "last_error"):
+        assert field in body["auto_sync"]
+
+
+def test_incremental_only_ever_sees_new_records():
+    """Documents the limit, so nobody assumes edits propagate.
+
+    The API has no modified_since filter and only sort=published works, so
+    the walk is newest-first against a watermark. A record edited in place
+    keeps its original published timestamp and never resurfaces.
+    """
+    import inspect
+
+    from uraas.tasks import docid_incremental
+
+    doc = inspect.getdoc(docid_incremental) or ""
+    assert "new" in doc.lower()
+    assert "modified_since" in doc or "modified since" in doc.lower()

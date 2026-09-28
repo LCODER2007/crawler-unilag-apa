@@ -316,6 +316,42 @@ Citation tracking is meaningful for the 66 records with a DOI and the handful
 of Manuscript and Project records. It is the wrong service for the rest, and
 saying so up front is better than shipping thousands of empty edge lists.
 
+### Keeping it current
+
+Three ways the corpus stays up to date, in descending order of how much
+infrastructure they need:
+
+| Mechanism | Where it runs | Triggered by |
+|---|---|---|
+| `celery beat` hourly | Compose stack only | `uraas.tasks.beat_schedule` |
+| `DOCID_AUTO_SYNC` thread | anywhere the dashboard runs | the app itself |
+| `scripts/ingest_docid_to_live.py` | a workstation | a person |
+
+The beat schedule fires only where `celery-beat` runs, which is the Compose
+stack. A Hugging Face Space runs gunicorn and nothing else, so on a Space an
+ingested corpus is frozen at whenever someone last ran a backfill by hand.
+
+`DOCID_AUTO_SYNC=1` closes that gap: the dashboard process runs the
+incremental walk itself in a background thread, first after
+`DOCID_AUTO_SYNC_DELAY_S` and then every `DOCID_AUTO_SYNC_INTERVAL_S`. That
+suits a Space specifically, which sleeps when idle and restarts on the next
+request, so the catch-up also runs whenever someone wakes it. It starts at
+most once per process, and a failure is logged and retried on the next tick
+rather than taking the dashboard down with it.
+
+It is off by default because it sends recurring traffic to a third party's
+API - a deployment opts into that, it does not inherit it.
+
+`GET /api/docid/ingest/coverage` reports `auto_sync.enabled`,
+`auto_sync.running`, the run count and the last error, so an operator can
+tell a live corpus from a frozen one.
+
+**All three only ever catch NEW records.** The API has no `modified_since`
+filter, so the walk is newest-first against a watermark; a record edited in
+place on the platform keeps its original `published` timestamp and never
+resurfaces. Propagating edits needs a periodic full re-ingest, or that filter
+upstream.
+
 ### Running the ingest against a deployed instance
 
 ```bash

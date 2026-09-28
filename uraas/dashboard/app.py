@@ -2210,6 +2210,69 @@ def admin_sync_citation_graph(item_id):
         return api_error(str(e))
 
 
+# DOCiD auto-sync: keep the ingested corpus current without a scheduler.
+#
+# The hourly catch-up in uraas.tasks.beat_schedule only fires where celery
+# beat runs, which is the Compose stack. The Space runs gunicorn and nothing
+# else, so without this an ingested corpus is frozen at whenever someone last
+# ran a backfill by hand. Opt-in via DOCID_AUTO_SYNC, because it sends
+# recurring traffic to a third party.
+_docid_auto_sync_started = False
+_docid_auto_sync_state = {"runs": 0, "last_result": None, "last_error": None}
+
+
+def _docid_auto_sync_loop():
+    """Walk DOCiD's newest records periodically and ingest anything new.
+
+    Only ever catches NEW records. The API has no modified_since filter, so a
+    record edited in place on the platform keeps its original `published`
+    timestamp and never resurfaces here - picking those up needs a full
+    re-ingest, or that filter, which is the first thing worth asking the
+    Africa PID Alliance for.
+    """
+    import time as _time
+
+    from uraas.tasks import docid_incremental
+
+    _time.sleep(max(0, config.DOCID_AUTO_SYNC_DELAY_S))
+    while True:
+        try:
+            result = docid_incremental(max_pages=config.DOCID_AUTO_SYNC_MAX_PAGES)
+            _docid_auto_sync_state["runs"] += 1
+            _docid_auto_sync_state["last_result"] = result
+            _docid_auto_sync_state["last_error"] = None
+            if result.get("created"):
+                logger.info(
+                    "[docid-auto-sync] ingested %s new record(s)", result["created"]
+                )
+                analytics_cache.invalidate_all()
+        except Exception as exc:
+            # A third party being down must never take the dashboard with it.
+            _docid_auto_sync_state["last_error"] = str(exc)
+            logger.error("[docid-auto-sync] failed: %s", exc)
+        _time.sleep(max(60, config.DOCID_AUTO_SYNC_INTERVAL_S))
+
+
+def start_docid_auto_sync():
+    """Start the auto-sync thread once per process."""
+    global _docid_auto_sync_started
+    if _docid_auto_sync_started or not config.DOCID_AUTO_SYNC:
+        return False
+    _docid_auto_sync_started = True
+    threading.Thread(
+        target=_docid_auto_sync_loop, name="docid-auto-sync", daemon=True
+    ).start()
+    logger.info(
+        "[docid-auto-sync] enabled: first run in %ss, then every %ss",
+        config.DOCID_AUTO_SYNC_DELAY_S,
+        config.DOCID_AUTO_SYNC_INTERVAL_S,
+    )
+    return True
+
+
+start_docid_auto_sync()
+
+
 # DOCiD ingest - pulling Africa PID Alliance records into URAAS
 
 
@@ -2226,7 +2289,18 @@ def docid_ingest_coverage():
         from uraas.services.docid_ingest import ingest_coverage
         from uraas.tasks import queue_status
 
-        return jsonify({**ingest_coverage(probe_remote=probe), "queue": queue_status()})
+        return jsonify(
+            {
+                **ingest_coverage(probe_remote=probe),
+                "queue": queue_status(),
+                "auto_sync": {
+                    "enabled": config.DOCID_AUTO_SYNC,
+                    "running": _docid_auto_sync_started,
+                    "interval_s": config.DOCID_AUTO_SYNC_INTERVAL_S,
+                    **_docid_auto_sync_state,
+                },
+            }
+        )
     except Exception as e:
         logger.error(f"docid_ingest_coverage: {e}")
         return api_error(str(e))
