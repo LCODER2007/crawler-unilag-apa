@@ -369,6 +369,48 @@ def keywords_for(title: Optional[str], abstract: Optional[str]) -> Optional[str]
     return SEPARATOR.join(words) if words else None
 
 
+def classify_special_collection(fields: Dict) -> Dict:
+    """Score an ingested record with the Special Collections engine.
+
+    Every dashboard view gates on SC_FILTER (special_collection_score > 0),
+    and Item.special_collection_score defaults to 0.0, so a record that is
+    never classified is stored correctly, served correctly by the API, and
+    invisible in the UI. Ingest was doing exactly that: 3,726 DOCiD records
+    were held and none of them appeared anywhere on the dashboard.
+
+    Uses the same guarded classifier as the crawl pipeline
+    (uraas.services.sc_engine.is_special_collection), so an ingested record is
+    ranked on the same basis as a crawled one rather than by a second,
+    looser rule.
+    """
+    from uraas.services.sc_engine import category_breakdown, is_special_collection
+
+    try:
+        is_sc, score, categories = is_special_collection(
+            fields.get("title") or "",
+            fields.get("abstract") or "",
+            fields.get("dc_subject") or "",
+        )
+    except Exception as exc:
+        logger.error("SC classification failed during ingest: %s", exc)
+        return {"special_collection_score": 0.0, "special_collection_categories": ""}
+
+    if not is_sc:
+        return {"special_collection_score": 0.0, "special_collection_categories": ""}
+    try:
+        category_breakdown(
+            fields.get("title") or "",
+            fields.get("abstract") or "",
+            fields.get("dc_subject") or "",
+        )
+    except Exception:
+        pass
+    return {
+        "special_collection_score": score,
+        "special_collection_categories": ",".join(categories),
+    }
+
+
 def _find_existing(session, fields: Dict) -> Optional[Item]:
     """Locate a record already held for this DOCiD publication.
 
@@ -528,6 +570,7 @@ def upsert_publication(
     mapped = map_publication(payload, api_base=api_base)
     fields = mapped["item"]
     fields["ai_keywords"] = keywords_for(fields.get("title"), fields.get("abstract"))
+    fields.update(classify_special_collection(fields))
     owns_session = session is None
     session = session or SessionLocal()
     try:
@@ -701,6 +744,57 @@ def enrichment_page(
                 _enrichment_for(r, include_citations=include_citations) for r in rows
             ],
         }
+    finally:
+        session.close()
+
+
+def reclassify_ingested(
+    source_label: Optional[str] = None, limit: Optional[int] = None
+) -> Dict:
+    """Re-score ingested records with the Special Collections engine.
+
+    Needed for records ingested before classification was wired into the
+    ingest: they were stored with the default score of 0.0, which makes them
+    invisible to every dashboard view, since those all gate on SC_FILTER.
+
+    Deliberately NOT scripts/reclassify_and_prune_sc.py, which deletes
+    everything scoring 0. That is right for the UNILAG crawl, which is
+    Special-Collections-only, and badly wrong here: a partner's corpus is
+    ingested so URAAS can enrich all of it, and roughly two thirds of it
+    scores 0 because it genuinely is not African indigenous-knowledge
+    material. Those records still need their keywords served. This re-scores
+    in place and removes nothing.
+    """
+    label = source_label or config.DOCID_SOURCE_LABEL
+    session = SessionLocal()
+    stats = {"scanned": 0, "now_special_collection": 0, "unchanged": 0, "source": label}
+    try:
+        q = session.query(Item).filter(Item.source_repository == label)
+        if limit:
+            q = q.limit(limit)
+        for item in q.all():
+            stats["scanned"] += 1
+            scored = classify_special_collection(
+                {
+                    "title": item.title,
+                    "abstract": item.abstract,
+                    "dc_subject": item.dc_subject,
+                }
+            )
+            if scored["special_collection_score"] > 0:
+                stats["now_special_collection"] += 1
+            else:
+                stats["unchanged"] += 1
+            item.special_collection_score = scored["special_collection_score"]
+            item.special_collection_categories = scored["special_collection_categories"]
+        session.commit()
+        logger.info("reclassified ingested records: %s", stats)
+        return stats
+    except Exception as exc:
+        session.rollback()
+        logger.error("reclassify_ingested failed: %s", exc)
+        stats["error"] = str(exc)
+        return stats
     finally:
         session.close()
 

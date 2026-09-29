@@ -134,6 +134,7 @@ ADMIN_ENDPOINTS = {
     "admin_docid_backfill",
     "admin_docid_incremental",
     "admin_docid_ingest_record",
+    "admin_docid_reclassify",
     # Also reachable via a valid partner API key (see PARTNER_ENDPOINTS) - # that path is checked earlier in _enforce_authentication and returns
     # before this set is ever consulted. Listing them here only closes the
     # session-cookie path: without this, any logged-in VIEWER (meant to be
@@ -2454,6 +2455,31 @@ def admin_docid_incremental():
         )
     except Exception as e:
         logger.error(f"admin_docid_incremental: {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/admin/docid/reclassify", methods=["POST"])
+def admin_docid_reclassify():
+    """Re-score ingested DOCiD records for Special Collections (admin only).
+
+    For records ingested before classification was part of the ingest: they
+    carry the default score of 0.0 and are therefore invisible to every
+    dashboard view. Re-scores in place and deletes nothing.
+    """
+    payload = request.get_json(silent=True) or {}
+    limit = payload.get("limit")
+    try:
+        limit = int(limit) if limit is not None else None
+    except (TypeError, ValueError):
+        limit = None
+    try:
+        from uraas.services.docid_ingest import reclassify_ingested
+
+        stats = reclassify_ingested(limit=limit)
+        analytics_cache.invalidate_all()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"admin_docid_reclassify: {e}")
         return api_error(str(e))
 
 

@@ -792,3 +792,100 @@ def test_each_instance_stays_separately_addressable(dspace_record):
         found = di.enrichment_by_source_id(4185, source_label=label)
         assert found is not None, f"{label} corpus not addressable"
         assert found["docid_publication_id"] == "4185"
+
+
+# -- Dashboard visibility --------------------------------------------------
+
+
+def test_ingest_classifies_for_special_collections(dspace_record):
+    """Every dashboard view gates on SC_FILTER (special_collection_score > 0).
+
+    Item.special_collection_score defaults to 0.0, so a record that is never
+    classified is stored correctly, served correctly by the API, and
+    invisible in the UI. Ingest did exactly that: 3,726 records were held and
+    none appeared anywhere on the dashboard.
+    """
+    result = upsert_publication(dspace_record)
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter(Item.id == result["item_id"]).first()
+        score, cats = item.special_collection_score, item.special_collection_categories
+    finally:
+        session.close()
+    # This fixture is a Cultural Heritage / Traditional Knowledge record.
+    assert score > 0, "ingested record was not classified"
+    assert cats
+
+
+def test_classification_uses_the_same_engine_as_the_crawl():
+    """An ingested record must be ranked on the same basis as a crawled one,
+    not by a second, looser rule."""
+    from uraas.services.docid_ingest import classify_special_collection
+    from uraas.services.sc_engine import is_special_collection
+
+    fields = {
+        "title": "Indigenous knowledge and traditional healing practices",
+        "abstract": "Traditional medicine and indigenous knowledge systems.",
+        "dc_subject": "Cultural Heritage; Traditional Knowledge",
+    }
+    mine = classify_special_collection(fields)
+    is_sc, score, _ = is_special_collection(
+        fields["title"], fields["abstract"], fields["dc_subject"]
+    )
+    assert mine["special_collection_score"] == (score if is_sc else 0.0)
+
+
+def test_classification_never_invents_a_score():
+    """A record with no usable text must score 0 rather than be forced in."""
+    from uraas.services.docid_ingest import classify_special_collection
+
+    assert (
+        classify_special_collection({"title": "", "abstract": "", "dc_subject": ""})[
+            "special_collection_score"
+        ]
+        == 0.0
+    )
+
+
+def test_reclassify_never_deletes(dspace_record, minimal_record):
+    """scripts/reclassify_and_prune_sc.py deletes everything scoring 0.
+
+    That is right for the UNILAG crawl, which is Special-Collections-only,
+    and badly wrong for a partner corpus: roughly two thirds of DOCiD's
+    records score 0 because they genuinely are not African
+    indigenous-knowledge material, and they still need their keywords served.
+    """
+    from uraas.services.docid_ingest import reclassify_ingested
+
+    upsert_publication(dspace_record)
+    upsert_publication(minimal_record)
+    session = SessionLocal()
+    try:
+        before = (
+            session.query(Item)
+            .filter(Item.source_repository == config.DOCID_SOURCE_LABEL)
+            .count()
+        )
+    finally:
+        session.close()
+
+    stats = reclassify_ingested()
+
+    session = SessionLocal()
+    try:
+        after = (
+            session.query(Item)
+            .filter(Item.source_repository == config.DOCID_SOURCE_LABEL)
+            .count()
+        )
+    finally:
+        session.close()
+    assert after == before, "reclassify deleted records"
+    assert stats["scanned"] == before
+
+
+def test_reclassify_stays_admin_only():
+    from uraas.dashboard.app import ADMIN_ENDPOINTS, PARTNER_ENDPOINTS
+
+    assert "admin_docid_reclassify" in ADMIN_ENDPOINTS
+    assert "admin_docid_reclassify" not in PARTNER_ENDPOINTS
