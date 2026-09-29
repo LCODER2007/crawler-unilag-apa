@@ -248,7 +248,7 @@ def _org_ror(org: Dict) -> Optional[str]:
     return None
 
 
-def map_publication(payload: Dict) -> Dict:
+def map_publication(payload: Dict, api_base: Optional[str] = None) -> Dict:
     """Flatten one DOCiD record into URAAS Item fields plus its people.
 
     Returns {"item": {...column values...}, "creators": [...],
@@ -279,7 +279,13 @@ def map_publication(payload: Dict) -> Dict:
         # handle_url is the record's canonical landing page where one exists.
         # Records without it still need a unique url, so they fall back to the
         # platform's own permalink for the publication.
-        "url": handle_url or f"{config.DOCID_INGEST_API_URL}/publications/{remote_id}",
+        # Records with no landing page still need a unique url, so they fall
+        # back to the platform's own permalink. `api_base` names the instance
+        # the record actually came from: reading the global config here
+        # recorded a docid-demo URL on a record fetched from docid-core the
+        # moment anything pointed the two elsewhere.
+        "url": handle_url
+        or f"{(api_base or config.DOCID_INGEST_API_URL)}/publications/{remote_id}",
         "dc_identifier_uri": handle_url,
         "publication_date": published_at,
         "dc_date_issued": published_at.strftime("%Y-%m-%d") if published_at else None,
@@ -384,12 +390,30 @@ def _find_existing(session, fields: Dict) -> Optional[Item]:
         )
         if row:
             return row
+
+    # DOI and url are fallbacks so an ingest ENRICHES a paper URAAS already
+    # crawled from OpenAlex rather than creating a second copy of it. They
+    # must not, however, let one source claim a record that already belongs
+    # to another: demo and production DOCiD instances share handle URLs and
+    # DOIs for the same underlying work, so without this guard ingesting from
+    # production over a database holding demo records silently rewrote their
+    # source_repository and source_record_id, and the demo corpus stopped
+    # being addressable. Confirmed 2026-09-29.
+    def _claimable(row: Optional[Item]) -> Optional[Item]:
+        if row is None:
+            return None
+        if row.source_record_id and row.source_repository != fields.get(
+            "source_repository"
+        ):
+            return None
+        return row
+
     if fields.get("doi"):
-        row = session.query(Item).filter(Item.doi == fields["doi"]).first()
+        row = _claimable(session.query(Item).filter(Item.doi == fields["doi"]).first())
         if row:
             return row
     if fields.get("url"):
-        return session.query(Item).filter(Item.url == fields["url"]).first()
+        return _claimable(session.query(Item).filter(Item.url == fields["url"]).first())
     return None
 
 
@@ -433,19 +457,83 @@ def _attach_authors(session, item: Item, creators: List[Dict], ror: Optional[str
             existing.add(norm)
 
 
-def upsert_publication(payload: Dict, session=None) -> Dict:
+def _avoid_unique_collisions(session, fields: Dict, existing, api_base=None):
+    """Keep a record storable when another source already holds its
+    identifiers.
+
+    Item.docid, Item.url and Item.doi are all UNIQUE, but the same work
+    legitimately appears in more than one source corpus: demo publication 56
+    and production publication 56 carry the same DOCiD string, and records
+    harvested from the same repository share a handle URL across instances.
+    Holding both corpora therefore collides on all three.
+
+    The record's real key here is (source_repository, source_record_id), so
+    a colliding identifier is worked around rather than allowed to fail the
+    whole record:
+
+      - url falls back to the source instance's own permalink, which is
+        unique per instance by construction. dc_identifier_uri keeps the
+        real landing page, so nothing is lost.
+      - docid and doi are dropped on the duplicate; both remain on the copy
+        that claimed them first, and dc_identifier_doi keeps the DOI
+        visible on this one.
+
+    Without this, switching an instance from demo to production over an
+    existing corpus failed four records in five. Confirmed 2026-09-29.
+    """
+    other_id = existing.id if existing else -1
+
+    def taken(column, value) -> bool:
+        if not value:
+            return False
+        return (
+            session.query(Item.id).filter(column == value, Item.id != other_id).first()
+            is not None
+        )
+
+    if taken(Item.url, fields.get("url")):
+        permalink = (
+            f"{(api_base or config.DOCID_INGEST_API_URL)}"
+            f"/publications/{fields.get('source_record_id')}"
+        )
+        if fields.get("url") != permalink:
+            logger.info(
+                "url %s already held; storing %s/%s under its source permalink",
+                fields["url"],
+                fields.get("source_repository"),
+                fields.get("source_record_id"),
+            )
+            fields["url"] = permalink
+
+    for column, key in ((Item.docid, "docid"), (Item.doi, "doi")):
+        if taken(column, fields.get(key)):
+            logger.info(
+                "%s %s already held by another source; storing %s/%s without it",
+                key,
+                fields[key],
+                fields.get("source_repository"),
+                fields.get("source_record_id"),
+            )
+            fields[key] = None
+
+
+def upsert_publication(
+    payload: Dict, session=None, api_base: Optional[str] = None
+) -> Dict:
     """Store one DOCiD record, creating or updating as appropriate.
 
     Returns {"item_id", "action", "source_record_id"} where action is
     "created", "updated" or "skipped".
     """
-    mapped = map_publication(payload)
+    mapped = map_publication(payload, api_base=api_base)
     fields = mapped["item"]
     fields["ai_keywords"] = keywords_for(fields.get("title"), fields.get("abstract"))
     owns_session = session is None
     session = session or SessionLocal()
     try:
         existing = _find_existing(session, fields)
+
+        _avoid_unique_collisions(session, fields, existing, api_base)
         if existing:
             for key, value in fields.items():
                 # Never blank an existing value with a null from DOCiD: a
@@ -485,7 +573,9 @@ def ingest_record(publication_id, client: Optional[DocIDReadClient] = None) -> D
     """Fetch and store one publication by its DOCiD id."""
     client = client or DocIDReadClient()
     payload = client.get_publication(publication_id)
-    return upsert_publication(payload)
+    # Pass the client's own base so a record records the instance it came
+    # from, rather than whatever the global config happens to point at.
+    return upsert_publication(payload, api_base=client.base)
 
 
 def _enrichment_for(item: Item, include_citations: bool = True) -> Dict:

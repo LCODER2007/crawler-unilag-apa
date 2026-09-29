@@ -184,7 +184,7 @@ def docid_ingest_page(
             continue
         try:
             payload = client.get_publication(remote_id)
-            result = upsert_publication(payload)
+            result = upsert_publication(payload, api_base=client.base)
             stats[result["action"]] = stats.get(result["action"], 0) + 1
         except Exception as exc:
             # One malformed record must not abort a page. Record it and move
@@ -294,7 +294,7 @@ def docid_incremental(max_pages: int = 5, page_size: Optional[int] = None) -> Di
             new_on_page += 1
             try:
                 payload = client.get_publication(remote_id)
-                result = upsert_publication(payload)
+                result = upsert_publication(payload, api_base=client.base)
                 stats[result["action"]] = stats.get(result["action"], 0) + 1
                 known.add(str(remote_id))
             except Exception as exc:

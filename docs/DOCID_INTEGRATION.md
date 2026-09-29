@@ -29,11 +29,46 @@ OpenAPI 2.0 spec at `/apispec_1.json` (180 endpoints).
 demo on 2026-09-26: `get-publications` and `get-publication/{id}` both return
 200 with no `Authorization` header.
 
+Both instances are live and carry comparable volumes (demo 3,726,
+production 3,864 as of 2026-09-29), so moving between them is a
+configuration change, not a re-engineering job.
+
 Point URAAS at an instance with `DOCID_INGEST_API_URL`. Change
 `DOCID_SOURCE_LABEL` at the same time: it is stamped on every ingested
 record's `source_repository` and is half of that record's stable identity, so
 pointing at production while still labelled `DOCiD (demo)` would merge two
 different corpora into one.
+
+### Holding both instances at once
+
+Supported, and worth understanding, because the two overlap heavily: the
+same publication id exists on both, carrying the **same DOCiD string** and
+often the **same source handle URL**. `Item.docid`, `Item.url` and
+`Item.doi` are all UNIQUE, so a naive second ingest collides on all three.
+
+Three defects came out of testing exactly this on 2026-09-29, all now fixed
+and covered by tests:
+
+- The DOI/url fallback, which exists so an ingest enriches a paper URAAS
+  already crawled rather than duplicating it, let a second source **claim a
+  record belonging to a first** - rewriting its `source_repository` and
+  `source_record_id` in place, so the original corpus silently stopped being
+  addressable. The fallback now refuses any record that already carries a
+  `source_record_id` from a different source.
+- Refusing to claim it was not sufficient on its own: the insert then
+  violated the unique constraint on `url` and **failed four records in
+  five**. A duplicate now falls back to its own instance permalink, which is
+  unique by construction, and keeps the real landing page on
+  `dc_identifier_uri`. `docid` and `doi` are dropped on the duplicate and
+  remain on whichever copy claimed them first.
+- The permalink fallback read `DOCID_INGEST_API_URL` from global config, so
+  a record fetched from `docid-core` recorded a `docid-demo` URL the moment
+  anything pointed the two elsewhere. The instance is now threaded through
+  the ingest and recorded per record.
+
+The enrichment endpoints resolve against `DOCID_SOURCE_LABEL`, so they serve
+whichever instance is configured; `enrichment_by_source_id()` and
+`enrichment_page()` both take an explicit `source_label` to read the other.
 
 ---
 

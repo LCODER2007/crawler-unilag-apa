@@ -687,3 +687,108 @@ def test_incremental_only_ever_sees_new_records():
     doc = inspect.getdoc(docid_incremental) or ""
     assert "new" in doc.lower()
     assert "modified_since" in doc or "modified since" in doc.lower()
+
+
+# -- Holding more than one DOCiD instance ----------------------------------
+#
+# Every case here was a live defect found on 2026-09-29 by pointing the
+# ingest at docid-core while a docid-demo corpus was already held.
+
+
+def _as_production(payload):
+    """The same publication as it appears on the production instance."""
+    return dict(payload)
+
+
+def test_a_second_source_cannot_steal_the_first_sources_record(dspace_record):
+    """The DOI/url fallback must not re-label another source's record.
+
+    Demo and production share handle URLs and DOIs for the same underlying
+    work. Without this guard, ingesting production over a demo corpus
+    rewrote source_repository and source_record_id in place, and the demo
+    corpus silently stopped being addressable.
+    """
+    import uraas.services.docid_ingest as di
+
+    first = upsert_publication(dspace_record)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(di.config, "DOCID_SOURCE_LABEL", "DOCiD (production)")
+        second = upsert_publication(_as_production(dspace_record))
+
+    assert second["item_id"] != first["item_id"], "production stole the demo record"
+
+    session = SessionLocal()
+    try:
+        labels = {
+            r.source_repository
+            for r in session.query(Item).filter(Item.source_record_id == "4185").all()
+        }
+    finally:
+        session.close()
+    assert labels == {config.DOCID_SOURCE_LABEL, "DOCiD (production)"}
+
+
+def test_a_shared_handle_url_does_not_fail_the_record(dspace_record):
+    """Item.url is UNIQUE and both instances carry the same handle.
+
+    Refusing to steal the record is not enough on its own - the insert then
+    violated the unique constraint and failed four records in five. The
+    duplicate falls back to its own instance permalink instead.
+    """
+    import uraas.services.docid_ingest as di
+
+    assert dspace_record.get("handle_url")
+    upsert_publication(dspace_record)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(di.config, "DOCID_SOURCE_LABEL", "DOCiD (production)")
+        result = upsert_publication(
+            _as_production(dspace_record),
+            api_base="https://docid-core.africapidalliance.org/api/v1",
+        )
+
+    session = SessionLocal()
+    try:
+        item = session.query(Item).filter(Item.id == result["item_id"]).first()
+        url, uri, docid = item.url, item.dc_identifier_uri, item.docid
+    finally:
+        session.close()
+    assert "docid-core" in url, "duplicate did not fall back to its own permalink"
+    # The real landing page must survive on the duplicate, not be thrown away.
+    assert uri == dspace_record["handle_url"]
+    # docid is UNIQUE and the first copy claimed it.
+    assert docid is None
+
+
+def test_provenance_url_names_the_instance_the_record_came_from():
+    """Reading the global config here recorded a docid-demo URL on a record
+    fetched from docid-core."""
+    from uraas.services.docid_ingest import map_publication
+
+    payload = {"id": 99, "document_title": "no handle here"}
+    core = map_publication(
+        payload, api_base="https://docid-core.africapidalliance.org/api/v1"
+    )["item"]
+    assert "docid-core" in core["url"]
+    demo = map_publication(
+        payload, api_base="https://docid-demo.africapidalliance.org/api/v1"
+    )["item"]
+    assert "docid-demo" in demo["url"]
+    assert core["url"] != demo["url"]
+
+
+def test_each_instance_stays_separately_addressable(dspace_record):
+    import uraas.services.docid_ingest as di
+
+    upsert_publication(dspace_record)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(di.config, "DOCID_SOURCE_LABEL", "DOCiD (production)")
+        upsert_publication(
+            _as_production(dspace_record),
+            api_base="https://docid-core.africapidalliance.org/api/v1",
+        )
+
+    for label in (config.DOCID_SOURCE_LABEL, "DOCiD (production)"):
+        found = di.enrichment_by_source_id(4185, source_label=label)
+        assert found is not None, f"{label} corpus not addressable"
+        assert found["docid_publication_id"] == "4185"
