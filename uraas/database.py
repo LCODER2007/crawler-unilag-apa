@@ -167,6 +167,12 @@ class Item(Base):
     # -- DocID™ (Africa PID Alliance) -----------------------------------------
     docid = Column(String(128), unique=True, index=True)  # 20.500.14351/[hash]
     docid_assigned_at = Column(DateTime)
+    # DOCiD's own integer publication id (stored as string) when URAAS pushed
+    # this record to DOCiD via scripts/register_docid.py. Distinct from
+    # source_record_id so URAAS-crawled items keep their original
+    # source_repository (e.g. "OpenAlex") while still being addressable by
+    # DOCiD's publication id on enrichment/related endpoints.
+    docid_publication_id = Column(String(128), index=True)
 
     # How confidently this item's institutional affiliation was verified at
     # crawl time - "strong" (ROR match, verified employer/employment record,

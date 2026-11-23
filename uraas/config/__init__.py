@@ -43,13 +43,11 @@ class Config:
         "yes",
         "on",
     }
-    # Push-to-DOCiD after each crawl. Defaults OFF: the Africa PID Alliance
-    # team asked (2026-09) to *pull* from URAAS into their own staging, where
-    # a curator promotes records - so URAAS pushing the same records in at
-    # the same time would have both sides ingesting everything twice. Set
-    # URAAS_ENABLE_DOCID_PUSH=1 only if that direction is agreed and the
-    # pull integration is switched off on their side.
-    ENABLE_DOCID_PUSH = os.getenv("URAAS_ENABLE_DOCID_PUSH", "false").lower() in {
+    # Push-to-DOCiD after each crawl. Defaults ON targeting docid-demo so
+    # newly crawled strong-affiliation Special Collections papers are
+    # registered automatically (still cleanly no-ops if DOCID_EMAIL /
+    # DOCID_PASSWORD are unset; set URAAS_ENABLE_DOCID_PUSH=0 to disable).
+    ENABLE_DOCID_PUSH = os.getenv("URAAS_ENABLE_DOCID_PUSH", "true").lower() in {
         "1",
         "true",
         "yes",
@@ -141,21 +139,17 @@ class Config:
     # Leave blank to skip auto-deposit; set to a collection UUID to enable it.
     DSPACE_COLLECTION_UUID = os.getenv("DSPACE_COLLECTION_UUID", "")
 
-    # -- Africa PID Alliance DOCiD™ platform (docid.africapidalliance.org) ----
+    # -- Africa PID Alliance DOCiD™ platform (docid-demo by default) ---------
     # Real registration API - distinct from uraas.utils.docid_generator, which
     # is a purely local placeholder hash used until real credentials exist.
-    # The base URL below (https://docid.africapidalliance.org/api) was
-    # confirmed live 2026-07-19 by reading the platform's own public
-    # frontend source (github.com/Africa-PID-Alliance/DOCiD) - it's a
-    # same-origin Next.js proxy to the real Flask backend, not a secret, so
-    # it's defaulted here; only DOCID_EMAIL/DOCID_PASSWORD need supplying.
-    # docs/api-reference.html on that domain describes a different, older
-    # /api/v1/* JSON-body shape that doesn't match what's actually deployed
-    # (real /publish is multipart/form-data at plain /api/publications/publish)
-    # - see uraas/services/docid_client.py's module docstring for the full
-    # empirically-verified schema. Leave EMAIL/PASSWORD blank to keep
-    # registration disabled (falls back to the local placeholder generator).
-    DOCID_API_URL = os.getenv("DOCID_API_URL", "").rstrip("/")
+    # Defaults to the docid-demo API (matching DOCID_INGEST_API_URL); override
+    # DOCID_API_URL explicitly to target production
+    # (https://docid.africapidalliance.org/api or
+    # https://docid-core.africapidalliance.org/api/v1). Leave EMAIL/PASSWORD
+    # blank to keep registration disabled.
+    DOCID_API_URL = os.getenv(
+        "DOCID_API_URL", "https://docid-demo.africapidalliance.org/api/v1"
+    ).rstrip("/")
     DOCID_EMAIL = os.getenv("DOCID_EMAIL", "")
     DOCID_PASSWORD = os.getenv("DOCID_PASSWORD", "")
 

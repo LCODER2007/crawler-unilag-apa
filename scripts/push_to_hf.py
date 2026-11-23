@@ -285,6 +285,8 @@ SPACE_VARIABLES = [
     ("SMTP_HOST", "smtp.gmail.com"),
     ("SMTP_PORT", "587"),
     ("SMTP_USE_TLS", "true"),
+    ("URAAS_ENABLE_DOCID_PUSH", "true"),
+    ("DOCID_API_URL", "https://docid-demo.africapidalliance.org/api/v1"),
 ]
 
 # Set as HF *Secrets*, never Variables - a Variable is readable by anyone who
@@ -301,6 +303,8 @@ SPACE_SECRETS = [
     "OPENALEX_MAILTO",
     "DSPACE_USERNAME",
     "DSPACE_PASSWORD",
+    "DOCID_EMAIL",
+    "DOCID_PASSWORD",
 ]
 
 

@@ -15,7 +15,7 @@ and which records carry a given keyword.
 import logging
 from typing import Dict, List, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 
 from uraas.database import Item, SessionLocal
 from uraas.services.sc_engine import SC_FILTER
@@ -201,7 +201,21 @@ def search_by_keyword(
         session.close()
 
 
-def related_by_keywords(item_id: int, limit: int = 10) -> List[Dict]:
+def _docid_publication_id(item: Item) -> Optional[str]:
+    """Return DOCiD's integer publication id (as str) if URAAS holds one."""
+    if getattr(item, "docid_publication_id", None):
+        return str(item.docid_publication_id)
+    if item.source_record_id and (item.source_repository or "").startswith("DOCiD"):
+        return str(item.source_record_id)
+    return None
+
+
+def related_by_keywords(
+    item_id: int,
+    limit: int = 10,
+    source_label: Optional[str] = None,
+    docid_only: bool = False,
+) -> List[Dict]:
     """Records sharing the most keywords with this one.
 
     Deliberately a keyword overlap, not a citation-graph neighbourhood - the
@@ -224,12 +238,31 @@ def related_by_keywords(item_id: int, limit: int = 10) -> List[Dict]:
         # it is one the database does rather than one Python does over every
         # row in the corpus.
         clauses = [Item.ai_keywords.ilike(f"%{w}%") for w in list(source_words)[:20]]
-        candidates = (
-            session.query(Item)
-            .filter(Item.id != item_id, Item.ai_keywords.isnot(None), or_(*clauses))
-            .limit(500)
-            .all()
+        q = session.query(Item).filter(
+            Item.id != item_id, Item.ai_keywords.isnot(None), or_(*clauses)
         )
+        if docid_only:
+            if source_label:
+                q = q.filter(
+                    or_(
+                        and_(
+                            Item.source_repository == source_label,
+                            Item.source_record_id.isnot(None),
+                        ),
+                        Item.docid_publication_id.isnot(None),
+                    )
+                )
+            else:
+                q = q.filter(
+                    or_(
+                        and_(
+                            Item.source_repository.startswith("DOCiD"),
+                            Item.source_record_id.isnot(None),
+                        ),
+                        Item.docid_publication_id.isnot(None),
+                    )
+                )
+        candidates = q.limit(500).all()
 
         scored = []
         for cand in candidates:
@@ -243,6 +276,8 @@ def related_by_keywords(item_id: int, limit: int = 10) -> List[Dict]:
             scored.append(
                 {
                     "id": cand.id,
+                    "docid_publication_id": _docid_publication_id(cand),
+                    "docid": cand.docid or "",
                     "title": cand.title,
                     "doi": cand.doi or "",
                     "year": (

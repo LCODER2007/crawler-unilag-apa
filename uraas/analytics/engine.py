@@ -354,6 +354,13 @@ class URAASAnalyticsEngine:
                 unclassified_q = unclassified_q.filter(
                     Item.institution.ilike(f"%{inst_name}%")
                 )
+            for prefix in exclude_sources or []:
+                unclassified_q = unclassified_q.filter(
+                    or_(
+                        Item.source_repository.is_(None),
+                        ~Item.source_repository.startswith(prefix),
+                    )
+                )
             unclassified = unclassified_q.all()
             if unclassified:
                 tree["Unclassified"] = {

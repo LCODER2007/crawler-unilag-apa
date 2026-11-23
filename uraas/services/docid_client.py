@@ -56,7 +56,7 @@ from uraas.utils.ai_classifier import sanitize_text
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 20
-DEFAULT_BASE_URL = "https://docid.africapidalliance.org/api"
+DEFAULT_BASE_URL = "https://docid-demo.africapidalliance.org/api/v1"
 
 
 class DocIDConnectionError(Exception):
@@ -275,6 +275,7 @@ class DocIDClient:
             ("resourceType", str(resource_type_id)),
             ("user_id", str(self.user_id)),
             ("owner", "URAAS / University of Lagos"),
+            ("doi", (getattr(item, "doi", None) or "").strip()),
             ("avatar", ""),
         ]
 
@@ -342,4 +343,12 @@ class DocIDClient:
         r.raise_for_status()
         result = r.json()
         result["_assigned_docid"] = docid
+        inner = result.get("data") if isinstance(result.get("data"), dict) else {}
+        pub_id = (
+            result.get("publication_id")
+            or inner.get("publication_id")
+            or inner.get("id")
+            or result.get("id")
+        )
+        result["_publication_id"] = str(pub_id) if pub_id is not None else None
         return result

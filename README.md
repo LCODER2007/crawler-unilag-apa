@@ -290,8 +290,11 @@ GET /api/analytics/top-authors?limit=20
 # Keywords for one record (extracted and persisted on first read if absent)
 GET /api/keywords/<id>
 
-# Records sharing the most keywords with this one
+# Records sharing the most keywords with this one (add ?id_type=docid&docid_only=1 to pass DOCiD publication id)
 GET /api/keywords/<id>/related?limit=10
+
+# Related records addressed directly by DOCiD publication id (returns docid_publication_id + docid)
+GET /api/docid/enrichment/<publication_id>/related?limit=10
 
 # Records carrying a keyword
 GET /api/keywords/search?q=indigenous%20knowledge&sc_only=1

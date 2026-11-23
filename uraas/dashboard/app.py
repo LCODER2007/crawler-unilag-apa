@@ -180,6 +180,7 @@ PARTNER_ENDPOINTS = {
     # stays admin-only.
     "docid_ingest_coverage",
     "docid_enrichment_one",
+    "docid_enrichment_related",
     "docid_enrichment_bulk",
 }
 
@@ -373,10 +374,10 @@ def _auto_register_docid():
     cleanly (prints "[DISABLED]", exits 0) when DOCID_EMAIL/DOCID_PASSWORD
     aren't configured.
 
-    Off by default since 2026-09 (config.ENABLE_DOCID_PUSH): the Africa PID
-    Alliance team asked to pull from URAAS into their own curator-gated
-    staging instead. Pushing as well would mean both sides ingest the same
-    records twice, which is exactly what they flagged.
+    On by default (config.ENABLE_DOCID_PUSH) targeting docid-demo so newly
+    crawled strong-affiliation Special Collections items are registered
+    automatically; still no-ops cleanly when DOCID_EMAIL/DOCID_PASSWORD are
+    unset or when URAAS_ENABLE_DOCID_PUSH=0.
     """
     import sys as _sys
 
@@ -1410,10 +1411,26 @@ def related_keywords(item_id):
     """Records sharing the most keywords with this one (thematic neighbours,
     not citation neighbours - see /api/citations/<id>/graph for those)."""
     limit = clamped_int("limit", 10, 1, 50)
+    id_type = (request.args.get("id_type") or "").strip().lower()
+    docid_only_raw = request.args.get("docid_only", "").strip().lower()
     try:
+        if id_type == "docid":
+            from uraas.services.docid_ingest import related_by_source_id
+
+            docid_only = docid_only_raw not in ("0", "false", "no")
+            data = related_by_source_id(item_id, limit=limit, docid_only=docid_only)
+            if data is None:
+                return api_error(
+                    "No such DOCiD record has been ingested into URAAS. "
+                    "See /api/docid/ingest/coverage.",
+                    404,
+                )
+            return jsonify(data)
+
         from uraas.services.keyword_service import related_by_keywords
 
-        results = related_by_keywords(item_id, limit=limit)
+        docid_only = docid_only_raw in ("1", "true", "yes")
+        results = related_by_keywords(item_id, limit=limit, docid_only=docid_only)
         return jsonify({"item_id": item_id, "count": len(results), "related": results})
     except Exception as e:
         logger.error(f"related_keywords({item_id}): {e}")
@@ -2328,6 +2345,37 @@ def docid_enrichment_one(publication_id):
         return jsonify(data)
     except Exception as e:
         logger.error(f"docid_enrichment_one({publication_id}): {e}")
+        return api_error(str(e))
+
+
+@app.route("/api/docid/enrichment/<publication_id>/related")
+def docid_enrichment_related(publication_id):
+    """Related records for one DOCiD publication, addressed by THEIR publication id.
+
+    By default returns only related records that also exist in DOCiD
+    (`docid_only=1`), each carrying `docid_publication_id` and `docid` so
+    DOCiD can look them up directly. Pass `?docid_only=0` to also include
+    URAAS-crawled records not yet registered in DOCiD.
+    """
+    limit = clamped_int("limit", 10, 1, 50)
+    docid_only = request.args.get("docid_only", "1").lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+    try:
+        from uraas.services.docid_ingest import related_by_source_id
+
+        data = related_by_source_id(publication_id, limit=limit, docid_only=docid_only)
+        if data is None:
+            return api_error(
+                "No such DOCiD record has been ingested into URAAS. "
+                "See /api/docid/ingest/coverage.",
+                404,
+            )
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"docid_enrichment_related({publication_id}): {e}")
         return api_error(str(e))
 
 

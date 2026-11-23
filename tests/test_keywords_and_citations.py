@@ -122,6 +122,8 @@ def test_related_by_keywords_excludes_self():
     for r in related:
         assert 0 < r["overlap_score"] <= 1
         assert r["shared_keywords"]
+        assert "docid_publication_id" in r
+        assert "docid" in r
     scores = [r["overlap_score"] for r in related]
     assert scores == sorted(scores, reverse=True)
 

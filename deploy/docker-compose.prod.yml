@@ -58,6 +58,10 @@ services:
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/2
       DOCID_INGEST_API_URL: ${DOCID_INGEST_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
       DOCID_SOURCE_LABEL: ${DOCID_SOURCE_LABEL:-DOCiD (demo)}
+      URAAS_ENABLE_DOCID_PUSH: ${URAAS_ENABLE_DOCID_PUSH:-true}
+      DOCID_API_URL: ${DOCID_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
+      DOCID_EMAIL: ${DOCID_EMAIL:-}
+      DOCID_PASSWORD: ${DOCID_PASSWORD:-}
       STORAGE_PATH: /app/storage/pdfs
       DASHBOARD_SECRET_KEY: ${DASHBOARD_SECRET_KEY:-change-this-in-production}
       FLASK_ENV: production
@@ -133,6 +137,10 @@ services:
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-uraas_redis_pass}@redis:6379/2
       DOCID_INGEST_API_URL: ${DOCID_INGEST_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
       DOCID_SOURCE_LABEL: ${DOCID_SOURCE_LABEL:-DOCiD (demo)}
+      URAAS_ENABLE_DOCID_PUSH: ${URAAS_ENABLE_DOCID_PUSH:-true}
+      DOCID_API_URL: ${DOCID_API_URL:-https://docid-demo.africapidalliance.org/api/v1}
+      DOCID_EMAIL: ${DOCID_EMAIL:-}
+      DOCID_PASSWORD: ${DOCID_PASSWORD:-}
       STORAGE_PATH: /app/storage/pdfs
     volumes:
       - ../storage:/app/storage

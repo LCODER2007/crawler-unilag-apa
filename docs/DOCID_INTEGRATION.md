@@ -296,17 +296,24 @@ on a worker" from "ran inline and blocked the request".
 
 The point of ingesting DOCiD's corpus is not to hold it. It is so URAAS can
 run its keyword and citation services over their records and serve the
-results back. Two endpoints do that, both partner-readable:
+results back. Three endpoints do that, all partner-readable:
 
 ```
 GET /api/docid/enrichment/<their_publication_id>
+GET /api/docid/enrichment/<their_publication_id>/related?limit=10[&docid_only=1]
 GET /api/docid/enrichment?page=1&page_size=100[&citations=1]
 ```
 
 **Addressed by their id, not ours.** DOCiD knows publication 4185; it has no
 idea that is URAAS item 58. `(source_repository, source_record_id)` is what
-makes their id addressable, which is why that column exists. A `404` means
-that record has not been ingested yet, not that it does not exist.
+makes ingested records addressable, and `Item.docid_publication_id` makes
+URAAS-pushed records addressable by DOCiD's publication id too. A `404` means
+that record is not in URAAS yet, not that it does not exist.
+
+`/related` scores Jaccard keyword overlap and defaults to `docid_only=1`,
+returning only related records that carry a `docid_publication_id` and `docid`
+so DOCiD can resolve them directly against its own database (pass
+`?docid_only=0` to also include URAAS-only crawled records).
 
 The bulk feed is ordered by `source_record_id` so paging stays stable while
 more records are still being ingested, and omits citations by default: they
@@ -417,10 +424,10 @@ looking at the ingested corpus is the entire point of ingesting it.
 This does **not** hide DOCiD's records from DOCiD. The enrichment endpoints
 above serve them deliberately, addressed by DOCiD's own publication id. The
 guard governs one thing: the tree that enumerates *URAAS's* corpus, so a
-partner pulling our records cannot scoop up their own back out of it. (In
-practice the tree also joins `Item.collections`, and ingested records belong
-to no UNILAG collection, so they would not appear there in any case - the
-guard makes that explicit rather than incidental.)
+partner pulling our records cannot scoop up their own back out of it. Because
+ingested records belong to no UNILAG collection and land in the `Unclassified`
+bucket when they qualify as Special Collections, `exclude_sources` is applied
+to both the classified collection queries and the `Unclassified` bucket query.
 
 The match is on the prefix, not the exact label, so `DOCiD (demo)` and
 `DOCiD (production)` are both covered by one rule and switching

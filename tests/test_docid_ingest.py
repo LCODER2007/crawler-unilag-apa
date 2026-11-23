@@ -889,3 +889,301 @@ def test_reclassify_stays_admin_only():
 
     assert "admin_docid_reclassify" in ADMIN_ENDPOINTS
     assert "admin_docid_reclassify" not in PARTNER_ENDPOINTS
+
+
+# -- Related papers by DOCiD id, Unclassified guard, and auto-push --------
+
+
+def _flatten_tree_ids(tree):
+    ids = set()
+    for _faculty, depts in tree.items():
+        for _dept, papers in depts.items():
+            for p in papers:
+                ids.add(p["id"])
+    return ids
+
+
+def test_papers_tree_excludes_docid_from_unclassified_bucket(dspace_record):
+    """DOCiD-ingested records belong to no UNILAG collection, so they fall into
+    Unclassified. exclude_sources must apply there too."""
+    from uraas.analytics.engine import analytics
+
+    result = upsert_publication(dspace_record)
+    item_id = result["item_id"]
+
+    filtered = analytics.get_papers_by_faculty_and_department(exclude_sources=["DOCiD"])
+    assert item_id not in _flatten_tree_ids(filtered)
+
+    unfiltered = analytics.get_papers_by_faculty_and_department(exclude_sources=None)
+    assert item_id in _flatten_tree_ids(unfiltered)
+
+
+def test_related_by_source_id_returns_docid_publication_ids():
+    from uraas.services.docid_ingest import related_by_source_id
+
+    session = SessionLocal()
+    created_ids = []
+    try:
+        a = Item(
+            title="Test Synthetic DOCiD Paper A",
+            url="https://example.org/synthetic/docid-rel-a",
+            source_repository=config.DOCID_SOURCE_LABEL,
+            source_record_id="999001",
+            docid="20.500.14351/testrel999001",
+            ai_keywords="zztestrelkw1, zztestrelkw2, zztestrelkw3",
+            special_collection_score=6.0,
+        )
+        b = Item(
+            title="Test Synthetic DOCiD Paper B",
+            url="https://example.org/synthetic/docid-rel-b",
+            source_repository=config.DOCID_SOURCE_LABEL,
+            source_record_id="999002",
+            docid="20.500.14351/testrel999002",
+            ai_keywords="zztestrelkw1, zztestrelkw2, zztestrelkw4",
+            special_collection_score=6.0,
+        )
+        local_c = Item(
+            title="Test Synthetic Local Paper C",
+            url="https://example.org/synthetic/local-rel-c",
+            source_repository="OpenAlex",
+            source_record_id=None,
+            docid=None,
+            ai_keywords="zztestrelkw1, zztestrelkw2, zztestrelkw3",
+            special_collection_score=6.0,
+        )
+        session.add_all([a, b, local_c])
+        session.commit()
+        created_ids = [a.id, b.id, local_c.id]
+        a_id, b_id, c_id = created_ids
+    finally:
+        session.close()
+
+    try:
+        res_docid = related_by_source_id("999001", limit=10, docid_only=True)
+        assert res_docid is not None
+        assert res_docid["docid_publication_id"] == "999001"
+        assert res_docid["uraas_item_id"] == a_id
+        assert res_docid["docid"] == "20.500.14351/testrel999001"
+        rel_ids = {r["id"] for r in res_docid["related"]}
+        assert b_id in rel_ids
+        assert c_id not in rel_ids
+        b_row = next(r for r in res_docid["related"] if r["id"] == b_id)
+        assert b_row["docid_publication_id"] == "999002"
+        assert b_row["docid"] == "20.500.14351/testrel999002"
+
+        res_all = related_by_source_id("999001", limit=10, docid_only=False)
+        assert res_all is not None
+        all_ids = {r["id"] for r in res_all["related"]}
+        assert {b_id, c_id} <= all_ids
+        c_row = next(r for r in res_all["related"] if r["id"] == c_id)
+        assert c_row["docid_publication_id"] is None
+    finally:
+        cleanup = SessionLocal()
+        try:
+            cleanup.query(Item).filter(Item.id.in_(created_ids)).delete(
+                synchronize_session=False
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_enrichment_related_endpoint_is_partner_readable():
+    from uraas.dashboard.app import ADMIN_ENDPOINTS, PARTNER_ENDPOINTS
+
+    assert "docid_enrichment_related" in PARTNER_ENDPOINTS
+    assert "docid_enrichment_related" not in ADMIN_ENDPOINTS
+
+
+def test_enrichment_related_http_surface(admin_client):
+    session = SessionLocal()
+    created_ids = []
+    try:
+        a = Item(
+            title="Test HTTP DOCiD Related A",
+            url="https://example.org/synthetic/http-rel-a",
+            source_repository=config.DOCID_SOURCE_LABEL,
+            source_record_id="999011",
+            docid="20.500.14351/testhttp999011",
+            ai_keywords="zztesthttprel1, zztesthttprel2",
+            special_collection_score=6.0,
+        )
+        b = Item(
+            title="Test HTTP DOCiD Related B",
+            url="https://example.org/synthetic/http-rel-b",
+            source_repository=config.DOCID_SOURCE_LABEL,
+            source_record_id="999012",
+            docid="20.500.14351/testhttp999012",
+            ai_keywords="zztesthttprel1, zztesthttprel2",
+            special_collection_score=6.0,
+        )
+        session.add_all([a, b])
+        session.commit()
+        created_ids = [a.id, b.id]
+    finally:
+        session.close()
+
+    try:
+        r = admin_client.get("/api/docid/enrichment/999011/related")
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["docid_publication_id"] == "999011"
+        assert "999012" in [row["docid_publication_id"] for row in body["related"]]
+
+        assert (
+            admin_client.get("/api/docid/enrichment/999999999/related").status_code
+            == 404
+        )
+
+        kw_r = admin_client.get("/api/keywords/999011/related?id_type=docid")
+        assert kw_r.status_code == 200
+        kw_body = kw_r.get_json()
+        assert kw_body["docid_publication_id"] == "999011"
+        assert "999012" in [row["docid_publication_id"] for row in kw_body["related"]]
+
+        assert (
+            admin_client.get(
+                "/api/keywords/999999999/related?id_type=docid"
+            ).status_code
+            == 404
+        )
+    finally:
+        cleanup = SessionLocal()
+        try:
+            cleanup.query(Item).filter(Item.id.in_(created_ids)).delete(
+                synchronize_session=False
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_docid_push_defaults_to_demo_and_stores_publication_id(monkeypatch):
+    from types import SimpleNamespace
+
+    from uraas.services import docid_client as dc
+    from uraas.services.docid_ingest import (
+        enrichment_by_source_id,
+        related_by_source_id,
+    )
+
+    assert dc.DEFAULT_BASE_URL == "https://docid-demo.africapidalliance.org/api/v1"
+    assert config.ENABLE_DOCID_PUSH is True
+    assert config.DOCID_API_URL == "https://docid-demo.africapidalliance.org/api/v1"
+
+    monkeypatch.setattr(dc.config, "DOCID_EMAIL", "test@unilag.edu.ng")
+    monkeypatch.setattr(dc.config, "DOCID_PASSWORD", "test-pass")
+    monkeypatch.setattr(
+        dc.config, "DOCID_API_URL", "https://docid-demo.africapidalliance.org/api/v1"
+    )
+
+    client = dc.DocIDClient()
+    assert client.base == "https://docid-demo.africapidalliance.org/api/v1"
+    client.access_token = "fake-jwt"
+    client.user_id = 42
+
+    monkeypatch.setattr(
+        client,
+        "_get",
+        lambda path, auth=False: (
+            [{"id": 1, "resource_type": "Indigeneous Knowledge"}]
+            if "resource-types" in path
+            else [{"role_id": 1, "role_name": "Author"}]
+        ),
+    )
+    monkeypatch.setattr(
+        client, "assign_docid", lambda title, desc: "20.500.14351/mockhash123456"
+    )
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "message": "Publication created successfully.",
+                "publication_id": 7777,
+            }
+
+    def fake_post(url, files=None, timeout=None):
+        captured["url"] = url
+        captured["fields"] = {k: v[1] for k, v in (files or [])}
+        return FakeResp()
+
+    monkeypatch.setattr(client._s, "post", fake_post)
+
+    mock_item = SimpleNamespace(
+        title="Mock Indigenous Knowledge Study",
+        abstract="Traditional knowledge study.",
+        doi="10.1234/mock.doi",
+        special_collection_categories="Indigenous Knowledge",
+        funders=None,
+        authors=[],
+        institution="University of Lagos",
+    )
+    res = client.publish_item(mock_item)
+    assert captured["url"].endswith("/publications/publish")
+    assert captured["fields"]["doi"] == "10.1234/mock.doi"
+    assert res["_assigned_docid"] == "20.500.14351/mockhash123456"
+    assert res["_publication_id"] == "7777"
+
+    session = SessionLocal()
+    created_ids = []
+    try:
+        pushed = Item(
+            title="Mock Pushed Paper",
+            url="https://example.org/synthetic/pushed-7777",
+            source_repository="OpenAlex",
+            source_record_id=None,
+            docid="20.500.14351/mockpush999777",
+            docid_publication_id="999777",
+            ai_keywords="zztestpushkw1, zztestpushkw2",
+            special_collection_score=6.0,
+        )
+        ingested = Item(
+            title="Mock Ingested Neighbor",
+            url="https://example.org/synthetic/ingested-999778",
+            source_repository=config.DOCID_SOURCE_LABEL,
+            source_record_id="999778",
+            docid="20.500.14351/mockingested999778",
+            ai_keywords="zztestpushkw1, zztestpushkw2",
+            special_collection_score=6.0,
+        )
+        session.add_all([pushed, ingested])
+        session.commit()
+        created_ids = [pushed.id, ingested.id]
+        pushed_id = pushed.id
+    finally:
+        session.close()
+
+    try:
+        enr = enrichment_by_source_id("999777")
+        assert enr is not None
+        assert enr["docid_publication_id"] == "999777"
+        assert enr["uraas_item_id"] == pushed_id
+        assert enr["docid"] == "20.500.14351/mockpush999777"
+
+        rel_from_pushed = related_by_source_id("999777", docid_only=True)
+        assert rel_from_pushed is not None
+        assert "999778" in [
+            r["docid_publication_id"] for r in rel_from_pushed["related"]
+        ]
+
+        rel_from_ingested = related_by_source_id("999778", docid_only=True)
+        assert rel_from_ingested is not None
+        assert "999777" in [
+            r["docid_publication_id"] for r in rel_from_ingested["related"]
+        ]
+    finally:
+        cleanup = SessionLocal()
+        try:
+            cleanup.query(Item).filter(Item.id.in_(created_ids)).delete(
+                synchronize_session=False
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()

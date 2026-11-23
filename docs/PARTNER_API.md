@@ -337,11 +337,31 @@ a record carrying many keywords cannot outrank a tight thematic match on
 volume alone. `?limit=` 1-50, default 10.
 
 ```json
-{ "item_id": 1, "count": 2, "related": [ { "id": 49, "title": "...", "doi": "10.4314/ajtcam.v4i2.31207", "year": 2008, "shared_keywords": ["malaria", "medicinal plants"], "overlap_score": 0.0811 } ] }
+{ "item_id": 1, "count": 2, "related": [ { "id": 49, "docid_publication_id": "4185", "docid": "uon/0ed2b8a0-3a5e-4b27-a761-24604ee90bd4", "title": "...", "doi": "10.4314/ajtcam.v4i2.31207", "year": 2008, "shared_keywords": ["malaria", "medicinal plants"], "overlap_score": 0.0811 } ] }
 ```
 
-This is a thematic neighbourhood, not a citation one - for citations see
-`/api/citations/<id>/graph`.
+- By default `<id>` is URAAS's internal `items.id`. Pass `?id_type=docid` to look
+  up by DOCiD's publication id instead (or use the dedicated endpoint below).
+- Pass `?docid_only=1` to restrict results to records that exist in DOCiD
+  (`docid_publication_id` non-null; default when `id_type=docid`).
+- This is a thematic neighbourhood, not a citation one - for citations see
+  `/api/citations/<id>/graph`.
+
+### `GET /api/docid/enrichment/<publication_id>/related`
+Recommended endpoint for DOCiD: identical thematic keyword matching, addressed
+directly by DOCiD's own publication id (`<publication_id>`). Defaults to
+`?docid_only=1` (pass `?docid_only=0` to include URAAS-only records too) and
+`?limit=` 1-50 (default 10).
+
+```json
+{
+  "docid_publication_id": "5219",
+  "uraas_item_id": 3905,
+  "docid": "uon/6e03e1fd-4ade-4539-80b3-7fe209e07068",
+  "count": 1,
+  "related": [ { "id": 49, "docid_publication_id": "4185", "docid": "uon/0ed2b8a0-3a5e-4b27-a761-24604ee90bd4", "title": "...", "doi": "...", "year": 2008, "shared_keywords": ["..."], "overlap_score": 0.0811 } ]
+}
+```
 
 ### `GET /api/keywords/search?q=<keyword>`
 Records carrying a keyword. `?limit=` 1-200 (default 50), `?sc_only=1`
@@ -438,11 +458,13 @@ few or none. `GET /api/keywords/coverage` reports the real figure.
 no webhook for "here's the DocID we assigned, update your record." Every
 other endpoint is URAAS serving data out.
 
-**Direction of travel.** As of 2026-09 the agreed model is that DOCiD
-*pulls* from URAAS into its own staging, where a curator promotes records.
-URAAS's automatic push-to-DOCiD after each crawl is therefore **disabled by
-default** (`URAAS_ENABLE_DOCID_PUSH`), so the same records can't be ingested
-twice from both directions.
+**Direction of travel.** `URAAS_ENABLE_DOCID_PUSH` defaults to `true` targeting
+`docid-demo` (`https://docid-demo.africapidalliance.org/api/v1`) via
+`DOCID_API_URL` (requires `DOCID_EMAIL`/`DOCID_PASSWORD`). After each crawl,
+`scripts/register_docid.py` registers newly crawled strong-affiliation Special
+Collections records (excluding any records originally ingested from `DOCiD*`)
+and stores DOCiD's returned `publication_id` on `Item.docid_publication_id`.
+DOCiD can still pull unpushed records from `/api/papers/tree` + `/api/papers/<id>`.
 
 ## For URAAS admins - issuing/revoking keys
 

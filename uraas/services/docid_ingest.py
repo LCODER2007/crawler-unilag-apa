@@ -455,7 +455,21 @@ def _find_existing(session, fields: Dict) -> Optional[Item]:
         if row:
             return row
     if fields.get("url"):
-        return _claimable(session.query(Item).filter(Item.url == fields["url"]).first())
+        row = _claimable(session.query(Item).filter(Item.url == fields["url"]).first())
+        if row:
+            return row
+    if source_id:
+        row = _claimable(
+            session.query(Item).filter(Item.docid_publication_id == source_id).first()
+        )
+        if row:
+            return row
+    if fields.get("docid"):
+        row = _claimable(
+            session.query(Item).filter(Item.docid == fields["docid"]).first()
+        )
+        if row:
+            return row
     return None
 
 
@@ -627,7 +641,7 @@ def _enrichment_for(item: Item, include_citations: bool = True) -> Dict:
     from uraas.services.keyword_service import _split
 
     payload = {
-        "docid_publication_id": item.source_record_id,
+        "docid_publication_id": item.source_record_id or item.docid_publication_id,
         "uraas_item_id": item.id,
         "docid": item.docid or "",
         "title": item.title,
@@ -669,6 +683,29 @@ def _enrichment_for(item: Item, include_citations: bool = True) -> Dict:
     return payload
 
 
+def _find_by_docid_publication_id(
+    session, publication_id, label: str
+) -> Optional[Item]:
+    """Resolve an Item by DOCiD's integer publication id.
+
+    Checks ingested records for `label` first so demo and production corpora
+    stay separately addressable, then falls back to URAAS-crawled records
+    pushed to DOCiD (stored in Item.docid_publication_id).
+    """
+    pub_id = str(publication_id)
+    item = (
+        session.query(Item)
+        .filter(
+            Item.source_repository == label,
+            Item.source_record_id == pub_id,
+        )
+        .first()
+    )
+    if item:
+        return item
+    return session.query(Item).filter(Item.docid_publication_id == pub_id).first()
+
+
 def enrichment_by_source_id(
     publication_id, source_label: Optional[str] = None
 ) -> Optional[Dict]:
@@ -681,19 +718,46 @@ def enrichment_by_source_id(
     label = source_label or config.DOCID_SOURCE_LABEL
     session = SessionLocal()
     try:
-        item = (
-            session.query(Item)
-            .filter(
-                Item.source_repository == label,
-                Item.source_record_id == str(publication_id),
-            )
-            .first()
-        )
+        item = _find_by_docid_publication_id(session, publication_id, label)
         if not item:
             return None
         return _enrichment_for(item)
     finally:
         session.close()
+
+
+def related_by_source_id(
+    publication_id,
+    limit: int = 10,
+    source_label: Optional[str] = None,
+    docid_only: bool = True,
+) -> Optional[Dict]:
+    """Thematically related records for one DOCiD publication, addressed by
+    DOCiD's own publication id.
+    """
+    from uraas.services.keyword_service import related_by_keywords
+
+    label = source_label or config.DOCID_SOURCE_LABEL
+    session = SessionLocal()
+    try:
+        item = _find_by_docid_publication_id(session, publication_id, label)
+        if not item:
+            return None
+        item_id = item.id
+        docid = item.docid or ""
+    finally:
+        session.close()
+
+    related = related_by_keywords(
+        item_id, limit=limit, source_label=label, docid_only=docid_only
+    )
+    return {
+        "docid_publication_id": str(publication_id),
+        "uraas_item_id": item_id,
+        "docid": docid,
+        "count": len(related),
+        "related": related,
+    }
 
 
 def enrichment_page(

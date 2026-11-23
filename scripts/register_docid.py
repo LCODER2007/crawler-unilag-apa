@@ -39,6 +39,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import or_
+
 from uraas.database import Item, SessionLocal
 from uraas.services.docid_client import DocIDClient, DocIDConnectionError
 
@@ -77,7 +79,13 @@ def main():
             session.query(Item)
             .filter(Item.special_collection_score > 0)
             .filter(Item.title.isnot(None))
-            .filter(Item.docid.is_(None))
+            .filter(or_(Item.docid.is_(None), Item.docid == ""))
+            .filter(
+                or_(
+                    Item.source_repository.is_(None),
+                    ~Item.source_repository.startswith("DOCiD"),
+                )
+            )
             .filter(Item.affiliation_confidence == "strong")
             .all()
         )
@@ -100,8 +108,11 @@ def main():
             try:
                 result = client.publish_item(it)
                 docid = result["_assigned_docid"]
+                pub_id = result.get("_publication_id") or result.get("publication_id")
                 it.docid = docid
                 it.docid_assigned_at = datetime.utcnow()
+                if pub_id is not None:
+                    it.docid_publication_id = str(pub_id)
                 # Commit immediately, not batched at the end - the record
                 # already exists on the live platform the moment publish_item()
                 # returns, so a crash before a final batched commit would
@@ -109,7 +120,9 @@ def main():
                 # registration on the next run.
                 session.commit()
                 ok += 1
-                print(f"  OK  id={it.id} docid={docid}  {it.title[:60]!r}")
+                print(
+                    f"  OK  id={it.id} docid={docid} pub_id={pub_id}  {it.title[:60]!r}"
+                )
             except Exception as e:
                 session.rollback()
                 failed += 1
